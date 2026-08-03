@@ -22,15 +22,23 @@ import { db, onLocalChange, type Cycle, type DayLog, type Settings } from "./db"
 
 const DEBOUNCE_MS = 3000;
 
+/* Los estados se distinguen a proposito. Antes un fallo de red y un
+   "no hay nada que hacer" emitian los dos `idle`, asi que ninguna
+   pantalla podia avisar de que la copia llevaba dias sin subirse. */
 export type BackupState =
   | { status: "off" }
-  | { status: "idle"; savedAt?: string }
   | { status: "saving" }
-  | { status: "error"; message: string };
+  | { status: "saved"; savedAt: string }
+  | { status: "offline"; savedAt?: string }
+  | { status: "error"; message: string; savedAt?: string };
 
 let timer: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Set<(s: BackupState) => void>();
 let current: BackupState = { status: "off" };
+/** Ultima copia confirmada. Sobrevive a los fallos para poder decir
+    "la ultima fue el martes" mientras la de hoy falla. */
+let lastSavedAt: string | undefined;
+let retry: ReturnType<typeof setTimeout> | null = null;
 
 function emit(s: BackupState) {
   current = s;
@@ -57,6 +65,16 @@ async function collect() {
   return { cycles, days, settings: settings ?? null };
 }
 
+/** Reintento unico y tardio. Si falla la red, sin esto la copia se
+    quedaba esperando al siguiente cambio, que puede tardar dias. */
+function scheduleRetry() {
+  if (retry) clearTimeout(retry);
+  retry = setTimeout(() => {
+    retry = null;
+    void push();
+  }, 60_000);
+}
+
 async function push() {
   emit({ status: "saving" });
   try {
@@ -70,20 +88,23 @@ async function push() {
     if (res.status === 401) return emit({ status: "off" });
 
     if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as {
-        error?: string;
-      };
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      scheduleRetry();
       return emit({
         status: "error",
-        message: data.error ?? "No se pudo guardar la copia.",
+        message: data.error ?? "El servidor no aceptó la copia.",
+        savedAt: lastSavedAt,
       });
     }
 
     const { savedAt } = (await res.json()) as { savedAt: string };
-    emit({ status: "idle", savedAt });
+    lastSavedAt = savedAt;
+    if (retry) { clearTimeout(retry); retry = null; }
+    emit({ status: "saved", savedAt });
   } catch {
-    // Sin red. No es un error que merezca molestarla.
-    emit({ status: "idle" });
+    // Sin red: no es culpa de nadie y se reintenta sola.
+    scheduleRetry();
+    emit({ status: "offline", savedAt: lastSavedAt });
   }
 }
 
@@ -127,7 +148,6 @@ export async function startBackup() {
   started = true;
 
   const restored = await restoreIfEmpty().catch(() => false);
-  emit({ status: "idle" });
 
   onLocalChange(schedulePush);
 

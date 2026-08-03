@@ -1,5 +1,6 @@
 "use client";
 
+import { BackupPanel } from "@/components/backup-panel";
 import { updateSettings, type HumorLevel, type Settings } from "@/lib/db";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
 
@@ -65,10 +66,12 @@ export default function Ajustes() {
         ))}
       </Group>
 
+      <BackupPanel />
+
       <p className="text-xs leading-relaxed text-faint">
-        Todo lo que registras vive solo en este móvil. No hay servidor, no hay
-        cuenta, nadie más lo ve. Lilaila no es un dispositivo médico ni un método
-        anticonceptivo.
+        Lo que registras vive en este móvil. Si has puesto código, además se
+        guarda una copia privada. Lilaila no es un dispositivo médico ni un
+        método anticonceptivo.
       </p>
     </div>
   );
