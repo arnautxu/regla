@@ -178,17 +178,52 @@ export async function getAllCycles(): Promise<Cycle[]> {
   return db.cycles.orderBy("startDate").toArray();
 }
 
-/** "Me ha bajado" — abre un ciclo nuevo empezando hoy. */
+/**
+ * "Me ha bajado". Ahora acepta cualquier fecha, no solo hoy.
+ *
+ * Con fechas libres aparece un problema que con el interruptor de
+ * antes no existia: decir "me bajo el viernes" cuando ya hay un ciclo
+ * apuntado el domingo NO son dos reglas, es la misma mal fechada. Si
+ * se anyadiera sin mas quedarian ciclos solapados y las medias se
+ * irian a la basura.
+ *
+ * Regla: dos inicios a menos de MIN_GAP dias son el mismo periodo, y
+ * el nuevo dato CORRIGE al viejo. Mas lejos, es una regla nueva.
+ */
+const MIN_GAP = 10;
+
+function daysBetween(a: string, b: string): number {
+  return Math.round(
+    (fromKey(a).getTime() - fromKey(b).getTime()) / 86400000,
+  );
+}
+
 export async function startPeriod(date = todayKey()): Promise<void> {
-  const latest = await getLatestCycle();
+  const all = await getAllCycles();
 
-  // Si ya hay una regla abierta que empezo hoy o despues, no duplicamos.
-  if (latest && !latest.endDate && latest.startDate >= date) return;
+  const near = all.find((c) => Math.abs(daysBetween(c.startDate, date)) < MIN_GAP);
+  if (near) {
+    await db.cycles.update(near.id, {
+      startDate: date,
+      // Si la correccion deja el fin antes del inicio, el fin deja de
+      // tener sentido y se borra: mejor sin dato que con uno imposible.
+      endDate: near.endDate && near.endDate < date ? undefined : near.endDate,
+      updatedAt: now(),
+    });
+    touch();
+    return;
+  }
 
-  // Si habia una regla abierta antigua, la cerramos antes de abrir otra
-  // para no dejar ciclos huerfanos sin fin.
-  if (latest && !latest.endDate) {
-    await db.cycles.update(latest.id, { endDate: date, updatedAt: now() });
+  // Cierra cualquier regla que siguiera abierta. El cierre va el dia
+  // ANTERIOR al nuevo inicio: cerrarla el mismo dia solaparia las dos
+  // y ese dia contaria por partida doble.
+  const open = all.filter((c) => !c.endDate && c.startDate < date);
+  for (const c of open) {
+    const dayBefore = toKey(new Date(fromKey(date).getTime() - 86400000));
+    await db.cycles.update(c.id, {
+      endDate: dayBefore >= c.startDate ? dayBefore : c.startDate,
+      updatedAt: now(),
+    });
   }
 
   await db.cycles.add({
@@ -220,14 +255,9 @@ export async function deleteCycle(id: string): Promise<void> {
  * nuestra cuenta un ciclo del pasado sería inventarse un dato.
  */
 export async function markCycleStart(date: string): Promise<void> {
-  const existing = await db.cycles.where("startDate").equals(date).first();
-  if (existing) return;
-  await db.cycles.add({
-    id: crypto.randomUUID(),
-    startDate: date,
-    updatedAt: now(),
-  });
-  touch();
+  // Misma logica que el boton de Hoy: el calendario no puede tener
+  // reglas propias sobre lo que es un ciclo valido.
+  await startPeriod(date);
 }
 
 export async function unmarkCycleStart(date: string): Promise<void> {

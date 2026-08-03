@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { addDays, format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -8,11 +8,12 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { Lilita } from "@/components/lilita";
 import { FlowRow } from "@/components/flow-row";
 import { MoodRow } from "@/components/mood-row";
+import { PeriodSheet, type PeriodAction } from "@/components/period-sheet";
 import { PHASE_LABEL, phaseByDay, type CycleState } from "@/lib/cycle";
 import { buildContext } from "@/lib/ai-context";
 import { computeInsights } from "@/lib/insights";
 import { useLilitaLine } from "@/lib/use-lilita-line";
-import { dateRange } from "@/lib/format";
+import { capitalize, dateRange } from "@/lib/format";
 import { db, deleteCycle, endPeriod, fromKey, startPeriod } from "@/lib/db";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
 
@@ -43,13 +44,17 @@ export default function Hoy() {
   // El banco local se pinta ya; si el modelo contesta, lo sustituye.
   const { line } = useLilitaLine(fallbackLine, context, dateKey, ready);
 
+  const [asking, setAsking] = useState<PeriodAction | null>(null);
+
   // Antes de que IndexedDB conteste no pintamos números: un "día 1"
   // fantasma que salta a "día 14" es peor que medio segundo en blanco.
   if (!ready) return <Booting />;
 
   const bleeding = state.bleeding;
   const latest = cycles[cycles.length - 1];
-  const startedToday = latest?.startDate === dateKey;
+  // El deshacer vale durante toda la regla en curso: darse cuenta
+  // del dedazo al dia siguiente es lo normal.
+  const canUndo = bleeding || latest?.startDate === dateKey;
 
   return (
     <div className="flex flex-1 flex-col gap-md px-safe pt-safe pb-lg">
@@ -108,9 +113,13 @@ export default function Hoy() {
           día del ciclo es una abstracción y baja a línea de apoyo. */}
       {state.dayOfCycle !== undefined && (
         <section className="border-t border-line pt-md">
-          <Headline state={state} bleeding={bleeding} />
+          <Headline
+            state={state}
+            bleeding={bleeding}
+            startedOn={latest?.startDate}
+          />
 
-          {startedToday && (
+          {canUndo && (
             <button
               type="button"
               onClick={() => {
@@ -139,8 +148,9 @@ export default function Hoy() {
         <button
           type="button"
           onClick={() => {
-            haptic([18, 40, 26]);
-            void (bleeding ? endPeriod() : startPeriod());
+            haptic(12);
+            // Ya no asume hoy: preguntar la fecha es el arreglo.
+            setAsking(bleeding ? "fin" : "inicio");
           }}
           className="w-full rounded-full px-lg py-4 font-display text-base font-bold tracking-[-0.01em] transition-[transform,background-color] duration-150 ease-[var(--ease-out-quart)] active:scale-[0.975]"
           style={
@@ -156,6 +166,16 @@ export default function Hoy() {
           {bleeding ? "Se ha ido" : "Me ha bajado"}
         </button>
       </section>
+
+      <PeriodSheet
+        action={asking}
+        todayKey={dateKey}
+        minKey={asking === "fin" ? latest?.startDate : undefined}
+        onPick={(when) => {
+          void (asking === "fin" ? endPeriod(when) : startPeriod(when));
+        }}
+        onClose={() => setAsking(null)}
+      />
     </div>
   );
 }
@@ -169,18 +189,28 @@ export default function Hoy() {
 function Headline({
   state,
   bleeding,
+  startedOn,
 }: {
   state: CycleState;
   bleeding: boolean;
+  startedOn?: string;
 }) {
   const cycleDay = `Día ${state.dayOfCycle} del ciclo`;
 
   if (bleeding && state.periodDay) {
+    // La fecha de inicio escrita es la confirmacion de lo apuntado:
+    // antes tocabas el boton, cambiaba un numero y no habia forma de
+    // comprobar que dia habia quedado registrado.
+    const desde = startedOn
+      ? `Empezó el ${capitalize(
+          format(fromKey(startedOn), "EEEE d", { locale: es }),
+        ).toLowerCase()}`
+      : null;
     return (
       <Big
         label="Día de regla"
         value={String(state.periodDay)}
-        detail={cycleDay}
+        detail={desde ? `${desde} · ${cycleDay}` : cycleDay}
       />
     );
   }

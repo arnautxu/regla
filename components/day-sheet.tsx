@@ -106,9 +106,10 @@ export function DaySheet({
                       }
                 }
               >
-                {isCycleStart
-                  ? "Quitar como primer día"
-                  : "Fue mi primer día de regla"}
+                {/* Mismo vocabulario que el botón de Hoy. Antes una
+                    pantalla decía "me ha bajado" y la otra "primer día
+                    de regla", y "quitar como primer día" es jerga. */}
+                {isCycleStart ? "No, no me bajó este día" : "Me bajó este día"}
               </button>
             </>
           )}
