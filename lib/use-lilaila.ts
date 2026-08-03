@@ -58,7 +58,15 @@ export function useLilaila(): Lilaila {
     resolvedCycles,
     resolvedSettings,
     dateKey,
-    today === undefined ? undefined : bled(today ?? undefined),
+    // undefined = "todavía no lo sé", no "hoy no sangra". Antes
+    // `today` sin registrar (null, tras el `?? null` de arriba) caía
+    // en bled(undefined) = false, un valor YA decidido que pisaba el
+    // fallback de computeCycleState pensado justo para este caso: sin
+    // tocar el botón todavía, la cabecera daba por acabada la regla y
+    // saltaba a "faltan 26 días" aunque la fase siguiera en regla.
+    today === undefined || today === null || today.flow === undefined
+      ? undefined
+      : bled(today),
   );
 
   const line = lilitaSays(

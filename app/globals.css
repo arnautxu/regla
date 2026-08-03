@@ -71,9 +71,22 @@
 
   --weight-body: 420;
 
-  /* Fase: solo para la etiqueta y los puntos. Nunca para rellenos
-     grandes ni para el botón principal. */
+  /* Fase: etiqueta, puntos, Y AHORA superficies suaves (ver más abajo
+     --phase-bg / --phase-surface). Nunca en el botón principal: ese
+     acento es solo de marca. */
   --phase: oklch(51% 0.2 26);
+
+  /* Profundidad de pegatina: trazo sólido + sombra corta y dura, sin
+     difuminar. color-mix con --fg para que la sombra se tiña de tinta
+     y se adapte sola al cambiar de tema. */
+  --depth-shadow: color-mix(in oklch, var(--fg) 20%, transparent);
+  --depth-sm: inset 0 0 0 1.5px var(--border-strong), 2px 2px 0 0 var(--depth-shadow);
+  --depth-md: inset 0 0 0 1.5px var(--border-strong), 3px 3px 0 0 var(--depth-shadow);
+  --depth-press: inset 0 0 0 1.5px var(--border-strong), 1px 1px 0 0 var(--depth-shadow);
+  /* Variante con el trazo del color de fase, para el bloque que más
+     representa "dónde estoy hoy". */
+  --depth-phase-md: inset 0 0 0 1.5px var(--phase), 3px 3px 0 0 var(--depth-shadow);
+  --depth-phase-press: inset 0 0 0 1.5px var(--phase), 1px 1px 0 0 var(--depth-shadow);
 }
 
 [data-theme="dark"] {
@@ -121,42 +134,66 @@
 
 [data-phase="menstrual"] {
   --phase: oklch(51% 0.2 26);
+  --phase-bg: oklch(95% 0.032 26);
+  --phase-surface: oklch(90.5% 0.052 26);
 }
 [data-phase="folicular"] {
   --phase: oklch(48% 0.11 172);
+  --phase-bg: oklch(95% 0.026 172);
+  --phase-surface: oklch(90% 0.045 172);
 }
 [data-phase="ovulacion"] {
   --phase: oklch(50% 0.18 350);
+  --phase-bg: oklch(95% 0.03 350);
+  --phase-surface: oklch(90% 0.05 350);
 }
 [data-phase="lutea"] {
   --phase: oklch(50% 0.13 58);
+  --phase-bg: oklch(95% 0.03 58);
+  --phase-surface: oklch(90% 0.05 58);
 }
 
 [data-theme="dark"][data-phase="menstrual"] {
   --phase: oklch(66% 0.2 26);
+  --phase-bg: oklch(24% 0.036 26);
+  --phase-surface: oklch(29.5% 0.055 26);
 }
 [data-theme="dark"][data-phase="folicular"] {
   --phase: oklch(74% 0.13 172);
+  --phase-bg: oklch(24% 0.03 172);
+  --phase-surface: oklch(29.5% 0.048 172);
 }
 [data-theme="dark"][data-phase="ovulacion"] {
   --phase: oklch(70% 0.17 350);
+  --phase-bg: oklch(24% 0.036 350);
+  --phase-surface: oklch(29.5% 0.055 350);
 }
 [data-theme="dark"][data-phase="lutea"] {
   --phase: oklch(76% 0.14 58);
+  --phase-bg: oklch(24% 0.033 58);
+  --phase-surface: oklch(29.5% 0.052 58);
 }
 
 @media (prefers-color-scheme: dark) {
   [data-theme="auto"][data-phase="menstrual"] {
     --phase: oklch(66% 0.2 26);
+    --phase-bg: oklch(24% 0.036 26);
+    --phase-surface: oklch(29.5% 0.055 26);
   }
   [data-theme="auto"][data-phase="folicular"] {
     --phase: oklch(74% 0.13 172);
+    --phase-bg: oklch(24% 0.03 172);
+    --phase-surface: oklch(29.5% 0.048 172);
   }
   [data-theme="auto"][data-phase="ovulacion"] {
     --phase: oklch(70% 0.17 350);
+    --phase-bg: oklch(24% 0.036 350);
+    --phase-surface: oklch(29.5% 0.055 350);
   }
   [data-theme="auto"][data-phase="lutea"] {
     --phase: oklch(76% 0.14 58);
+    --phase-bg: oklch(24% 0.033 58);
+    --phase-surface: oklch(29.5% 0.052 58);
   }
 }
 
@@ -226,6 +263,8 @@
   --color-accent-soft: var(--accent-soft);
   --color-on-accent: var(--on-accent);
   --color-phase: var(--phase);
+  --color-phase-bg: var(--phase-bg);
+  --color-phase-surface: var(--phase-surface);
 }
 
 /* ═══ Base ══════════════════════════════════════════════════════ */
@@ -341,6 +380,45 @@ dialog.sheet::backdrop {
 @utility px-safe {
   padding-left: max(env(safe-area-inset-left), var(--spacing-lg));
   padding-right: max(env(safe-area-inset-right), var(--spacing-lg));
+}
+
+/* ═══ Profundidad de pegatina ═══════════════════════════════════
+   Trazo sólido + sombra corta y dura. Al presionar, la superficie se
+   desplaza hacia su propia sombra: se "hunde" en vez de solo encoger. */
+
+@utility sticker {
+  box-shadow: var(--depth-md);
+  transition:
+    box-shadow 150ms var(--ease-out-quart),
+    transform 150ms var(--ease-out-quart);
+  &:active {
+    box-shadow: var(--depth-press);
+    transform: translate(2px, 2px);
+  }
+}
+
+@utility sticker-sm {
+  box-shadow: var(--depth-sm);
+  transition:
+    box-shadow 150ms var(--ease-out-quart),
+    transform 150ms var(--ease-out-quart);
+  &:active {
+    box-shadow: var(--depth-press);
+    transform: translate(1px, 1px);
+  }
+}
+
+/* Igual, pero con el trazo del color de fase: para el bloque que
+   representa "dónde estoy hoy". */
+@utility sticker-phase {
+  box-shadow: var(--depth-phase-md);
+  transition:
+    box-shadow 150ms var(--ease-out-quart),
+    transform 150ms var(--ease-out-quart);
+  &:active {
+    box-shadow: var(--depth-phase-press);
+    transform: translate(2px, 2px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

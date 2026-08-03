@@ -45,13 +45,12 @@ export function FlowRow({
                   flow: active ? undefined : opt.value,
                 });
               }}
-              className="min-h-[46px] rounded-lg px-1 text-2xs font-medium leading-[1.15] transition-[transform,box-shadow,color] duration-150 active:scale-[0.96]"
+              className="min-h-[46px] rounded-lg px-1 text-2xs font-medium leading-[1.15] transition-[transform,box-shadow,color] duration-150 active:scale-[0.96] active:translate-x-[1px] active:translate-y-[1px]"
               style={{
-                // Sin relleno: en minimal el estado se dice con el
-                // trazo y el color de texto, no pintando cajas.
+                background: active ? "var(--accent-soft)" : "var(--surface)",
                 boxShadow: active
-                  ? "inset 0 0 0 1.5px var(--accent)"
-                  : "inset 0 0 0 1px var(--border-strong)",
+                  ? "inset 0 0 0 1.5px var(--accent), 2px 2px 0 0 var(--depth-shadow)"
+                  : "var(--depth-sm)",
                 color: active ? "var(--accent)" : "var(--fg-muted)",
               }}
             >

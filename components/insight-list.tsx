@@ -16,11 +16,17 @@ export function InsightList({ insights }: { insights: Insight[] }) {
   if (!insights.length) return null;
 
   return (
-    <ul className="flex flex-col divide-y divide-[var(--border)] border-y border-line">
+    <ul className="flex flex-col gap-2.5">
       {insights.map((insight) => {
         const mark = MARK[insight.kind];
         return (
-          <li key={insight.id} className="py-4">
+          <li
+            key={insight.id}
+            className="sticker-sm rounded-2xl px-lg py-4"
+            style={{
+              background: mark.accent ? "var(--accent-soft)" : "var(--surface)",
+            }}
+          >
             <p
               className="text-2xs font-semibold uppercase tracking-[0.14em]"
               style={{

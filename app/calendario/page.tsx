@@ -35,9 +35,12 @@ export default function Calendario() {
     <div className="flex flex-1 flex-col gap-lg px-safe pt-safe pb-lg">
       {/* ── Cabecera con navegación de mes ─────────────────────── */}
       <header className="flex items-center justify-between gap-md pt-lg">
-        <h1 className="font-display text-xl font-bold capitalize tracking-[-0.03em]">
-          {format(month, "LLLL yyyy", { locale: es })}
-        </h1>
+        <div className="flex items-center gap-2">
+          <Lilita mood="neutral" size={38} className="shrink-0" />
+          <h1 className="font-display text-xl font-bold capitalize tracking-[-0.03em]">
+            {format(month, "LLLL yyyy", { locale: es })}
+          </h1>
+        </div>
 
         <div className="flex items-center gap-1">
           <MonthButton
@@ -55,7 +58,12 @@ export default function Calendario() {
 
       {ready && (
         <>
-          <MonthGrid weeks={weeks} onSelect={setSelected} />
+          <div
+            className="sticker rounded-2xl px-lg py-md"
+            style={{ background: "var(--surface)" }}
+          >
+            <MonthGrid weeks={weeks} onSelect={setSelected} />
+          </div>
 
           {/* Volver a hoy solo aparece cuando te has ido lejos. Un
               botón que no hace nada el 90% del tiempo es ruido. */}
@@ -76,7 +84,10 @@ export default function Calendario() {
           {/* Lo que viene casi nunca cae en el mes que estás mirando,
               y es justo lo que has abierto el calendario a consultar. */}
           {next.periodStart && next.startEarliest && next.fertileStart && (
-            <dl className="grid grid-cols-[auto_1fr] gap-x-lg gap-y-3 border-t border-line pt-lg text-sm">
+            <dl
+              className="sticker-phase grid grid-cols-[auto_1fr] gap-x-lg gap-y-3 rounded-2xl px-lg py-md text-sm"
+              style={{ background: "var(--phase-bg)" }}
+            >
               <dt className="text-2xs font-semibold uppercase leading-5 tracking-[0.14em] text-faint">
                 Próxima regla
               </dt>
@@ -104,9 +115,7 @@ export default function Calendario() {
             </dl>
           )}
 
-          <div className="border-t border-line pt-lg">
-            <Legend />
-          </div>
+          <Legend />
 
           <p className="text-xs leading-relaxed text-faint">
             Las bandas discontinuas son estimaciones a partir de tus últimos

@@ -59,6 +59,11 @@ export default function Hoy() {
   // fantasma que salta a "día 14" es peor que medio segundo en blanco.
   if (!ready) return <Booting />;
 
+  // "bleeding" es la lectura para pintar (cabecera, fase, Lilita): si
+  // la regla sigue abierta y hoy entra en el rango, se asume que hoy
+  // también sangra aunque todavía no lo hayas tocado — si no, la
+  // cabecera saltaba a "faltan 26 días" con la etiqueta diciendo
+  // "REGLA" al lado, porque nadie había pulsado nada todavía hoy.
   const bleeding = state.bleeding;
   const latest = cycles[cycles.length - 1];
 
@@ -66,55 +71,62 @@ export default function Hoy() {
        · hoy ya apuntado  -> no hay nada que hacer, lo dice y deja editar
        · regla en marcha  -> "Registrar hoy", de un toque
        · nada en marcha   -> "Me ha bajado", que pregunta el dia
-     El final de la regla no se declara: se marca "Nada" en el flujo. */
+     El final de la regla no se declara: se marca "Nada" en el flujo.
+
+     A diferencia de "bleeding" de arriba, esto NO se supone: el botón
+     solo puede decir "ya está apuntado" si hoy tiene un flujo de
+     verdad guardado. El día cuenta cuando le das al botón (o al
+     flujo directamente) — nunca antes. */
+  const loggedToday = today?.flow !== undefined && today.flow > 0;
   const reglaAbierta = Boolean(latest && !latest.endDate);
-  const accion: "apuntado" | "hoy" | "inicio" = bleeding
+  const accion: "apuntado" | "hoy" | "inicio" = loggedToday
     ? "apuntado"
     : reglaAbierta
       ? "hoy"
       : "inicio";
   // El deshacer vale durante toda la regla en curso: darse cuenta
   // del dedazo al dia siguiente es lo normal.
-  const canUndo = bleeding || latest?.startDate === dateKey;
+  const canUndo = reglaAbierta || latest?.startDate === dateKey;
 
   return (
-    <div className="flex flex-1 flex-col gap-md px-safe pt-safe pb-lg">
-      {/* ── Cabecera ───────────────────────────────────────────── */}
-      <header className="flex items-center justify-between pt-md">
-        <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-faint">
-          {format(fromKey(dateKey), "EEEE d 'de' MMMM", { locale: es })}
-        </p>
-        {state.phase && (
-          <p className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-[0.16em] text-muted">
-            {/* La fase se dice con un punto y una palabra. Antes teñía
-                la app entera y el rojo dejaba de significar nada. */}
-            <span
-              aria-hidden="true"
-              className="size-1.5 rounded-full"
-              style={{ background: "var(--phase)" }}
-            />
-            {PHASE_LABEL[state.phase]}
-          </p>
-        )}
-      </header>
-
-      {/* ── Lilita y su frase ─────────────────────────────────────
-          Ella a la derecha, la frase pegada al margen izquierdo. El
-          aire sobrante se acumula bajo el texto, donde se lee como
-          respiración y no como un agujero entre controles. */}
-      {/* Todo el bloque lleva al chat. Lilita ES la puerta: un botón
-          aparte diciendo "hablar con la IA" convertiría al personaje
-          en el envoltorio de una función, y es al revés. */}
+    <div className="flex flex-1 flex-col gap-lg px-safe pt-safe pb-lg">
+      {/* ── Hoy, en su fase ────────────────────────────────────────
+          El bloque entero se tiñe del color de la fase: es lo primero
+          que se ve al abrir la app, y una manera más directa de decir
+          "estás aquí" que una etiqueta pequeña sola. Todo el bloque
+          lleva al chat — Lilita ES la puerta: un botón aparte diciendo
+          "hablar con la IA" convertiría al personaje en el envoltorio
+          de una función, y es al revés. */}
       <Link
         href="/chat"
         onClick={() => haptic(8)}
-        className="flex flex-1 flex-col rounded-2xl transition-[opacity] duration-150 active:opacity-70"
+        className="sticker-phase flex flex-col rounded-[28px] px-lg pt-md pb-lg transition-[opacity,transform] duration-150"
+        style={{ background: "var(--phase-bg)" }}
       >
+        <header className="flex items-center justify-between">
+          <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-faint">
+            {format(fromKey(dateKey), "EEEE d 'de' MMMM", { locale: es })}
+          </p>
+          {state.phase && (
+            <p
+              className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-2xs font-semibold uppercase tracking-[0.16em]"
+              style={{ background: "var(--phase-surface)", color: "var(--phase)" }}
+            >
+              <span
+                aria-hidden="true"
+                className="size-1.5 rounded-full"
+                style={{ background: "var(--phase)" }}
+              />
+              {PHASE_LABEL[state.phase]}
+            </p>
+          )}
+        </header>
+
         <div className="flex justify-end pr-xs">
           {/* El flujo ya es fijo, así que siempre hay una fila más
               que antes. Lilita cede el sitio: en una pantalla de
               812px, si no, el botón principal se sale. */}
-          <Lilita mood={line.mood} size={bleeding ? 108 : 132} />
+          <Lilita mood={line.mood} size={bleeding ? 100 : 124} />
         </div>
         <p className="mt-md text-balance font-display text-lg font-semibold leading-[1.2] tracking-[-0.02em]">
           {line.text}
@@ -132,7 +144,10 @@ export default function Hoy() {
           es "qué día de regla llevo"; cuando no, "cuánto falta". El
           día del ciclo es una abstracción y baja a línea de apoyo. */}
       {state.dayOfCycle !== undefined && (
-        <section className="border-t border-line pt-md">
+        <section
+          className="sticker rounded-2xl px-lg py-md"
+          style={{ background: "var(--surface)" }}
+        >
           <Headline
             state={state}
             bleeding={bleeding}
@@ -146,7 +161,7 @@ export default function Hoy() {
                 haptic(8);
                 void clearPeriodAround(latest.startDate);
               }}
-              className="-ml-1 flex min-h-[44px] items-center px-1 text-xs text-faint underline underline-offset-4"
+              className="-ml-1 mt-1 flex min-h-[44px] items-center px-1 text-xs text-faint underline underline-offset-4"
             >
               No, me he equivocado
             </button>
@@ -155,29 +170,29 @@ export default function Hoy() {
       )}
 
       {/* ── Registro rápido ────────────────────────────────────────
-          El flujo solo aparece mientras sangra: el resto del mes es
-          un control muerto ocupando el mejor sitio de la pantalla. */}
-      {/* Siempre visible: marcar el flujo ES registrar la regla.
-          Esconderlo cuando la app cree que no sangras impide
-          justamente corregirla. */}
-      <FlowRow day={today} dateKey={dateKey} />
-      <MoodRow day={today} dateKey={dateKey} />
-
-      {/* Los cuatro botones de arriba son el registro de un toque, que
-          es el 90% de las veces. Esto abre el detalle —sintomas, animo,
-          nota— sin ocupar sitio en la pantalla mientras no se use.
-          Antes solo se llegaba dando un rodeo por el calendario. */}
-      <button
-        type="button"
-        onClick={() => {
-          haptic(8);
-          setDetailing(true);
-        }}
-        className="-ml-1 flex min-h-[44px] items-center self-start px-1 text-xs underline underline-offset-4"
-        style={{ color: "var(--fg-muted)" }}
+          Agrupados en una sola superficie: son un mismo gesto ("cómo
+          estoy hoy"), no controles sueltos flotando en la página. */}
+      <section
+        className="sticker flex flex-col gap-md rounded-2xl px-lg py-md"
+        style={{ background: "var(--surface)" }}
       >
-        {resumenDetalle(today)}
-      </button>
+        <FlowRow day={today} dateKey={dateKey} />
+        <MoodRow day={today} dateKey={dateKey} />
+
+        {/* Abre el detalle —sintomas, animo, nota— sin ocupar sitio en
+            la pantalla mientras no se use. */}
+        <button
+          type="button"
+          onClick={() => {
+            haptic(8);
+            setDetailing(true);
+          }}
+          className="-ml-1 flex min-h-[44px] items-center self-start px-1 text-xs underline underline-offset-4"
+          style={{ color: "var(--fg-muted)" }}
+        >
+          {resumenDetalle(today)}
+        </button>
+      </section>
 
       {/* ── Acción principal ──────────────────────────────────────
           En el tercio inferior, siempre. Es el 90% de lo que hará
@@ -199,15 +214,19 @@ export default function Hoy() {
               setAsking(true);
             }
           }}
-          className="w-full rounded-full px-lg py-4 font-display text-base font-bold tracking-[-0.01em] transition-[transform,background-color] duration-150 ease-[var(--ease-out-quart)] active:scale-[0.975]"
+          className="w-full rounded-full px-lg py-4 font-display text-base font-bold tracking-[-0.01em] transition-[transform,background-color,box-shadow] duration-150 ease-[var(--ease-out-quart)] active:scale-[0.975] active:translate-x-[1px] active:translate-y-[1px]"
           style={
             accion === "apuntado"
               ? {
                   background: "transparent",
                   color: "var(--fg-muted)",
-                  boxShadow: "inset 0 0 0 1px var(--border-strong)",
+                  boxShadow: "var(--depth-sm)",
                 }
-              : { background: "var(--accent)", color: "var(--on-accent)" }
+              : {
+                  background: "var(--accent)",
+                  color: "var(--on-accent)",
+                  boxShadow: "3px 3px 0 0 var(--depth-shadow)",
+                }
           }
         >
           {accion === "apuntado"

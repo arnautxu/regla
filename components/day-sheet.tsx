@@ -170,8 +170,8 @@ export function DaySheet({
                   }
                   rows={2}
                   placeholder="Lo que quieras acordarte"
-                  className="mt-2 w-full resize-none rounded-xl bg-transparent px-3 py-2.5 text-sm outline-none"
-                  style={{ boxShadow: "inset 0 0 0 1px var(--border-strong)" }}
+                  className="mt-2 w-full resize-none rounded-xl px-3 py-2.5 text-sm outline-none"
+                  style={{ background: "var(--bg)", boxShadow: "var(--depth-sm)" }}
                 />
               </section>
 
@@ -181,17 +181,18 @@ export function DaySheet({
                   haptic([14, 30, 20]);
                   void setBleeding(day.key, !sangro);
                 }}
-                className="min-h-[52px] w-full rounded-full px-lg font-display text-base font-bold tracking-[-0.01em] transition-[transform,background-color] duration-150 active:scale-[0.98]"
+                className="min-h-[52px] w-full rounded-full px-lg font-display text-base font-bold tracking-[-0.01em] transition-[transform,background-color,box-shadow] duration-150 active:scale-[0.98] active:translate-x-[1px] active:translate-y-[1px]"
                 style={
                   sangro
                     ? {
                         background: "transparent",
                         color: "var(--fg-muted)",
-                        boxShadow: "inset 0 0 0 1px var(--border-strong)",
+                        boxShadow: "var(--depth-sm)",
                       }
                     : {
                         background: "var(--accent)",
                         color: "var(--on-accent)",
+                        boxShadow: "3px 3px 0 0 var(--depth-shadow)",
                       }
                 }
               >

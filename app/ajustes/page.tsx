@@ -1,5 +1,6 @@
 "use client";
 
+import { Lilita } from "@/components/lilita";
 import { BackupPanel } from "@/components/backup-panel";
 import { updateSettings, type HumorLevel, type Settings } from "@/lib/db";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
@@ -30,9 +31,12 @@ export default function Ajustes() {
 
   return (
     <div className="flex flex-1 flex-col gap-2xl px-safe pt-safe pb-xl">
-      <h1 className="pt-lg font-display text-xl font-bold tracking-[-0.03em]">
-        Ajustes
-      </h1>
+      <div className="flex items-center gap-2 pt-lg">
+        <Lilita mood="neutral" size={38} className="shrink-0" />
+        <h1 className="font-display text-xl font-bold tracking-[-0.03em]">
+          Ajustes
+        </h1>
+      </div>
 
       <Group
         title="El humor de Lilita"
@@ -91,7 +95,10 @@ function Group({
       <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
         {title}
       </h2>
-      <div className="mt-sm divide-y divide-[var(--border)] border-y border-line">
+      <div
+        className="sticker mt-sm divide-y divide-[var(--border)] rounded-2xl px-lg"
+        style={{ background: "var(--surface)" }}
+      >
         {children}
       </div>
       {note && (

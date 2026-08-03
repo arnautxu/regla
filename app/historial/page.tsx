@@ -81,9 +81,12 @@ export default function Historial() {
 
   return (
     <div className="flex flex-1 flex-col gap-xl px-safe pt-safe pb-lg">
-      <h1 className="pt-lg font-display text-xl font-bold tracking-[-0.03em]">
-        Historial
-      </h1>
+      <div className="flex items-center gap-2 pt-lg">
+        <Lilita mood="neutral" size={38} className="shrink-0" />
+        <h1 className="font-display text-xl font-bold tracking-[-0.03em]">
+          Historial
+        </h1>
+      </div>
 
       {!ready ? null : cycles.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-lg pb-2xl">
@@ -95,7 +98,7 @@ export default function Historial() {
         </div>
       ) : (
         <>
-          <dl className="grid grid-cols-2 gap-y-lg border-t border-line pt-lg">
+          <dl className="grid grid-cols-2 gap-3">
             <Stat
               label="Ciclo medio"
               value={stats.avgCycle ? `${stats.avgCycle}` : "—"}
@@ -138,13 +141,13 @@ export default function Historial() {
           </dl>
 
           {stats.avgCycle === undefined ? (
-            <p className="-mt-md text-sm leading-relaxed text-muted">
+            <p className="text-sm leading-relaxed text-muted">
               Con un solo ciclo no puedo calcular medias. Necesito al menos dos
               para saber cuánto tarda en volver.
             </p>
           ) : (
             stats.basis < 6 && (
-              <p className="-mt-md text-sm leading-relaxed text-muted">
+              <p className="text-sm leading-relaxed text-muted">
                 Estas cifras todavía se mueven bastante. Con medio año de
                 registro empiezan a significar algo.
               </p>
@@ -187,7 +190,10 @@ function Stat({
   unit?: string;
 }) {
   return (
-    <div>
+    <div
+      className="sticker-sm rounded-2xl px-4 py-3"
+      style={{ background: "var(--surface)" }}
+    >
       <dt className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
         {label}
       </dt>

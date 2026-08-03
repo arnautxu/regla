@@ -98,14 +98,18 @@ export function PeriodSheet({
                     onPick(opt.key);
                     ref.current?.close();
                   }}
-                  className="flex min-h-[56px] w-full items-center justify-between gap-md rounded-2xl px-4 text-left transition-[transform] duration-150 active:scale-[0.98]"
+                  className="flex min-h-[56px] w-full items-center justify-between gap-md rounded-2xl px-4 text-left transition-[transform,box-shadow] duration-150 active:scale-[0.98] active:translate-x-[1px] active:translate-y-[1px]"
                   style={
                     // Solo la primera opción va rellena. Si todas
                     // pesaran igual, elegir "hoy" —que es el 90% de
                     // las veces— costaría lo mismo que pensar.
                     i === 0
-                      ? { background: "var(--accent)", color: "var(--on-accent)" }
-                      : { boxShadow: "inset 0 0 0 1px var(--border-strong)" }
+                      ? {
+                          background: "var(--accent)",
+                          color: "var(--on-accent)",
+                          boxShadow: "3px 3px 0 0 var(--depth-shadow)",
+                        }
+                      : { background: "var(--surface)", boxShadow: "var(--depth-sm)" }
                   }
                 >
                   <span className="font-display text-base font-bold">
@@ -130,8 +134,8 @@ export function PeriodSheet({
                   ref.current?.close();
                   router.push("/calendario");
                 }}
-                className="flex min-h-[52px] w-full items-center justify-center rounded-2xl px-4 text-sm text-muted"
-                style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
+                className="flex min-h-[52px] w-full items-center justify-center rounded-2xl px-4 text-sm text-muted transition-[transform,box-shadow] duration-150 active:scale-[0.98] active:translate-x-[1px] active:translate-y-[1px]"
+                style={{ background: "var(--surface)", boxShadow: "var(--depth-sm)" }}
               >
                 Otro día — elegirlo en el calendario
               </button>

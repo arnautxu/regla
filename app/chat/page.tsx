@@ -91,8 +91,8 @@ export default function Chat() {
                   <button
                     type="button"
                     onClick={() => send(s)}
-                    className="w-full rounded-xl px-4 py-3 text-left text-sm transition-[transform] duration-150 active:scale-[0.98]"
-                    style={{ boxShadow: "inset 0 0 0 1px var(--border-strong)" }}
+                    className="w-full rounded-xl px-4 py-3 text-left text-sm transition-[transform,box-shadow] duration-150 active:scale-[0.98] active:translate-x-[1px] active:translate-y-[1px]"
+                    style={{ background: "var(--surface)", boxShadow: "var(--depth-sm)" }}
                   >
                     {s}
                   </button>
@@ -110,17 +110,21 @@ export default function Chat() {
           if (!text) return null;
 
           return (
-            <div key={m.id} className={mine ? "flex justify-end" : ""}>
+            <div key={m.id} className={mine ? "flex justify-end" : "flex justify-start"}>
               <p
                 className={
                   mine
                     ? "max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed"
-                    : "max-w-[92%] text-base leading-relaxed"
+                    : "sticker-sm max-w-[92%] rounded-2xl px-4 py-2.5 text-base leading-relaxed"
                 }
                 style={
                   mine
-                    ? { background: "var(--accent)", color: "var(--on-accent)" }
-                    : undefined
+                    ? {
+                        background: "var(--accent)",
+                        color: "var(--on-accent)",
+                        boxShadow: "2px 2px 0 0 var(--depth-shadow)",
+                      }
+                    : { background: "var(--surface)" }
                 }
               >
                 {text}
@@ -152,15 +156,19 @@ export default function Chat() {
           onChange={(e) => setInput(e.target.value)}
           placeholder="Escribe aquí…"
           aria-label="Tu pregunta"
-          className="min-h-[46px] flex-1 rounded-full bg-transparent px-4 text-base outline-none"
-          style={{ boxShadow: "inset 0 0 0 1px var(--border-strong)" }}
+          className="min-h-[46px] flex-1 rounded-full px-4 text-base outline-none"
+          style={{ background: "var(--surface)", boxShadow: "var(--depth-sm)" }}
         />
         <button
           type="submit"
           disabled={!input.trim() || status !== "ready"}
           aria-label="Enviar"
-          className="flex size-[46px] shrink-0 items-center justify-center rounded-full transition-[transform,opacity] duration-150 active:scale-90 disabled:opacity-35"
-          style={{ background: "var(--accent)", color: "var(--on-accent)" }}
+          className="flex size-[46px] shrink-0 items-center justify-center rounded-full transition-[transform,opacity,box-shadow] duration-150 active:scale-90 disabled:opacity-35"
+          style={{
+            background: "var(--accent)",
+            color: "var(--on-accent)",
+            boxShadow: "2px 2px 0 0 var(--depth-shadow)",
+          }}
         >
           <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M12 19V5M6 11l6-6 6 6" />

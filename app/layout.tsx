@@ -28,7 +28,13 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "Lilaila",
-    statusBarStyle: "black-translucent",
+    // "default" = barra clara con texto oscuro. El tema canónico es
+    // claro, así que es lo correcto de fondo; AppShell la cambia a
+    // "black-translucent" cuando el tema resuelto es oscuro. Con
+    // "black-translucent" fijo aquí, la hora y la batería quedaban en
+    // blanco sobre el papel claro — invisibles. Eso solo se ve en la
+    // PWA instalada en iOS, nunca en un navegador de escritorio.
+    statusBarStyle: "default",
   },
   formatDetection: { telephone: false, date: false, email: false },
   icons: {

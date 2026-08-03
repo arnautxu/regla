@@ -98,7 +98,10 @@ export function BackupPanel() {
   }
 
   return (
-    <section className="flex flex-col gap-md">
+    <section
+      className="sticker flex flex-col gap-md rounded-2xl px-lg py-md"
+      style={{ background: "var(--surface)" }}
+    >
       <div>
         <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
           Copia de seguridad
@@ -205,12 +208,17 @@ function Boton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="min-h-[44px] rounded-full px-4 text-sm transition-[transform,opacity] duration-150 active:scale-[0.97] disabled:opacity-40"
+      className="min-h-[44px] rounded-full px-4 text-sm transition-[transform,opacity,box-shadow] duration-150 active:scale-[0.97] active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-40"
       style={
         danger
-          ? { background: "var(--accent)", color: "var(--on-accent)" }
+          ? {
+              background: "var(--accent)",
+              color: "var(--on-accent)",
+              boxShadow: "2px 2px 0 0 var(--depth-shadow)",
+            }
           : {
-              boxShadow: "inset 0 0 0 1px var(--border-strong)",
+              background: "var(--bg)",
+              boxShadow: "var(--depth-sm)",
               color: "var(--fg-muted)",
             }
       }
