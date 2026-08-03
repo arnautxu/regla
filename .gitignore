@@ -32,6 +32,11 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...menos la plantilla, que es documentacion y no lleva valores
+!.env.example
+
+# ajustes locales del agente, no del proyecto
+.claude/settings.local.json
 
 # vercel
 .vercel

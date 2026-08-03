@@ -1,0 +1,146 @@
+"use client";
+
+import { db, onLocalChange, type Cycle, type DayLog, type Settings } from "./db";
+
+/* ═══════════════════════════════════════════════════════════════
+   COPIA DE SEGURIDAD
+
+   Un solo dispositivo, así que esto no es sincronización: el móvil
+   manda y el servidor guarda una copia. Sin fusión, sin conflictos.
+
+   · Al arrancar, si el móvil está vacío y el servidor tiene datos,
+     se restaura. Ese es el caso "Safari purgó el almacenamiento" o
+     "móvil nuevo", y es el único momento en que se baja algo.
+
+   · En cada cambio, se sube todo con un retardo de 3 s. Marcar cinco
+     chips seguidos no dispara cinco subidas.
+
+   · Si no hay red, no pasa nada: la app funciona igual y la copia
+     sale en el siguiente cambio. IndexedDB nunca deja de ser la
+     copia de trabajo.
+   ═══════════════════════════════════════════════════════════════ */
+
+const DEBOUNCE_MS = 3000;
+
+export type BackupState =
+  | { status: "off" }
+  | { status: "idle"; savedAt?: string }
+  | { status: "saving" }
+  | { status: "error"; message: string };
+
+let timer: ReturnType<typeof setTimeout> | null = null;
+const listeners = new Set<(s: BackupState) => void>();
+let current: BackupState = { status: "off" };
+
+function emit(s: BackupState) {
+  current = s;
+  for (const l of listeners) l(s);
+}
+
+export function subscribeBackup(fn: (s: BackupState) => void) {
+  listeners.add(fn);
+  fn(current);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+async function collect() {
+  const [cycles, days, settings] = await Promise.all([
+    db.cycles.toArray(),
+    db.days.toArray(),
+    db.settings.get("singleton"),
+  ]);
+  return { cycles, days, settings: settings ?? null };
+}
+
+async function push() {
+  emit({ status: "saving" });
+  try {
+    const body = await collect();
+    const res = await fetch("/api/data", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: 1, ...body }),
+    });
+
+    if (res.status === 401) return emit({ status: "off" });
+
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      return emit({
+        status: "error",
+        message: data.error ?? "No se pudo guardar la copia.",
+      });
+    }
+
+    const { savedAt } = (await res.json()) as { savedAt: string };
+    emit({ status: "idle", savedAt });
+  } catch {
+    // Sin red. No es un error que merezca molestarla.
+    emit({ status: "idle" });
+  }
+}
+
+function schedulePush() {
+  if (timer) clearTimeout(timer);
+  timer = setTimeout(() => {
+    timer = null;
+    void push();
+  }, DEBOUNCE_MS);
+}
+
+/** Baja del servidor solo si aquí no hay nada. Nunca pisa datos locales. */
+async function restoreIfEmpty(): Promise<boolean> {
+  const localCount = await db.cycles.count();
+  if (localCount > 0) return false;
+
+  const res = await fetch("/api/data");
+  if (!res.ok) return false;
+
+  const doc = (await res.json()) as {
+    cycles: Cycle[];
+    days: DayLog[];
+    settings: Settings | null;
+  };
+  if (!doc.cycles?.length && !doc.days?.length) return false;
+
+  await db.transaction("rw", db.cycles, db.days, db.settings, async () => {
+    await db.cycles.bulkPut(doc.cycles ?? []);
+    await db.days.bulkPut(doc.days ?? []);
+    if (doc.settings) await db.settings.put(doc.settings);
+  });
+  return true;
+}
+
+let started = false;
+
+/** Arranca la copia. Idempotente: llamarlo dos veces no duplica nada. */
+export async function startBackup() {
+  if (started) return;
+  started = true;
+
+  const restored = await restoreIfEmpty().catch(() => false);
+  emit({ status: "idle" });
+
+  onLocalChange(schedulePush);
+
+  // Tras restaurar no se sube: lo que hay aquí ya vino de allí.
+  if (!restored) schedulePush();
+}
+
+export function stopBackup() {
+  started = false;
+  onLocalChange(null);
+  if (timer) clearTimeout(timer);
+  emit({ status: "off" });
+}
+
+/** Fuerza una subida ya, sin esperar al retardo. */
+export function pushNow() {
+  if (timer) clearTimeout(timer);
+  timer = null;
+  return push();
+}

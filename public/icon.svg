@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#1a1012"/>
+  <!-- Solo el busto. Con patas, Lilita ocupa un rectángulo estrecho y
+       en un icono cuadrado de 60px se queda en nada. La gota con ojos
+       se reconoce al instante; las zapatillas son para dentro. -->
+  <g transform="translate(256 258) scale(3.3) translate(-60 -67)">
+    <path d="M60 8 C60 8 98 56 98 88 A38 38 0 1 1 22 88 C22 56 60 8 60 8 Z"
+          fill="#e0384a" stroke="#4a1418" stroke-width="4"/>
+    <ellipse cx="44" cy="52" rx="7" ry="12" fill="#f27182" transform="rotate(-18 44 52)"/>
+    <ellipse cx="45" cy="78" rx="15.5" ry="16.5" fill="#faf4f0" stroke="#4a1418" stroke-width="3.5"/>
+    <ellipse cx="75" cy="78" rx="15.5" ry="16.5" fill="#faf4f0" stroke="#4a1418" stroke-width="3.5"/>
+    <circle cx="47" cy="77" r="6.5" fill="#4a1418"/>
+    <circle cx="77" cy="77" r="6.5" fill="#4a1418"/>
+    <g stroke="#4a1418" stroke-width="5" stroke-linecap="round" fill="none">
+      <path d="M36 59 L54 57"/>
+      <path d="M70 49 L84 55"/>
+    </g>
+    <path d="M46 104 Q58 112 76 100" fill="none" stroke="#4a1418" stroke-width="4" stroke-linecap="round"/>
+  </g>
+</svg>

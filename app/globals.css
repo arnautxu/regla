@@ -1,26 +1,347 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ═══════════════════════════════════════════════════════════════
+   LILAILA — sistema de diseño
+
+   Claro y minimal. Papel cálido, tinta cálida, y UN solo acento: el
+   rojo de Lilita.
+
+   Antes la fase del ciclo teñía la app entera. Era vistoso y era
+   ruido: el botón principal cambiaba de color cada semana y el rojo
+   dejaba de significar nada por estar en todas partes. Ahora el
+   acento es constante y la fase se cuenta con una etiqueta y un
+   punto. Misma información, una décima parte del volumen.
+   ═══════════════════════════════════════════════════════════════ */
+
+@theme {
+  /* --- Tipografía ------------------------------------------------
+     Bricolage Grotesque para titular, Schibsted Grotesk para leer.
+     Sobre papel blanco la display luce más, así que en claro se usa
+     menos y más grande: minimal es contraste de tamaño, no de peso. */
+  --font-display: var(--font-bricolage), system-ui, sans-serif;
+  --font-sans: var(--font-schibsted), system-ui, sans-serif;
+
+  /* Escala fija en rem — es UI de app, no una landing. Ratio ~1.4 */
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-base: 1.0625rem;
+  --text-lg: 1.375rem;
+  --text-xl: 1.875rem;
+  --text-2xl: 2.75rem;
+  --text-3xl: 4rem;
+
+  /* --- Espaciado: base 4pt, nombres semánticos ------------------- */
+  --spacing-2xs: 0.25rem;
+  --spacing-xs: 0.5rem;
+  --spacing-sm: 0.75rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+  --spacing-3xl: 4rem;
+  --spacing-4xl: 6rem;
+
+  /* --- Motion ---------------------------------------------------- */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-quart: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ═══ Tema: CLARO es el canónico ════════════════════════════════
+   Neutros tintados hacia el rojo de marca con chroma mínimo
+   (0.004–0.015). No se lee como "rosado": cose el papel con la
+   mascota sin que nadie sepa por qué encaja. */
+
+:root {
+  color-scheme: light;
+
+  --bg: oklch(98.6% 0.004 45);
+  --surface: oklch(100% 0 0);
+  --fg: oklch(21% 0.016 30);
+  --fg-muted: oklch(47% 0.014 30);
+  --fg-faint: oklch(55.5% 0.012 30);
+  --border: oklch(91.5% 0.006 40);
+  --border-strong: oklch(65.5% 0.012 40);
+
+  /* Un acento y ya. Es el rojo de Lilita, y no se mueve. */
+  --accent: oklch(51% 0.2 26);
+  --accent-soft: oklch(95.5% 0.022 26);
+  --on-accent: oklch(99% 0.004 45);
+
+  --weight-body: 420;
+
+  /* Fase: solo para la etiqueta y los puntos. Nunca para rellenos
+     grandes ni para el botón principal. */
+  --phase: oklch(51% 0.2 26);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: oklch(15% 0.01 30);
+  --surface: oklch(19.5% 0.012 30);
+  --fg: oklch(95% 0.006 30);
+  --fg-muted: oklch(72% 0.012 30);
+  --fg-faint: oklch(64% 0.012 30);
+  --border: oklch(28% 0.014 30);
+  --border-strong: oklch(50% 0.02 30);
+
+  --accent: oklch(66% 0.2 26);
+  --accent-soft: oklch(21% 0.05 26);
+  --on-accent: oklch(15% 0.02 30);
+
+  --weight-body: 400;
+  --phase: oklch(66% 0.2 26);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  [data-theme="auto"] {
+    color-scheme: dark;
+
+    --bg: oklch(15% 0.01 30);
+    --surface: oklch(19.5% 0.012 30);
+    --fg: oklch(95% 0.006 30);
+    --fg-muted: oklch(72% 0.012 30);
+    --fg-faint: oklch(64% 0.012 30);
+    --border: oklch(28% 0.014 30);
+    --border-strong: oklch(50% 0.02 30);
+    --accent: oklch(66% 0.2 26);
+    --accent-soft: oklch(21% 0.05 26);
+    --on-accent: oklch(15% 0.02 30);
+    --weight-body: 400;
+    --phase: oklch(66% 0.2 26);
   }
 }
 
+/* ═══ Color de fase ═════════════════════════════════════════════
+   Cuatro tonos, y en superficie mínima: una etiqueta de 11px y un
+   punto de 6px. Lo justo para que el ojo aprenda la asociación sin
+   que la pantalla cambie de identidad cada semana. */
+
+[data-phase="menstrual"] {
+  --phase: oklch(51% 0.2 26);
+}
+[data-phase="folicular"] {
+  --phase: oklch(48% 0.11 172);
+}
+[data-phase="ovulacion"] {
+  --phase: oklch(50% 0.18 350);
+}
+[data-phase="lutea"] {
+  --phase: oklch(50% 0.13 58);
+}
+
+[data-theme="dark"][data-phase="menstrual"] {
+  --phase: oklch(66% 0.2 26);
+}
+[data-theme="dark"][data-phase="folicular"] {
+  --phase: oklch(74% 0.13 172);
+}
+[data-theme="dark"][data-phase="ovulacion"] {
+  --phase: oklch(70% 0.17 350);
+}
+[data-theme="dark"][data-phase="lutea"] {
+  --phase: oklch(76% 0.14 58);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"][data-phase="menstrual"] {
+    --phase: oklch(66% 0.2 26);
+  }
+  [data-theme="auto"][data-phase="folicular"] {
+    --phase: oklch(74% 0.13 172);
+  }
+  [data-theme="auto"][data-phase="ovulacion"] {
+    --phase: oklch(70% 0.17 350);
+  }
+  [data-theme="auto"][data-phase="lutea"] {
+    --phase: oklch(76% 0.14 58);
+  }
+}
+
+/* ═══ Lilita ════════════════════════════════════════════════════
+   Roja siempre. Sobre papel cálido el granate del contorno hace de
+   línea de tinta y la silueta se lee sola. */
+
+:root {
+  --li-body: oklch(56% 0.21 25);
+  --li-line: oklch(28% 0.11 25);
+  --li-sclera: oklch(99% 0.006 60);
+  --li-shine: oklch(72% 0.15 25);
+  --li-shoe: oklch(97% 0.008 60);
+  --li-sweat: oklch(80% 0.08 225);
+}
+
+[data-theme="dark"] {
+  --li-body: oklch(62% 0.2 25);
+  --li-sclera: oklch(97% 0.012 60);
+  --li-shoe: oklch(95% 0.014 60);
+}
+
+/* ═══ Calendario ════════════════════════════════════════════════
+   Un hecho y una estimación no pueden verse igual de firmes.
+
+     regla registrada → tinta plena. Pasó.
+     regla prevista   → contorno finísimo. Es un cálculo.
+     ventana fértil   → subrayado tenue. Es el cálculo MENOS fiable
+                        de la app (asume ovulación el día 14, que en
+                        ciclos reales se mueve varios días), así que
+                        es lo más callado de la pantalla. */
+
+:root {
+  --cal-regla: oklch(51% 0.2 26);
+  --cal-regla-fg: oklch(99% 0.004 45);
+  --cal-prevista: oklch(66.5% 0.12 26);
+  --cal-fertil: oklch(66.5% 0.1 350);
+}
+
+[data-theme="dark"] {
+  --cal-regla: oklch(57% 0.19 26);
+  --cal-regla-fg: oklch(98% 0.006 45);
+  --cal-prevista: oklch(52% 0.13 26);
+  --cal-fertil: oklch(55% 0.11 350);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] {
+    --cal-regla: oklch(57% 0.19 26);
+    --cal-regla-fg: oklch(98% 0.006 45);
+    --cal-prevista: oklch(52% 0.13 26);
+    --cal-fertil: oklch(55% 0.11 350);
+  }
+}
+
+/* ═══ Puente a utilidades de Tailwind ═══════════════════════════ */
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-fg: var(--fg);
+  --color-muted: var(--fg-muted);
+  --color-faint: var(--fg-faint);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-phase: var(--phase);
+}
+
+/* ═══ Base ══════════════════════════════════════════════════════ */
+
+html {
+  overscroll-behavior-y: none;
+  background: var(--bg);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-weight: var(--weight-body);
+  font-synthesis-weight: none;
+  font-kerning: normal;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* Los números de ciclo se comparan en columna: tabulares o baila todo */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+:where(a, button, [role="button"], input, select, textarea):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* ═══ Hoja inferior ═════════════════════════════════════════════
+   <dialog> nativo: trampa de foco, Escape e inerte de fondo gratis.
+   Escritos a mano, esos tres suelen salir mal. */
+
+dialog.sheet {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+/* Va después del display:flex de arriba, o el diálogo cerrado se
+   quedaría visible: el display:none del navegador ya no gana. */
+dialog.sheet:not([open]) {
+  display: none;
+}
+
+dialog.sheet::backdrop {
+  background: oklch(25% 0.02 30 / 0.32);
+  animation: sheet-fade 200ms var(--ease-out-quart);
+}
+
+.sheet-panel {
+  width: 100%;
+  max-width: 440px;
+  max-height: 88dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface);
+  color: var(--fg);
+  border-radius: 28px 28px 0 0;
+  border-top: 1px solid var(--border);
+  padding-bottom: calc(var(--spacing-lg) + env(safe-area-inset-bottom));
+  animation: sheet-up 300ms var(--ease-out-quart);
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes sheet-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ═══ Utilidades ════════════════════════════════════════════════ */
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@utility mb-safe {
+  margin-bottom: env(safe-area-inset-bottom);
+}
+@utility px-safe {
+  padding-left: max(env(safe-area-inset-left), var(--spacing-lg));
+  padding-right: max(env(safe-area-inset-right), var(--spacing-lg));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
