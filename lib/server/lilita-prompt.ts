@@ -1,3 +1,4 @@
+import { google } from "@ai-sdk/google";
 import type { LilitaContext } from "../ai-context";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -124,16 +125,54 @@ le pasa. Tienes sus datos delante.
     .join("\n\n");
 }
 
-export const MODEL = "anthropic/claude-sonnet-5";
+/* ═══════════════════════════════════════════════════════════════
+   QUÉ MODELO Y DE QUIÉN
+
+   Dos caminos, y se elige el que esté disponible:
+
+   1. GEMINI DIRECTO, si hay GOOGLE_GENERATIVE_AI_API_KEY. Va contra
+      Google sin intermediarios y no depende de la facturación de
+      Vercel.
+
+   2. VERCEL AI GATEWAY, si no. Autentica con clave de API o con el
+      token OIDC que Vercel inyecta en sus despliegues — pero exige
+      una tarjeta en la cuenta para servir peticiones, cosa que no
+      se descubre hasta que devuelve un 403.
+
+   Gemini va primero justamente por eso: no tiene esa puerta.
+   ═══════════════════════════════════════════════════════════════ */
+
+/** Flash: sobrado para frases de 20 palabras y un chat corto. */
+const GEMINI_DEFAULT = "gemini-3.6-flash";
+const GATEWAY_DEFAULT = "anthropic/claude-sonnet-5";
+
+export function usingGemini(): boolean {
+  return Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
+}
 
 /**
- * El AI Gateway autentica de dos maneras: con una clave de API o, en
- * despliegues de Vercel, con el token OIDC que la plataforma inyecta
- * sola. Mirar solo la clave dejaba la IA apagada en producción aunque
- * funcionase perfectamente por OIDC.
+ * El modelo listo para pasar a generateText/streamText. Se puede
+ * forzar otro con LILAILA_MODEL sin tocar código, que es lo que hará
+ * falta el día que salga uno mejor.
  */
+export function resolveModel() {
+  if (usingGemini()) {
+    return google(process.env.LILAILA_MODEL ?? GEMINI_DEFAULT);
+  }
+  // Cadena suelta: el gateway es el proveedor global por defecto.
+  return process.env.LILAILA_MODEL ?? GATEWAY_DEFAULT;
+}
+
+export function modelName(): string {
+  return usingGemini()
+    ? `google/${process.env.LILAILA_MODEL ?? GEMINI_DEFAULT}`
+    : (process.env.LILAILA_MODEL ?? GATEWAY_DEFAULT);
+}
+
 export function aiConfigured(): boolean {
   return Boolean(
-    process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN,
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+      process.env.AI_GATEWAY_API_KEY ||
+      process.env.VERCEL_OIDC_TOKEN,
   );
 }

@@ -8,7 +8,7 @@ import {
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, requireSession } from "@/lib/server/auth";
 import {
-  MODEL,
+  resolveModel,
   aiConfigured,
   chatInstructions,
 } from "@/lib/server/lilita-prompt";
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   };
 
   const result = streamText({
-    model: MODEL,
+    model: resolveModel(),
     instructions: chatInstructions(context),
     messages: await convertToModelMessages(messages),
     temperature: 0.9,

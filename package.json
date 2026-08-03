@@ -10,6 +10,7 @@
     "icons": "node scripts/icons.mjs"
   },
   "dependencies": {
+    "@ai-sdk/google": "^4.0.31",
     "@ai-sdk/react": "^4.0.51",
     "@vercel/blob": "^2.6.1",
     "ai": "^7.0.48",

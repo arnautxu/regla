@@ -2,7 +2,8 @@ import { generateText } from "ai";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, requireSession } from "@/lib/server/auth";
 import {
-  MODEL,
+  resolveModel,
+  modelName,
   aiConfigured,
   lineInstructions,
 } from "@/lib/server/lilita-prompt";
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
 
   try {
     const { text } = await generateText({
-      model: MODEL,
+      model: resolveModel(),
       instructions: lineInstructions(context),
       prompt:
         "Escribe la intervención de hoy. Solo el texto, nada más.",
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
   } catch (err) {
     // Al cliente le da igual el motivo (se queda con el banco local),
     // pero sin esto en el log un fallo del gateway es indepurable.
-    console.error("[lilita] fallo generando la frase:", err);
+    console.error(`[lilita] fallo generando la frase (${modelName()}):`, err);
     return Response.json({ error: "El modelo no contestó." }, { status: 502 });
   }
 }
