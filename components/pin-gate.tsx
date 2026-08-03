@@ -45,27 +45,46 @@ export function PinGate({ children }: { children: React.ReactNode }) {
     if (sending || pin.length < 4) return;
     setSending(true);
 
+    // Fallo de red y fallo del servidor son cosas distintas y hay que
+    // decirlas distintas. Antes iban al mismo catch: un 500 con el
+    // cuerpo vacío hacía reventar res.json() y se anunciaba como
+    // "sin conexión", que mandaba a mirar el wifi durante media hora
+    // mientras el problema era una variable de entorno.
+    let res: Response;
     try {
-      const res = await fetch("/api/auth", {
+      res = await fetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pin }),
       });
-      if (res.ok) {
-        haptic([18, 40, 26]);
-        setGate({ state: "dentro" });
-      } else {
-        const d = (await res.json()) as { error?: string };
-        haptic([40, 60, 40]);
-        setPin("");
-        setGate({ state: "pide-pin", error: d.error ?? "No ha colado." });
-        input.current?.focus();
-      }
     } catch {
-      setGate({ state: "pide-pin", error: "Sin conexión ahora mismo." });
-    } finally {
       setSending(false);
+      setGate({ state: "pide-pin", error: "Sin conexión ahora mismo." });
+      return;
     }
+
+    setSending(false);
+
+    if (res.ok) {
+      haptic([18, 40, 26]);
+      setGate({ state: "dentro" });
+      return;
+    }
+
+    // El cuerpo puede no ser JSON (un 500 crudo, una página de error
+    // del proxy). Que eso no vuelva a disfrazarse de otra cosa.
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    haptic([40, 60, 40]);
+    setPin("");
+    input.current?.focus();
+    setGate({
+      state: "pide-pin",
+      error:
+        data.error ??
+        (res.status >= 500
+          ? `Error del servidor (${res.status}). Revisa la configuración.`
+          : "No ha colado."),
+    });
   }
 
   if (gate.state === "comprobando") {
@@ -100,11 +119,16 @@ export function PinGate({ children }: { children: React.ReactNode }) {
           ref={input}
           autoFocus
           type="password"
-          inputMode="numeric"
-          autoComplete="one-time-code"
+          // Teclado numérico solo mientras lo que lleva escrito son
+          // dígitos. Antes el campo FILTRABA a dígitos y cortaba en
+          // 10, así que un código alfanumérico —que es más fuerte que
+          // seis números— era literalmente imposible de teclear. La
+          // app no tiene por qué dictar el formato de la contraseña.
+          inputMode={/^\d*$/.test(pin) ? "numeric" : "text"}
+          autoComplete="current-password"
           value={pin}
           onChange={(e) => {
-            setPin(e.target.value.replace(/\D/g, "").slice(0, 10));
+            setPin(e.target.value.slice(0, 64));
             // El error del intento anterior se va en cuanto vuelve a
             // teclear. Dejarlo puesto mientras escribe el código bueno
             // la deja pensando que ya ha fallado otra vez.
@@ -112,7 +136,14 @@ export function PinGate({ children }: { children: React.ReactNode }) {
           }}
           aria-label="Código de acceso"
           aria-invalid={Boolean(gate.error)}
-          className="tnum w-full rounded-2xl bg-transparent py-4 text-center font-display text-2xl tracking-[0.4em] outline-none"
+          // El espaciado ancho es bonito para seis dígitos y un
+          // desastre para un código alfanumérico largo: se sale de la
+          // caja. Se adapta a lo que esté escribiendo.
+          className={`tnum w-full rounded-2xl bg-transparent py-4 text-center font-display outline-none ${
+            /^\d*$/.test(pin) && pin.length <= 8
+              ? "text-2xl tracking-[0.4em]"
+              : "text-lg tracking-[0.08em]"
+          }`}
           style={{ boxShadow: "inset 0 0 0 1.5px var(--border-strong)" }}
         />
 

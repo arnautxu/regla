@@ -3,6 +3,7 @@ import {
   SESSION_COOKIE,
   checkPin,
   clearAttempts,
+  configProblem,
   cookieOptions,
   createSession,
   rateLimit,
@@ -12,18 +13,22 @@ import {
 /**
  * ¿Sigue viva la sesión? Lo usa la app al arrancar.
  *
- * `configured` distingue "no ha entrado" de "esto todavía no tiene
- * servidor". Sin esa diferencia, arrancar el proyecto sin variables
- * de entorno dejaría la app tras una puerta que nadie puede abrir.
- * Sin configurar, Lilaila funciona igual: solo en el móvil, sin copia.
+ * `configured` valida de verdad, no solo comprueba que las variables
+ * existan: antes decía que sí con un secreto demasiado corto y el
+ * login moría después con un 500 mudo.
+ *
+ * Distinguir "no ha entrado" de "esto no tiene servidor" importa
+ * porque sin configurar Lilaila funciona igual: solo en el móvil,
+ * sin copia. No queremos dejarla tras una puerta que nadie abre.
  */
 export async function GET() {
-  const configured = Boolean(
-    process.env.LILAILA_PIN &&
-      process.env.LILAILA_SECRET &&
-      process.env.BLOB_READ_WRITE_TOKEN,
-  );
-  if (!configured) return Response.json({ configured: false, authenticated: false });
+  const problem = configProblem();
+  const configured = !problem && Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+
+  if (!configured) {
+    if (problem) console.warn("[auth] configuración incompleta:", problem);
+    return Response.json({ configured: false, authenticated: false });
+  }
 
   const jar = await cookies();
   return Response.json({
@@ -33,6 +38,17 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  // Un problema de configuración no es culpa de quien intenta entrar,
+  // y merece un mensaje que diga qué arreglar.
+  const problem = configProblem();
+  if (problem) {
+    console.error("[auth] configuración inválida:", problem);
+    return Response.json(
+      { error: `Configuración del servidor incompleta. ${problem}` },
+      { status: 500 },
+    );
+  }
+
   const h = await headers();
   const ip =
     h.get("x-forwarded-for")?.split(",")[0].trim() ??
@@ -61,12 +77,19 @@ export async function POST(req: Request) {
     return Response.json({ error: "Ese código no es." }, { status: 401 });
   }
 
-  clearAttempts(ip);
-  const { token, maxAge } = createSession();
-  const jar = await cookies();
-  jar.set(SESSION_COOKIE, token, cookieOptions(maxAge));
-
-  return Response.json({ authenticated: true });
+  try {
+    clearAttempts(ip);
+    const { token, maxAge } = createSession();
+    const jar = await cookies();
+    jar.set(SESSION_COOKIE, token, cookieOptions(maxAge));
+    return Response.json({ authenticated: true });
+  } catch (err) {
+    console.error("[auth] fallo creando la sesión:", err);
+    return Response.json(
+      { error: "No he podido crear la sesión. Mira los logs del servidor." },
+      { status: 500 },
+    );
+  }
 }
 
 /** Cerrar sesión. */

@@ -21,22 +21,37 @@ import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
 const SESSION_DAYS = 90;
 export const SESSION_COOKIE = "lilaila_session";
 
-function secret(): string {
+export const MIN_SECRET = 16;
+export const MIN_PIN = 4;
+
+/**
+ * Revisa la configuración y devuelve qué falla, o null si está bien.
+ *
+ * Existe porque la primera versión solo comprobaba que las variables
+ * ESTUVIERAN, y luego reventaba al usarlas si no valían. Resultado:
+ * la app decía "configurado: sí", el login daba un 500 con el cuerpo
+ * vacío y el usuario leía "sin conexión". Un secreto de 11 caracteres
+ * tardó media hora en encontrarse por eso.
+ */
+export function configProblem(): string | null {
   const s = process.env.LILAILA_SECRET;
-  if (!s || s.length < 16) {
-    throw new Error(
-      "Falta LILAILA_SECRET (mínimo 16 caracteres) en las variables de entorno.",
-    );
-  }
-  return s;
+  const p = process.env.LILAILA_PIN;
+
+  if (!s) return "Falta LILAILA_SECRET.";
+  if (s.length < MIN_SECRET)
+    return `LILAILA_SECRET tiene ${s.length} caracteres y necesita al menos ${MIN_SECRET}.`;
+  if (!p) return "Falta LILAILA_PIN.";
+  if (p.length < MIN_PIN)
+    return `LILAILA_PIN tiene ${p.length} caracteres y necesita al menos ${MIN_PIN}.`;
+  return null;
+}
+
+function secret(): string {
+  return process.env.LILAILA_SECRET!;
 }
 
 function expectedPin(): string {
-  const p = process.env.LILAILA_PIN;
-  if (!p || p.length < 4) {
-    throw new Error("Falta LILAILA_PIN (mínimo 4 dígitos).");
-  }
-  return p;
+  return process.env.LILAILA_PIN!;
 }
 
 /** Comparación en tiempo constante: una comparación normal filtra
