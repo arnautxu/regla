@@ -1,6 +1,6 @@
 import { generateText } from "ai";
 import { cookies } from "next/headers";
-import { SESSION_COOKIE, verifySession } from "@/lib/server/auth";
+import { SESSION_COOKIE, requireSession } from "@/lib/server/auth";
 import {
   MODEL,
   aiConfigured,
@@ -20,14 +20,11 @@ export async function POST(req: Request) {
     return Response.json({ error: "IA no configurada." }, { status: 503 });
   }
 
-  // Si hay servidor con PIN, el endpoint va detrás de la puerta: si
-  // no, cualquiera podría gastar la cuota del gateway.
-  if (process.env.LILAILA_PIN) {
-    const jar = await cookies();
-    if (!verifySession(jar.get(SESSION_COOKIE)?.value)) {
-      return Response.json({ error: "No autorizado." }, { status: 401 });
-    }
-  }
+  // Detrás de la puerta en producción, siempre: un endpoint de modelo
+  // abierto es la cuota de otro.
+  const jar = await cookies();
+  const denied = await requireSession(jar.get(SESSION_COOKIE)?.value);
+  if (denied) return denied;
 
   let context: LilitaContext;
   try {

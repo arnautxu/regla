@@ -116,6 +116,28 @@ export function verifySession(token: string | undefined): boolean {
   return Number.isFinite(exp) && Date.now() < exp;
 }
 
+/**
+ * Guarda para los endpoints que cuestan dinero (los de IA).
+ *
+ * En producción SIEMPRE exige sesión. Sin esto, desplegar con clave
+ * del gateway pero sin PIN dejaría un endpoint de modelo abierto a
+ * internet, y el primero que encuentre la URL se come la cuota.
+ * En local se deja pasar para poder desarrollar sin montar la puerta.
+ */
+export async function requireSession(
+  token: string | undefined,
+): Promise<Response | null> {
+  if (process.env.NODE_ENV !== "production" && !process.env.LILAILA_PIN) {
+    return null;
+  }
+  if (verifySession(token)) return null;
+
+  return Response.json(
+    { error: "No autorizado. Configura LILAILA_PIN y entra con tu código." },
+    { status: 401 },
+  );
+}
+
 /** Configuración de la cookie. httpOnly para que ni el propio JS
     de la app pueda leerla, y por tanto tampoco un XSS. */
 export function cookieOptions(maxAge: number) {

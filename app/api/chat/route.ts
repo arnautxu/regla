@@ -6,7 +6,7 @@ import {
   type UIMessage,
 } from "ai";
 import { cookies } from "next/headers";
-import { SESSION_COOKIE, verifySession } from "@/lib/server/auth";
+import { SESSION_COOKIE, requireSession } from "@/lib/server/auth";
 import {
   MODEL,
   aiConfigured,
@@ -21,12 +21,9 @@ export async function POST(req: Request) {
     return Response.json({ error: "IA no configurada." }, { status: 503 });
   }
 
-  if (process.env.LILAILA_PIN) {
-    const jar = await cookies();
-    if (!verifySession(jar.get(SESSION_COOKIE)?.value)) {
-      return Response.json({ error: "No autorizado." }, { status: 401 });
-    }
-  }
+  const jar = await cookies();
+  const denied = await requireSession(jar.get(SESSION_COOKIE)?.value);
+  if (denied) return denied;
 
   const { messages, context } = (await req.json()) as {
     messages: UIMessage[];
