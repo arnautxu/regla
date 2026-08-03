@@ -46,6 +46,9 @@ export function subscribeBackup(fn: (s: BackupState) => void) {
 }
 
 async function collect() {
+  // Los ciclos ya no se guardan: se derivan de los dias. Se sigue
+  // subiendo la tabla vieja tal cual por si hiciera falta volver
+  // atras, pero lo que importa son los dias.
   const [cycles, days, settings] = await Promise.all([
     db.cycles.toArray(),
     db.days.toArray(),
@@ -94,7 +97,8 @@ function schedulePush() {
 
 /** Baja del servidor solo si aquí no hay nada. Nunca pisa datos locales. */
 async function restoreIfEmpty(): Promise<boolean> {
-  const localCount = await db.cycles.count();
+  // Vacio = sin dias registrados. La tabla de ciclos es legado.
+  const localCount = await db.days.count();
   if (localCount > 0) return false;
 
   const res = await fetch("/api/data");

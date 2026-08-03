@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
+import { daysToFill, derivedCycles } from "./period-days";
 
 /* ---------------------------------------------------------------
    Todo vive en el iPhone de Lidia. Nada de esto sale del dispositivo.
@@ -120,6 +121,67 @@ db.version(2)
       });
   });
 
+/*
+ * v3: el dia pasa a ser la verdad.
+ *
+ * Cada ciclo guardado se convierte en dias con flujo. La tabla vieja
+ * NO se borra: si esta conversion tuviera un fallo, tirarla seria
+ * perder el historial entero sin vuelta atras. Se queda como copia
+ * muerta y deja de leerse.
+ */
+db.version(3)
+  .stores({
+    cycles: "id, startDate, endDate, updatedAt",
+    days: "date, updatedAt",
+    settings: "id",
+  })
+  .upgrade(async (tx) => {
+    const stamp = new Date().toISOString();
+    const cycles = (await tx.table("cycles").toArray()) as Cycle[];
+    const days = (await tx.table("days").toArray()) as DayLog[];
+    const porFecha = new Map(days.map((d) => [d.date, d]));
+
+    const DIA = 86400000;
+    const clave = (t: number) => {
+      const d = new Date(t);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+
+    for (const c of cycles) {
+      const ini = new Date(
+        Number(c.startDate.slice(0, 4)),
+        Number(c.startDate.slice(5, 7)) - 1,
+        Number(c.startDate.slice(8, 10)),
+      ).getTime();
+      // Sin fin declarado se asume la duracion por defecto: es lo que
+      // la app ya venia mostrando, asi que no cambia nada de lo visto.
+      const finKey = c.endDate ?? clave(ini + 4 * DIA);
+      const fin = new Date(
+        Number(finKey.slice(0, 4)),
+        Number(finKey.slice(5, 7)) - 1,
+        Number(finKey.slice(8, 10)),
+      ).getTime();
+
+      // Nunca hacia el futuro: una regla abierta se rellenaba cinco
+      // dias a ciegas y dejaba apuntado que manyana sangro.
+      const hoy = new Date();
+      const tope = Math.min(
+        fin,
+        new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).getTime(),
+      );
+
+      for (let t = ini; t <= tope; t += DIA) {
+        const k = clave(t);
+        const previo = porFecha.get(k);
+        // Lo que ella marco a mano manda sobre lo que deduzcamos.
+        if (previo?.flow !== undefined) continue;
+        const nuevo: DayLog = { ...previo, date: k, flow: 2, updatedAt: stamp };
+        porFecha.set(k, nuevo);
+        await tx.table("days").put(nuevo);
+      }
+    }
+  });
+
 export { db };
 
 /* --- Helpers de fecha ------------------------------------------- */
@@ -169,100 +231,106 @@ function touch() {
   onChange?.();
 }
 
-/** El ciclo mas reciente por fecha de inicio. */
-export async function getLatestCycle(): Promise<Cycle | undefined> {
-  return db.cycles.orderBy("startDate").last();
+/* Los ciclos ya no se guardan: se calculan a partir de los dias. */
+export async function getAllCycles(): Promise<Cycle[]> {
+  return derivedCycles(await db.days.toArray(), todayKey());
 }
 
-export async function getAllCycles(): Promise<Cycle[]> {
-  return db.cycles.orderBy("startDate").toArray();
+export async function getLatestCycle(): Promise<Cycle | undefined> {
+  return (await getAllCycles()).at(-1);
+}
+
+/* ── Registro de sangrado ────────────────────────────────────────
+   Todo esto escribe DIAS. Los ciclos se derivan de ellos (ver
+   period-days.ts), asi que ya no hay dos verdades que puedan
+   contradecirse. ──────────────────────────────────────────────── */
+
+/** Flujo por defecto cuando lo marca el boton y no ella a mano. */
+const FLUJO_POR_DEFECTO: FlowLevel = 2;
+
+/**
+ * "Me bajo el dia X". Marca desde X hasta hoy: si dice que le bajo
+ * hace tres dias, lleva tres dias sangrando. Respeta los dias que ya
+ * tengan un flujo puesto a mano.
+ */
+export async function startPeriod(date = todayKey()): Promise<void> {
+  const existentes = await db.days.toArray();
+  const mapa = new Map(existentes.map((d) => [d.date, d]));
+  const stamp = now();
+
+  for (const key of daysToFill(date, todayKey(), mapa)) {
+    const previo = mapa.get(key);
+    await db.days.put({
+      ...previo,
+      date: key,
+      flow: FLUJO_POR_DEFECTO,
+      updatedAt: stamp,
+    });
+  }
+  touch();
 }
 
 /**
- * "Me ha bajado". Ahora acepta cualquier fecha, no solo hoy.
+ * "El ultimo dia que manche fue X."
  *
- * Con fechas libres aparece un problema que con el interruptor de
- * antes no existia: decir "me bajo el viernes" cuando ya hay un ciclo
- * apuntado el domingo NO son dos reglas, es la misma mal fechada. Si
- * se anyadiera sin mas quedarian ciclos solapados y las medias se
- * irian a la basura.
- *
- * Regla: dos inicios a menos de MIN_GAP dias son el mismo periodo, y
- * el nuevo dato CORRIGE al viejo. Mas lejos, es una regla nueva.
+ * Con el modelo por dias, cerrar una regla es quitar el sangrado de
+ * los dias POSTERIORES a X, no marcar X. Si dice que el ultimo fue
+ * anteayer, ayer y hoy no cuentan.
  */
-const MIN_GAP = 10;
+export async function endPeriod(date = todayKey()): Promise<void> {
+  const all = await db.days.toArray();
+  const stamp = now();
+  const hoy = todayKey();
 
-function daysBetween(a: string, b: string): number {
-  return Math.round(
-    (fromKey(a).getTime() - fromKey(b).getTime()) / 86400000,
-  );
+  for (const d of all) {
+    if (d.date > date && d.date <= hoy && d.flow !== undefined) {
+      await db.days.put({ ...d, flow: undefined, updatedAt: stamp });
+    }
+  }
+  // Y el dia elegido si que sangro, por si no estaba marcado.
+  const ultimo = all.find((d) => d.date === date);
+  if (!ultimo?.flow) {
+    await db.days.put({
+      ...ultimo,
+      date,
+      flow: ultimo?.flow || FLUJO_POR_DEFECTO,
+      updatedAt: stamp,
+    });
+  }
+  touch();
 }
 
-export async function startPeriod(date = todayKey()): Promise<void> {
-  const all = await getAllCycles();
+/** Quita el sangrado de toda la racha que contiene ese dia. */
+export async function clearPeriodAround(date: string): Promise<void> {
+  const all = await db.days.toArray();
+  const cycle = derivedCycles(all, todayKey()).find(
+    (c) => c.startDate <= date && (c.endDate ?? todayKey()) >= date,
+  );
+  if (!cycle) return;
 
-  const near = all.find((c) => Math.abs(daysBetween(c.startDate, date)) < MIN_GAP);
-  if (near) {
-    await db.cycles.update(near.id, {
-      startDate: date,
-      // Si la correccion deja el fin antes del inicio, el fin deja de
-      // tener sentido y se borra: mejor sin dato que con uno imposible.
-      endDate: near.endDate && near.endDate < date ? undefined : near.endDate,
-      updatedAt: now(),
-    });
-    touch();
-    return;
+  const hasta = cycle.endDate ?? todayKey();
+  const stamp = now();
+  for (const d of all) {
+    if (d.date >= cycle.startDate && d.date <= hasta && d.flow !== undefined) {
+      await db.days.put({ ...d, flow: undefined, updatedAt: stamp });
+    }
   }
+  touch();
+}
 
-  // Cierra cualquier regla que siguiera abierta. El cierre va el dia
-  // ANTERIOR al nuevo inicio: cerrarla el mismo dia solaparia las dos
-  // y ese dia contaria por partida doble.
-  const open = all.filter((c) => !c.endDate && c.startDate < date);
-  for (const c of open) {
-    const dayBefore = toKey(new Date(fromKey(date).getTime() - 86400000));
-    await db.cycles.update(c.id, {
-      endDate: dayBefore >= c.startDate ? dayBefore : c.startDate,
-      updatedAt: now(),
-    });
-  }
-
-  await db.cycles.add({
-    id: crypto.randomUUID(),
-    startDate: date,
+/** Marca o desmarca un dia suelto como dia de regla. */
+export async function setBleeding(
+  date: string,
+  yes: boolean,
+): Promise<void> {
+  const previo = await db.days.get(date);
+  await db.days.put({
+    ...previo,
+    date,
+    flow: yes ? (previo?.flow || FLUJO_POR_DEFECTO) : undefined,
     updatedAt: now(),
   });
   touch();
-}
-
-/** "Se ha ido" — cierra el ciclo abierto. */
-export async function endPeriod(date = todayKey()): Promise<void> {
-  const latest = await getLatestCycle();
-  if (!latest || latest.endDate) return;
-  await db.cycles.update(latest.id, { endDate: date, updatedAt: now() });
-  touch();
-}
-
-/** Deshace un "me ha bajado" pulsado sin querer. */
-export async function deleteCycle(id: string): Promise<void> {
-  await db.cycles.delete(id);
-  touch();
-}
-
-/**
- * Marca un día cualquiera como primer día de regla, desde el
- * calendario. A diferencia de startPeriod() no cierra el ciclo
- * anterior: aquí se están rellenando días atrasados y cerrar por
- * nuestra cuenta un ciclo del pasado sería inventarse un dato.
- */
-export async function markCycleStart(date: string): Promise<void> {
-  // Misma logica que el boton de Hoy: el calendario no puede tener
-  // reglas propias sobre lo que es un ciclo valido.
-  await startPeriod(date);
-}
-
-export async function unmarkCycleStart(date: string): Promise<void> {
-  const existing = await db.cycles.where("startDate").equals(date).first();
-  if (existing) await deleteCycle(existing.id);
 }
 
 export async function getDay(date: string): Promise<DayLog | undefined> {

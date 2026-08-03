@@ -51,6 +51,13 @@ export function computeCycleState(
   cycles: Cycle[],
   settings: Settings,
   today = todayKey(),
+  /**
+   * Si hoy hay sangrado registrado. Se pasa desde fuera porque el
+   * dato vive en el registro del dia, no en el ciclo: deducirlo de
+   * la ventana del ciclo permitia que la pantalla dijera "dia 4 de
+   * regla" con el dia marcado como "Nada".
+   */
+  bleedingToday?: boolean,
 ): CycleState {
   const sorted = [...cycles].sort((a, b) =>
     a.startDate.localeCompare(b.startDate),
@@ -94,19 +101,14 @@ export function computeCycleState(
     };
   }
 
-  // El tope usa la duración APRENDIDA de sus reglas, no la de
-  // ajustes: si las suyas duran 7 días, cerrar a los 5 la dejaría
-  // sin poder registrar flujo justo los días que sangra.
+  // Sangra hoy = hoy tiene flujo registrado. Sin ese dato (llamadas
+  // antiguas) se cae a la deduccion por ventana, que es peor pero no
+  // rompe nada.
   const bleeding =
-    !current.endDate && dayOfCycle <= Math.max(model.periodLength + 3, 8);
+    bleedingToday ??
+    (!current.endDate && dayOfCycle <= Math.max(model.periodLength + 3, 8));
 
-  const periodDay = current.endDate
-    ? differenceInCalendarDays(fromKey(current.endDate), fromKey(current.startDate)) + 1 >= dayOfCycle
-      ? dayOfCycle
-      : undefined
-    : bleeding
-      ? dayOfCycle
-      : undefined;
+  const periodDay = bleeding ? dayOfCycle : undefined;
 
   const daysUntilNext = avgLength - dayOfCycle + 1;
   const spread = model.spread;

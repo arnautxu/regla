@@ -10,6 +10,7 @@ import {
   type Settings,
 } from "./db";
 import { computeCycleState, type CycleState } from "./cycle";
+import { bled, derivedCycles } from "./period-days";
 import { lilitaSays, type Line } from "./lilita/lines";
 
 export interface Lilaila {
@@ -38,9 +39,11 @@ export function useLilaila(): Lilaila {
     async () => (await db.settings.get("singleton")) ?? null,
     [],
   );
+  // Los ciclos se derivan de los dias: una sola verdad. Al escuchar
+  // la tabla de dias, marcar el flujo repinta el ciclo al instante.
   const cycles = useLiveQuery(
-    () => db.cycles.orderBy("startDate").toArray(),
-    [],
+    async () => derivedCycles(await db.days.toArray(), dateKey),
+    [dateKey],
   );
   const today = useLiveQuery(
     async () => (await db.days.get(dateKey)) ?? null,
@@ -51,7 +54,12 @@ export function useLilaila(): Lilaila {
   const resolvedSettings = settings ?? DEFAULT_SETTINGS;
   const resolvedCycles = cycles ?? [];
 
-  const state = computeCycleState(resolvedCycles, resolvedSettings, dateKey);
+  const state = computeCycleState(
+    resolvedCycles,
+    resolvedSettings,
+    dateKey,
+    today === undefined ? undefined : bled(today ?? undefined),
+  );
 
   const line = lilitaSays(
     {

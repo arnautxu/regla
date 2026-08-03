@@ -6,8 +6,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   db,
-  markCycleStart,
-  unmarkCycleStart,
+  setBleeding,
   upsertDay,
   type MoodTag,
   type SymptomTag,
@@ -88,13 +87,9 @@ export function DaySheet({
     [day?.key],
   );
 
-  const isCycleStart = useLiveQuery(
-    async () =>
-      day
-        ? (await db.cycles.where("startDate").equals(day.key).count()) > 0
-        : false,
-    [day?.key],
-  );
+  // Ya no se pregunta si es "el primer dia": se pregunta si ese dia
+  // sangro. El inicio del ciclo lo deduce la app de la racha.
+  const sangro = log?.flow !== undefined && log.flow > 0;
 
   return (
     <dialog
@@ -184,13 +179,11 @@ export function DaySheet({
                 type="button"
                 onClick={() => {
                   haptic([14, 30, 20]);
-                  void (isCycleStart
-                    ? unmarkCycleStart(day.key)
-                    : markCycleStart(day.key));
+                  void setBleeding(day.key, !sangro);
                 }}
                 className="min-h-[52px] w-full rounded-full px-lg font-display text-base font-bold tracking-[-0.01em] transition-[transform,background-color] duration-150 active:scale-[0.98]"
                 style={
-                  isCycleStart
+                  sangro
                     ? {
                         background: "transparent",
                         color: "var(--fg-muted)",
@@ -205,7 +198,7 @@ export function DaySheet({
                 {/* Mismo vocabulario que el botón de Hoy. Antes una
                     pantalla decía "me ha bajado" y la otra "primer día
                     de regla", y "quitar como primer día" es jerga. */}
-                {isCycleStart ? "No, no me bajó este día" : "Me bajó este día"}
+                {sangro ? "Este día no sangré" : "Este día sí sangré"}
               </button>
             </>
           )}

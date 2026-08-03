@@ -17,7 +17,7 @@ import { useLilitaLine } from "@/lib/use-lilita-line";
 import { capitalize, dateRange } from "@/lib/format";
 import {
   db,
-  deleteCycle,
+  clearPeriodAround,
   endPeriod,
   fromKey,
   startPeriod,
@@ -99,11 +99,10 @@ export default function Hoy() {
         className="flex flex-1 flex-col rounded-2xl transition-[opacity] duration-150 active:opacity-70"
       >
         <div className="flex justify-end pr-xs">
-          {/* Mientras sangra aparece también la fila de flujo, y en
-              una pantalla de 812px eso empuja el botón principal
-              fuera de vista. Lilita cede el sitio: durante la regla
-              lo que importa es registrar, no admirarla. */}
-          <Lilita mood={line.mood} size={bleeding ? 116 : 148} />
+          {/* El flujo ya es fijo, así que siempre hay una fila más
+              que antes. Lilita cede el sitio: en una pantalla de
+              812px, si no, el botón principal se sale. */}
+          <Lilita mood={line.mood} size={bleeding ? 108 : 132} />
         </div>
         <p className="mt-md text-balance font-display text-lg font-semibold leading-[1.2] tracking-[-0.02em]">
           {line.text}
@@ -133,7 +132,7 @@ export default function Hoy() {
               type="button"
               onClick={() => {
                 haptic(8);
-                void deleteCycle(latest.id);
+                void clearPeriodAround(latest.startDate);
               }}
               className="-ml-1 flex min-h-[44px] items-center px-1 text-xs text-faint underline underline-offset-4"
             >
@@ -146,7 +145,10 @@ export default function Hoy() {
       {/* ── Registro rápido ────────────────────────────────────────
           El flujo solo aparece mientras sangra: el resto del mes es
           un control muerto ocupando el mejor sitio de la pantalla. */}
-      {bleeding && <FlowRow day={today} dateKey={dateKey} />}
+      {/* Siempre visible: marcar el flujo ES registrar la regla.
+          Esconderlo cuando la app cree que no sangras impide
+          justamente corregirla. */}
+      <FlowRow day={today} dateKey={dateKey} />
       <MoodRow day={today} dateKey={dateKey} />
 
       {/* Los cuatro botones de arriba son el registro de un toque, que
@@ -188,7 +190,7 @@ export default function Hoy() {
               : { background: "var(--accent)", color: "var(--on-accent)" }
           }
         >
-          {bleeding ? "Se ha ido" : "Me ha bajado"}
+          {bleeding ? "Ya no me baja" : "Me ha bajado"}
         </button>
       </section>
 
