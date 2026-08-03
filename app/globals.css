@@ -283,6 +283,13 @@ dialog.sheet:not([open]) {
   display: none;
 }
 
+/* El <dialog> recibe el foco al abrirse, y el aro del navegador
+   rodea la hoja entera. No es un control: no hay nada que indicar. */
+dialog.sheet:focus,
+dialog.sheet:focus-visible {
+  outline: none;
+}
+
 dialog.sheet::backdrop {
   background: oklch(25% 0.02 30 / 0.32);
   animation: sheet-fade 200ms var(--ease-out-quart);

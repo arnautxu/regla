@@ -248,6 +248,70 @@ const PHASE_WORD: Record<Phase, string> = {
   lutea: "lútea",
 };
 
+/* ── 7b. El síntoma que más se repite, y dónde cae ───────────── */
+
+const SINTOMA_TEXTO: Record<string, string> = {
+  retortijones: "los retortijones",
+  "dolor-lumbar": "el dolor lumbar",
+  "tetas-doloridas": "el dolor de tetas",
+  migrana: "la migraña",
+  hinchazon: "la hinchazón",
+  acne: "el acné",
+  insomnio: "el insomnio",
+  cagalera: "la cagalera",
+  antojos: "los antojos",
+  cansancio: "el cansancio",
+};
+
+function topSymptom(
+  days: DayLog[],
+  cycles: Cycle[],
+  settings: Settings,
+  phaseOf: (day: number, len: number) => Phase,
+): Insight | null {
+  const model = buildModel(cycles, settings);
+  const conSintomas = withCycleDay(days, cycles).filter(
+    (d) => d.log.symptoms?.length,
+  );
+  if (conSintomas.length < 5) return null;
+
+  const cuenta = new Map<string, number>();
+  const porFase = new Map<string, Map<Phase, number>>();
+
+  for (const d of conSintomas) {
+    const fase = phaseOf(d.cycleDay, model.length);
+    for (const s of d.log.symptoms!) {
+      cuenta.set(s, (cuenta.get(s) ?? 0) + 1);
+      const m = porFase.get(s) ?? new Map<Phase, number>();
+      m.set(fase, (m.get(fase) ?? 0) + 1);
+      porFase.set(s, m);
+    }
+  }
+
+  const [top, veces] = [...cuenta.entries()].reduce((a, b) =>
+    b[1] > a[1] ? b : a,
+  );
+  if (veces < 4) return null;
+
+  // ¿Se concentra en una fase o está repartido? Solo se afirma si de
+  // verdad se agrupa: "te pasa siempre" con un 40% no es un patrón.
+  const fases = porFase.get(top)!;
+  const [faseTop, enFase] = [...fases.entries()].reduce((a, b) =>
+    b[1] > a[1] ? b : a,
+  );
+  const concentrado = enFase / veces >= 0.6;
+
+  return {
+    id: "sintoma-top",
+    kind: "patron",
+    title: `Lo que más marcas es ${SINTOMA_TEXTO[top] ?? top}`,
+    detail: concentrado
+      ? `${veces} veces, y ${enFase} de ellas en fase ${PHASE_WORD[faseTop]}. Ahí tienes tu patrón.`
+      : `${veces} veces, pero repartido por todo el ciclo. No se concentra en ninguna fase concreta.`,
+    basis: veces,
+  };
+}
+
 /* ── 8. Ciclos descartados por atípicos ──────────────────────── */
 
 function outlierNote(cycles: Cycle[], settings: Settings): Insight | null {
@@ -303,6 +367,7 @@ export function computeInsights(
     irregular(cycles, settings),
     painPeak(days, cycles),
     worstPhase(days, cycles, settings, phaseOf),
+    topSymptom(days, cycles, settings, phaseOf),
     trend(cycles, settings),
     outlierNote(cycles, settings),
     consistency(days, todayKey),

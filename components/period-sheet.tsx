@@ -76,7 +76,13 @@ export function PeriodSheet({
     <dialog
       ref={ref}
       onClose={onClose}
-      onClick={(e) => {
+      // pointerdown y no click: el clic que ABRE la hoja termina de
+      // procesarse cuando showModal() ya la ha puesto en la capa
+      // superior, asi que su evento 'click' le llega al backdrop y la
+      // cierra al instante. El pointerdown que la abrio ocurrio antes
+      // de que el dialogo existiera, de modo que aqui solo entran
+      // pulsaciones nuevas.
+      onPointerDown={(e) => {
         if (e.target === ref.current) ref.current?.close();
       }}
       className="sheet"

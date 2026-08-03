@@ -4,21 +4,72 @@ import { useEffect, useRef } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { db, markCycleStart, unmarkCycleStart } from "@/lib/db";
+import {
+  db,
+  markCycleStart,
+  unmarkCycleStart,
+  upsertDay,
+  type MoodTag,
+  type SymptomTag,
+} from "@/lib/db";
+import { capitalize } from "@/lib/format";
 import { haptic } from "@/lib/use-lilaila";
 import { FlowRow } from "./flow-row";
 import { MoodRow } from "./mood-row";
-import type { DayCell } from "@/lib/calendar";
+import { TagPicker } from "./tag-picker";
 
-function capitalize(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
+/**
+ * Lo mínimo que necesita la hoja. DayCell del calendario encaja aquí
+ * sin conversión, y la pantalla de Hoy puede construirlo a mano para
+ * abrir el día de hoy sin pasar por el calendario.
+ */
+export interface SheetDay {
+  key: string;
+  date: Date;
+  isToday: boolean;
+  isFuture: boolean;
+}
+
+/* Las diez etiquetas de síntoma y las siete de ánimo llevaban desde
+   el primer día en el modelo de datos sin aparecer en ninguna
+   pantalla. "Cómo me encuentro" se resumía en un número de dolor del
+   0 al 10, que no distingue entre migraña y estar de mal humor. */
+
+const SINTOMAS: { value: SymptomTag; label: string }[] = [
+  { value: "retortijones", label: "Retortijones" },
+  { value: "dolor-lumbar", label: "Lumbares" },
+  { value: "tetas-doloridas", label: "Tetas" },
+  { value: "migrana", label: "Migraña" },
+  { value: "hinchazon", label: "Hinchazón" },
+  { value: "cansancio", label: "Cansancio" },
+  { value: "insomnio", label: "Insomnio" },
+  { value: "antojos", label: "Antojos" },
+  { value: "acne", label: "Acné" },
+  { value: "cagalera", label: "Cagalera" },
+];
+
+const ANIMOS: { value: MoodTag; label: string }[] = [
+  { value: "tranquila", label: "Tranquila" },
+  { value: "feliz", label: "Feliz" },
+  { value: "irritada", label: "Irritada" },
+  { value: "llorona", label: "Llorona" },
+  { value: "apatica", label: "Apática" },
+  { value: "gremlin", label: "Gremlin" },
+  { value: "cachonda", label: "Cachonda" },
+];
+
+function toggle<T>(list: T[] | undefined, value: T): T[] {
+  const current = list ?? [];
+  return current.includes(value)
+    ? current.filter((v) => v !== value)
+    : [...current, value];
 }
 
 export function DaySheet({
-  cell,
+  day,
   onClose,
 }: {
-  cell: DayCell | null;
+  day: SheetDay | null;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -28,35 +79,40 @@ export function DaySheet({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (cell && !el.open) el.showModal();
-    if (!cell && el.open) el.close();
-  }, [cell]);
+    if (day && !el.open) el.showModal();
+    if (!day && el.open) el.close();
+  }, [day]);
 
   const log = useLiveQuery(
-    async () => (cell ? ((await db.days.get(cell.key)) ?? null) : null),
-    [cell?.key],
+    async () => (day ? ((await db.days.get(day.key)) ?? null) : null),
+    [day?.key],
   );
 
   const isCycleStart = useLiveQuery(
     async () =>
-      cell
-        ? (await db.cycles.where("startDate").equals(cell.key).count()) > 0
+      day
+        ? (await db.cycles.where("startDate").equals(day.key).count()) > 0
         : false,
-    [cell?.key],
+    [day?.key],
   );
 
   return (
     <dialog
       ref={ref}
       onClose={onClose}
-      onClick={(e) => {
-        // Clic en el backdrop (el propio <dialog>, fuera del panel)
+      // pointerdown y no click: el clic que ABRE la hoja termina de
+      // procesarse cuando showModal() ya la ha puesto en la capa
+      // superior, asi que su evento 'click' le llega al backdrop y la
+      // cierra al instante. El pointerdown que la abrio ocurrio antes
+      // de que el dialogo existiera, de modo que aqui solo entran
+      // pulsaciones nuevas.
+      onPointerDown={(e) => {
         if (e.target === ref.current) ref.current?.close();
       }}
       className="sheet"
-      aria-label={cell ? format(cell.date, "d 'de' MMMM", { locale: es }) : ""}
+      aria-label={day ? format(day.date, "d 'de' MMMM", { locale: es }) : ""}
     >
-      {cell && (
+      {day && (
         <div className="sheet-panel flex flex-col gap-lg px-lg pt-md">
           <div
             aria-hidden="true"
@@ -68,29 +124,69 @@ export function DaySheet({
             <h2 className="font-display text-lg font-bold tracking-[-0.02em]">
               {/* date-fns da los días en minúscula en es; en un título
                   eso se lee como una errata. */}
-              {capitalize(format(cell.date, "EEEE d 'de' MMMM", { locale: es }))}
+              {capitalize(format(day.date, "EEEE d 'de' MMMM", { locale: es }))}
             </h2>
-            {cell.isToday && (
-              <p className="text-xs text-faint">Hoy</p>
-            )}
+            {day.isToday && <p className="text-xs text-faint">Hoy</p>}
           </header>
 
-          {cell.isFuture ? (
+          {day.isFuture ? (
             <p className="text-sm leading-relaxed text-muted">
               Este día todavía no ha pasado. Cuando llegue me cuentas.
             </p>
           ) : (
             <>
-              <FlowRow day={log ?? undefined} dateKey={cell.key} />
-              <MoodRow day={log ?? undefined} dateKey={cell.key} />
+              <FlowRow day={log ?? undefined} dateKey={day.key} />
+              <MoodRow day={log ?? undefined} dateKey={day.key} />
+
+              <TagPicker
+                label="Qué te duele"
+                options={SINTOMAS}
+                selected={log?.symptoms ?? []}
+                onToggle={(v) =>
+                  void upsertDay(day.key, {
+                    symptoms: toggle(log?.symptoms, v),
+                  })
+                }
+              />
+
+              <TagPicker
+                label="Cómo estás de ánimo"
+                options={ANIMOS}
+                selected={log?.mood ?? []}
+                onToggle={(v) =>
+                  void upsertDay(day.key, { mood: toggle(log?.mood, v) })
+                }
+              />
+
+              <section>
+                <label
+                  htmlFor={`nota-${day.key}`}
+                  className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint"
+                >
+                  Nota
+                </label>
+                <textarea
+                  id={`nota-${day.key}`}
+                  defaultValue={log?.note ?? ""}
+                  onBlur={(e) =>
+                    void upsertDay(day.key, {
+                      note: e.target.value.trim() || undefined,
+                    })
+                  }
+                  rows={2}
+                  placeholder="Lo que quieras acordarte"
+                  className="mt-2 w-full resize-none rounded-xl bg-transparent px-3 py-2.5 text-sm outline-none"
+                  style={{ boxShadow: "inset 0 0 0 1px var(--border-strong)" }}
+                />
+              </section>
 
               <button
                 type="button"
                 onClick={() => {
                   haptic([14, 30, 20]);
                   void (isCycleStart
-                    ? unmarkCycleStart(cell.key)
-                    : markCycleStart(cell.key));
+                    ? unmarkCycleStart(day.key)
+                    : markCycleStart(day.key));
                 }}
                 className="min-h-[52px] w-full rounded-full px-lg font-display text-base font-bold tracking-[-0.01em] transition-[transform,background-color] duration-150 active:scale-[0.98]"
                 style={

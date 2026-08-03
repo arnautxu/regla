@@ -126,7 +126,7 @@ export default function Calendario() {
         </>
       )}
 
-      <DaySheet cell={selected} onClose={() => setSelected(null)} />
+      <DaySheet day={selected} onClose={() => setSelected(null)} />
     </div>
   );
 }

@@ -9,12 +9,20 @@ import { Lilita } from "@/components/lilita";
 import { FlowRow } from "@/components/flow-row";
 import { MoodRow } from "@/components/mood-row";
 import { PeriodSheet, type PeriodAction } from "@/components/period-sheet";
+import { DaySheet } from "@/components/day-sheet";
 import { PHASE_LABEL, phaseByDay, type CycleState } from "@/lib/cycle";
 import { buildContext } from "@/lib/ai-context";
 import { computeInsights } from "@/lib/insights";
 import { useLilitaLine } from "@/lib/use-lilita-line";
 import { capitalize, dateRange } from "@/lib/format";
-import { db, deleteCycle, endPeriod, fromKey, startPeriod } from "@/lib/db";
+import {
+  db,
+  deleteCycle,
+  endPeriod,
+  fromKey,
+  startPeriod,
+  type DayLog,
+} from "@/lib/db";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
 
 export default function Hoy() {
@@ -45,6 +53,7 @@ export default function Hoy() {
   const { line } = useLilitaLine(fallbackLine, context, dateKey, ready);
 
   const [asking, setAsking] = useState<PeriodAction | null>(null);
+  const [detailing, setDetailing] = useState(false);
 
   // Antes de que IndexedDB conteste no pintamos números: un "día 1"
   // fantasma que salta a "día 14" es peor que medio segundo en blanco.
@@ -126,7 +135,7 @@ export default function Hoy() {
                 haptic(8);
                 void deleteCycle(latest.id);
               }}
-              className="mt-2 -ml-1 px-1 py-1 text-xs text-faint underline underline-offset-4"
+              className="-ml-1 flex min-h-[44px] items-center px-1 text-xs text-faint underline underline-offset-4"
             >
               No, me he equivocado
             </button>
@@ -139,6 +148,22 @@ export default function Hoy() {
           un control muerto ocupando el mejor sitio de la pantalla. */}
       {bleeding && <FlowRow day={today} dateKey={dateKey} />}
       <MoodRow day={today} dateKey={dateKey} />
+
+      {/* Los cuatro botones de arriba son el registro de un toque, que
+          es el 90% de las veces. Esto abre el detalle —sintomas, animo,
+          nota— sin ocupar sitio en la pantalla mientras no se use.
+          Antes solo se llegaba dando un rodeo por el calendario. */}
+      <button
+        type="button"
+        onClick={() => {
+          haptic(8);
+          setDetailing(true);
+        }}
+        className="-ml-1 flex min-h-[44px] items-center self-start px-1 text-xs underline underline-offset-4"
+        style={{ color: "var(--fg-muted)" }}
+      >
+        {resumenDetalle(today)}
+      </button>
 
       {/* ── Acción principal ──────────────────────────────────────
           En el tercio inferior, siempre. Es el 90% de lo que hará
@@ -176,8 +201,31 @@ export default function Hoy() {
         }}
         onClose={() => setAsking(null)}
       />
+
+      <DaySheet
+        day={
+          detailing
+            ? {
+                key: dateKey,
+                date: fromKey(dateKey),
+                isToday: true,
+                isFuture: false,
+              }
+            : null
+        }
+        onClose={() => setDetailing(false)}
+      />
     </div>
   );
+}
+
+/* El enlace dice lo que ya hay apuntado, no solo "añadir detalles":
+   asi se ve de un vistazo si el dia esta registrado sin abrir nada. */
+function resumenDetalle(day: DayLog | undefined): string {
+  const n = (day?.symptoms?.length ?? 0) + (day?.mood?.length ?? 0);
+  if (n === 0) return "Añadir síntomas, ánimo o una nota";
+  const nota = day?.note ? " y una nota" : "";
+  return `${n} ${n === 1 ? "cosa apuntada" : "cosas apuntadas"}${nota} — editar`;
 }
 
 /* ── Titular ─────────────────────────────────────────────────────
