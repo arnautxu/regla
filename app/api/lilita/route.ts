@@ -48,7 +48,10 @@ export async function POST(req: Request) {
     if (!line) throw new Error("respuesta vacía");
 
     return Response.json({ line });
-  } catch {
+  } catch (err) {
+    // Al cliente le da igual el motivo (se queda con el banco local),
+    // pero sin esto en el log un fallo del gateway es indepurable.
+    console.error("[lilita] fallo generando la frase:", err);
     return Response.json({ error: "El modelo no contestó." }, { status: 502 });
   }
 }

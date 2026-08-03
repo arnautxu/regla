@@ -126,6 +126,14 @@ le pasa. Tienes sus datos delante.
 
 export const MODEL = "anthropic/claude-sonnet-5";
 
+/**
+ * El AI Gateway autentica de dos maneras: con una clave de API o, en
+ * despliegues de Vercel, con el token OIDC que la plataforma inyecta
+ * sola. Mirar solo la clave dejaba la IA apagada en producción aunque
+ * funcionase perfectamente por OIDC.
+ */
 export function aiConfigured(): boolean {
-  return Boolean(process.env.AI_GATEWAY_API_KEY);
+  return Boolean(
+    process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN,
+  );
 }
