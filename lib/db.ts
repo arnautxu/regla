@@ -258,7 +258,22 @@ export async function startPeriod(date = todayKey()): Promise<void> {
   const mapa = new Map(existentes.map((d) => [d.date, d]));
   const stamp = now();
 
+  // El dia ELEGIDO siempre se marca, aunque ya tuviera un flujo (por
+  // ejemplo "Nada" de un registro anterior). Es una orden explicita:
+  // si no, decir "me bajo hoy" tras haber marcado que no no haria
+  // nada y pareceria que el boton esta roto.
+  const elegido = mapa.get(date);
+  await db.days.put({
+    ...elegido,
+    date,
+    flow: elegido?.flow ? elegido.flow : FLUJO_POR_DEFECTO,
+    updatedAt: stamp,
+  });
+
+  // Los dias intermedios solo si no tienen nada puesto: lo que ella
+  // haya marcado a mano manda sobre lo que deduzca la app.
   for (const key of daysToFill(date, todayKey(), mapa)) {
+    if (key === date) continue;
     const previo = mapa.get(key);
     await db.days.put({
       ...previo,

@@ -22,35 +22,21 @@ import { haptic } from "@/lib/use-lilaila";
    día.
    ═══════════════════════════════════════════════════════════════ */
 
-export type PeriodAction = "inicio" | "fin";
+/* Solo se pregunta por el INICIO. El final ya no se declara: la
+   regla acaba cuando marca "Nada" en el flujo de un dia. */
 
-const COPY: Record<
-  PeriodAction,
-  { title: string; hint: string; relative: string[] }
-> = {
-  inicio: {
-    title: "¿Qué día te bajó?",
-    hint: "Si fue hace unos días, dímelo y lo cuadro bien.",
-    relative: ["Hoy", "Ayer", "Hace 2 días", "Hace 3 días", "Hace 4 días"],
-  },
-  fin: {
-    title: "¿Cuál fue el último día?",
-    hint: "El último día que manchaste, no el primero que no.",
-    relative: ["Hoy", "Ayer", "Hace 2 días", "Hace 3 días", "Hace 4 días"],
-  },
-};
+const TITULO = "¿Qué día te bajó?";
+const AYUDA = "Si fue hace unos días, dímelo y lo cuadro bien.";
+const RELATIVOS = ["Hoy", "Ayer", "Hace 2 días", "Hace 3 días", "Hace 4 días"];
 
 export function PeriodSheet({
-  action,
+  open,
   todayKey,
-  /** No se puede cerrar una regla antes de que empezara */
-  minKey,
   onPick,
   onClose,
 }: {
-  action: PeriodAction | null;
+  open: boolean;
   todayKey: string;
-  minKey?: string;
   onPick: (dateKey: string) => void;
   onClose: () => void;
 }) {
@@ -60,17 +46,16 @@ export function PeriodSheet({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (action && !el.open) el.showModal();
-    if (!action && el.open) el.close();
-  }, [action]);
+    if (open && !el.open) el.showModal();
+    if (!open && el.open) el.close();
+  }, [open]);
 
-  const copy = action ? COPY[action] : null;
   const base = fromKey(todayKey);
-
-  const options = (copy?.relative ?? [])
-    .map((label, i) => ({ label, date: addDays(base, -i), key: toKey(addDays(base, -i)) }))
-    // Sin fechas imposibles: el fin de una regla no cae antes del inicio.
-    .filter((o) => !minKey || o.key >= minKey);
+  const options = RELATIVOS.map((label, i) => ({
+    label,
+    date: addDays(base, -i),
+    key: toKey(addDays(base, -i)),
+  }));
 
   return (
     <dialog
@@ -86,9 +71,9 @@ export function PeriodSheet({
         if (e.target === ref.current) ref.current?.close();
       }}
       className="sheet"
-      aria-label={copy?.title ?? ""}
+      aria-label={TITULO}
     >
-      {copy && (
+      {open && (
         <div className="sheet-panel flex flex-col gap-lg px-lg pt-md">
           <div
             aria-hidden="true"
@@ -98,9 +83,9 @@ export function PeriodSheet({
 
           <header>
             <h2 className="font-display text-lg font-bold tracking-[-0.02em]">
-              {copy.title}
+              {TITULO}
             </h2>
-            <p className="mt-1 text-sm text-muted">{copy.hint}</p>
+            <p className="mt-1 text-sm text-muted">{AYUDA}</p>
           </header>
 
           <ul className="flex flex-col gap-2">

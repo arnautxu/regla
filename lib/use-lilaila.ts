@@ -69,6 +69,10 @@ export function useLilaila(): Lilaila {
       daysUntilNext: state.daysUntilNext,
       daysLate: state.daysLate,
       bleeding: state.bleeding,
+      pendienteDeHoy:
+        !state.bleeding &&
+        resolvedCycles.at(-1) !== undefined &&
+        resolvedCycles.at(-1)!.endDate === undefined,
       cyclesLogged: state.cyclesLogged,
       painLevel: today?.painLevel,
       badDay: today?.badDay,

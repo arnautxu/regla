@@ -8,7 +8,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { Lilita } from "@/components/lilita";
 import { FlowRow } from "@/components/flow-row";
 import { MoodRow } from "@/components/mood-row";
-import { PeriodSheet, type PeriodAction } from "@/components/period-sheet";
+import { PeriodSheet } from "@/components/period-sheet";
 import { DaySheet } from "@/components/day-sheet";
 import { PHASE_LABEL, phaseByDay, type CycleState } from "@/lib/cycle";
 import { buildContext } from "@/lib/ai-context";
@@ -18,8 +18,8 @@ import { capitalize, dateRange } from "@/lib/format";
 import {
   db,
   clearPeriodAround,
-  endPeriod,
   fromKey,
+  setBleeding,
   startPeriod,
   type DayLog,
 } from "@/lib/db";
@@ -52,7 +52,7 @@ export default function Hoy() {
   // El banco local se pinta ya; si el modelo contesta, lo sustituye.
   const { line } = useLilitaLine(fallbackLine, context, dateKey, ready);
 
-  const [asking, setAsking] = useState<PeriodAction | null>(null);
+  const [asking, setAsking] = useState(false);
   const [detailing, setDetailing] = useState(false);
 
   // Antes de que IndexedDB conteste no pintamos números: un "día 1"
@@ -61,6 +61,18 @@ export default function Hoy() {
 
   const bleeding = state.bleeding;
   const latest = cycles[cycles.length - 1];
+
+  /* El boton registra UN dia, no un tramo.
+       · hoy ya apuntado  -> no hay nada que hacer, lo dice y deja editar
+       · regla en marcha  -> "Registrar hoy", de un toque
+       · nada en marcha   -> "Me ha bajado", que pregunta el dia
+     El final de la regla no se declara: se marca "Nada" en el flujo. */
+  const reglaAbierta = Boolean(latest && !latest.endDate);
+  const accion: "apuntado" | "hoy" | "inicio" = bleeding
+    ? "apuntado"
+    : reglaAbierta
+      ? "hoy"
+      : "inicio";
   // El deshacer vale durante toda la regla en curso: darse cuenta
   // del dedazo al dia siguiente es lo normal.
   const canUndo = bleeding || latest?.startDate === dateKey;
@@ -175,33 +187,48 @@ export default function Hoy() {
         <button
           type="button"
           onClick={() => {
-            haptic(12);
-            // Ya no asume hoy: preguntar la fecha es el arreglo.
-            setAsking(bleeding ? "fin" : "inicio");
+            if (accion === "apuntado") {
+              haptic(8);
+              setDetailing(true);
+            } else if (accion === "hoy") {
+              // Un toque y ya: es "hoy", no hace falta preguntar cuando.
+              haptic([18, 40, 26]);
+              void setBleeding(dateKey, true);
+            } else {
+              haptic(12);
+              setAsking(true);
+            }
           }}
           className="w-full rounded-full px-lg py-4 font-display text-base font-bold tracking-[-0.01em] transition-[transform,background-color] duration-150 ease-[var(--ease-out-quart)] active:scale-[0.975]"
           style={
-            bleeding
+            accion === "apuntado"
               ? {
                   background: "transparent",
-                  color: "var(--accent)",
-                  boxShadow: "inset 0 0 0 1.5px var(--accent)",
+                  color: "var(--fg-muted)",
+                  boxShadow: "inset 0 0 0 1px var(--border-strong)",
                 }
               : { background: "var(--accent)", color: "var(--on-accent)" }
           }
         >
-          {bleeding ? "Ya no me baja" : "Me ha bajado"}
+          {accion === "apuntado"
+            ? "Hoy ya está apuntado"
+            : accion === "hoy"
+              ? "Registrar hoy"
+              : "Me ha bajado"}
         </button>
+
+        {accion === "hoy" && (
+          <p className="mt-2 text-center text-xs text-faint">
+            Cuando marques «Nada» en el flujo, se acabó.
+          </p>
+        )}
       </section>
 
       <PeriodSheet
-        action={asking}
+        open={asking}
         todayKey={dateKey}
-        minKey={asking === "fin" ? latest?.startDate : undefined}
-        onPick={(when) => {
-          void (asking === "fin" ? endPeriod(when) : startPeriod(when));
-        }}
-        onClose={() => setAsking(null)}
+        onPick={(when) => void startPeriod(when)}
+        onClose={() => setAsking(false)}
       />
 
       <DaySheet

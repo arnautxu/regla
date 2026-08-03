@@ -13,6 +13,8 @@ export type Mood =
 
 export interface LineContext {
   phase?: Phase;
+  /** La regla sigue abierta pero hoy no se ha registrado nada */
+  pendienteDeHoy?: boolean;
   dayOfCycle?: number;
   periodDay?: number;
   daysUntilNext?: number;
@@ -127,7 +129,7 @@ const MENSTRUAL: Record<number, Line[]> = {
     },
   ],
   5: [
-    { text: "Día 5. Recta final. Dale al botón cuando se vaya.", mood: "neutral" },
+    { text: "Día 5. Recta final. Marca «Nada» el día que pare.", mood: "neutral" },
     {
       text: "Día 5. Si esto sigue mucho más, avísame y lo apuntamos como largo.",
       mood: "neutral",
@@ -135,13 +137,28 @@ const MENSTRUAL: Record<number, Line[]> = {
   ],
 };
 
+/* Regla en marcha pero hoy sin marcar. Antes caia en el banco de
+   "dia 1" y soltaba "el utero ha empezado las obras" en el dia 3,
+   inventandose un dato que nadie le habia dado. */
+const PENDIENTE_HOY: Line[] = [
+  { text: "Ayer sí. ¿Y hoy? Marca el flujo y sigo contando.", mood: "neutral" },
+  {
+    text: "Me falta el parte de hoy. ¿Sigue la cosa o ya se ha ido?",
+    mood: "neutral",
+  },
+  {
+    text: "No sé cómo vas hoy. Un toque en el flujo y me entero.",
+    mood: "neutral",
+  },
+];
+
 const MENSTRUAL_LARGA: Line[] = [
   {
     text: "Llevas más de una semana sangrando. Eso ya no es normal-normal. Consúltalo.",
     mood: "neutral",
   },
   {
-    text: "Séptimo día o más. ¿Sigue de verdad o se te ha olvidado darle a «se ha ido»?",
+    text: "Séptimo día o más. ¿Sigue de verdad o se te ha olvidado marcar que paró?",
     mood: "neutral",
   },
 ];
@@ -355,6 +372,9 @@ export function lilitaSays(ctx: LineContext, dateKey: string): Line {
   }
 
   if (soft && ctx.phase) return pick(SUAVE[ctx.phase], dateKey);
+
+  // --- Regla abierta y hoy en blanco: pedir el dato, no inventarlo.
+  if (ctx.pendienteDeHoy && !soft) return pick(PENDIENTE_HOY, dateKey);
 
   // --- Sangrando: la frase depende del día de regla.
   if (ctx.bleeding && ctx.periodDay) {
