@@ -60,10 +60,6 @@ function addRange(set: Set<string>, from: Date, days: number) {
   for (let i = 0; i < days; i++) set.add(toKey(addDays(from, i)));
 }
 
-function minDate(a: Date, b: Date) {
-  return a < b ? a : b;
-}
-
 export interface MonthData {
   weeks: DayCell[][];
   /** Cuántos días del mes tienen algo pintado — para el estado vacío */
@@ -171,32 +167,19 @@ export function buildMonth(
     ? Math.round(mean(lengths))
     : settings.avgCycleLength;
 
-  const bleeding = new Set<string>();
+  // El sangrado se pinta desde los DIAS, no desde el rango del ciclo.
+  // Derivando el ciclo de una racha con huecos permitidos, rellenar
+  // start..end pintaba de rojo un dia que ella habia dejado sin
+  // marcar: justo la contradiccion que el modelo por dias elimina.
+  const bleeding = new Set<string>(
+    days.filter((d) => d.flow !== undefined && d.flow > 0).map((d) => d.date),
+  );
   const fertile = new Set<string>();
   const predicted = new Set<string>();
 
   sorted.forEach((cycle, i) => {
     const start = fromKey(cycle.startDate);
     const next = sorted[i + 1];
-
-    // --- Sangrado registrado.
-    // Si el ciclo sigue abierto no se pinta hacia el futuro: solo
-    // sabemos lo que ha pasado hasta hoy. Y si hay un ciclo posterior
-    // (porque rellenó días atrasados desde el calendario), se corta
-    // ahí — o un ciclo sin cerrar se comería el siguiente.
-    let end: Date;
-    if (cycle.endDate) {
-      end = fromKey(cycle.endDate);
-    } else {
-      const cap = fromKey(today) < start ? start : fromKey(today);
-      end = next ? minDate(cap, addDays(fromKey(next.startDate), -1)) : cap;
-      if (end < start) end = start;
-    }
-    const bleedDays = Math.min(
-      differenceInCalendarDays(end, start) + 1,
-      15, // tope de cordura: un registro sin cerrar no pinta un mes
-    );
-    addRange(bleeding, start, Math.max(bleedDays, 1));
 
     // --- Ventana fértil de ESE ciclo.
     // La fase lútea dura ~14 días y es la constante; la folicular es

@@ -170,8 +170,15 @@ db.version(3)
         new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).getTime(),
       );
 
-      for (let t = ini; t <= tope; t += DIA) {
-        const k = clave(t);
+      // Avance por dias de calendario, no sumando 86400000 ms: en el
+      // cambio de hora de octubre el dia dura 25 h y el bucle de ms
+      // repetia una fecha y se saltaba la siguiente.
+      for (
+        let cursor = new Date(ini);
+        cursor.getTime() <= tope;
+        cursor.setDate(cursor.getDate() + 1)
+      ) {
+        const k = clave(cursor.getTime());
         const previo = porFecha.get(k);
         // Lo que ella marco a mano manda sobre lo que deduzcamos.
         if (previo?.flow !== undefined) continue;
@@ -285,36 +292,6 @@ export async function startPeriod(date = todayKey()): Promise<void> {
   touch();
 }
 
-/**
- * "El ultimo dia que manche fue X."
- *
- * Con el modelo por dias, cerrar una regla es quitar el sangrado de
- * los dias POSTERIORES a X, no marcar X. Si dice que el ultimo fue
- * anteayer, ayer y hoy no cuentan.
- */
-export async function endPeriod(date = todayKey()): Promise<void> {
-  const all = await db.days.toArray();
-  const stamp = now();
-  const hoy = todayKey();
-
-  for (const d of all) {
-    if (d.date > date && d.date <= hoy && d.flow !== undefined) {
-      await db.days.put({ ...d, flow: undefined, updatedAt: stamp });
-    }
-  }
-  // Y el dia elegido si que sangro, por si no estaba marcado.
-  const ultimo = all.find((d) => d.date === date);
-  if (!ultimo?.flow) {
-    await db.days.put({
-      ...ultimo,
-      date,
-      flow: ultimo?.flow || FLUJO_POR_DEFECTO,
-      updatedAt: stamp,
-    });
-  }
-  touch();
-}
-
 /** Quita el sangrado de toda la racha que contiene ese dia. */
 export async function clearPeriodAround(date: string): Promise<void> {
   const all = await db.days.toArray();
@@ -348,9 +325,6 @@ export async function setBleeding(
   touch();
 }
 
-export async function getDay(date: string): Promise<DayLog | undefined> {
-  return db.days.get(date);
-}
 
 export async function upsertDay(
   date: string,

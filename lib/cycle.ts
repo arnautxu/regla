@@ -90,8 +90,10 @@ export function computeCycleState(
     return {
       phase: "menstrual",
       dayOfCycle: 1,
-      bleeding: !current.endDate,
-      periodDay: 1,
+      // Tambien aqui manda el registro del dia: antes esta rama
+      // devolvia "sangrando" a secas y se colaba por delante.
+      bleeding: bleedingToday ?? !current.endDate,
+      periodDay: bleedingToday === false ? undefined : 1,
       confidence,
       avgLength,
       cyclesLogged: model.basis,
@@ -172,31 +174,4 @@ function phaseFor(
   if (day >= ovulation - 4 && day <= ovulation + 1) return "ovulacion";
   if (day < ovulation) return "folicular";
   return "lutea";
-}
-
-/** La fase que toca en un día concreto, para pintar el calendario. */
-export function phaseOnDate(
-  dateKey: string,
-  cycles: Cycle[],
-  settings: Settings,
-): Phase | undefined {
-  const sorted = [...cycles].sort((a, b) =>
-    a.startDate.localeCompare(b.startDate),
-  );
-  const cycle = [...sorted].reverse().find((c) => c.startDate <= dateKey);
-  if (!cycle) return undefined;
-
-  const day =
-    differenceInCalendarDays(fromKey(dateKey), fromKey(cycle.startDate)) + 1;
-
-  // Mismo modelo que el resto de la app: si el calendario pintara
-  // fases con una media distinta de la que predice Hoy, las dos
-  // pantallas se contradirían sin que nadie supiera por qué.
-  const avgLength = buildModel(sorted, settings).length;
-
-  // Más allá de un ciclo y medio sin datos nuevos, no inventamos.
-  if (day > avgLength * 1.5) return undefined;
-
-  const bleeding = cycle.endDate ? dateKey <= cycle.endDate : false;
-  return phaseFor(day, avgLength, settings, cycle, bleeding);
 }
