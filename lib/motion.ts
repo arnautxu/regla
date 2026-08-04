@@ -18,3 +18,9 @@ export const DURATION = {
   /** Cambio de pantalla, hoja modal. */
   slow: 0.32,
 } as const;
+
+/** Duración del vuelo de Lilita al empezar la regla, en segundos.
+    Vive aquí y no en period-start-scene.tsx para que period-start-fx
+    (el lavado rojo, que SÍ carga siempre) pueda usar el mismo número
+    sin arrastrar three.js a su bundle con un import estático. */
+export const PERIOD_FLIGHT_DURATION_S = 2.2;

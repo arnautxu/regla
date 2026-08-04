@@ -3,6 +3,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "motion/react";
+import { PERIOD_FLIGHT_DURATION_S } from "@/lib/motion";
 
 const PeriodStartScene = dynamic(
   () => import("./period-start-scene").then((m) => m.PeriodStartScene),
@@ -69,7 +70,10 @@ export function PeriodStartFX({
             }}
             initial={{ opacity: 0 }}
             animate={{ opacity: [0, 0.6, 0] }}
-            transition={{ duration: reduced ? 0.35 : 1.5, times: [0, 0.32, 1] }}
+            transition={{
+              duration: reduced ? 0.35 : PERIOD_FLIGHT_DURATION_S,
+              times: [0, 0.32, 1],
+            }}
           />
           {!reduced && <PeriodStartScene onDone={onDone} />}
         </motion.div>

@@ -16,23 +16,23 @@ import {
   SRGBColorSpace,
   WebGLRenderer,
 } from "three";
+import { PERIOD_FLIGHT_DURATION_S } from "@/lib/motion";
 
 /* ═══════════════════════════════════════════════════════════════
    LILITA VUELA
 
-   Un vistazo, no una cinemática: entra abajo a la izquierda, pasa
-   cerca de cámara a mitad de camino — el único motivo real para
-   hacer esto en 3D, en 2D no existe "cerca" — y sale arriba a la
-   derecha, puño por delante como Superman.
+   Entra abajo a la izquierda, pasa cerca de cámara a mitad de camino
+   — el único motivo real para hacer esto en 3D, en 2D no existe
+   "cerca" — y sale arriba a la derecha, puño por delante como
+   Superman.
 
-   Geometría de primitivas, no una réplica exacta del SVG: a la
-   velocidad a la que cruza la pantalla en 1.3s, el color y la
-   silueta bastan para que se la reconozca. Se dispone todo al
+   Geometría de primitivas, no una réplica exacta del SVG: el color y
+   la silueta bastan para que se la reconozca. Se dispone todo al
    terminar porque esto se dispara muchas veces a lo largo de meses
    de uso, no una vez en la vida del componente.
    ═══════════════════════════════════════════════════════════════ */
 
-const DURATION_S = 1.3;
+const DURATION_S = PERIOD_FLIGHT_DURATION_S;
 const BODY_RED = 0xc0392b;
 const LINE_DARK = 0x3d0f0a;
 const CREAM = 0xfdf3ea;
