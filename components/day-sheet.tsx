@@ -130,8 +130,16 @@ export function DaySheet({
             </p>
           ) : (
             <>
-              <FlowRow day={log ?? undefined} dateKey={day.key} />
-              <MoodRow day={log ?? undefined} dateKey={day.key} />
+              <FlowRow
+                value={log?.flow}
+                onChange={(v) => void upsertDay(day.key, { flow: v })}
+                dateKey={day.key}
+              />
+              <MoodRow
+                value={log ?? undefined}
+                onChange={(patch) => void upsertDay(day.key, patch)}
+                dateKey={day.key}
+              />
 
               <TagPicker
                 label="Qué te duele"

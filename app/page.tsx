@@ -17,7 +17,9 @@ import {
   fromKey,
   setBleeding,
   startPeriod,
+  upsertDay,
   type DayLog,
+  type FlowLevel,
 } from "@/lib/db";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
 
@@ -35,6 +37,21 @@ export default function Hoy() {
   // hoy" de los días siguientes — eso gastaría la broma en un día.
   const [celebrating, setCelebrating] = useState(false);
   const [detailing, setDetailing] = useState(false);
+
+  // Borrador de hoy: tocar el flujo o el ánimo NO escribe nada
+  // todavía. Si escribiera al primer toque, "Me ha bajado" dejaría de
+  // significar "confirmar" — ya estaría contado, y encima a media
+  // composición (sin dar tiempo a añadir síntomas). Se confirma todo
+  // junto al pulsar el botón principal. Los síntomas/ánimo detallados
+  // (vía "Añadir síntomas…") sí se guardan al toque, porque esos no
+  // deciden si el día cuenta.
+  const [draftFlow, setDraftFlow] = useState<FlowLevel | undefined>(
+    undefined,
+  );
+  const [draftMood, setDraftMood] = useState<{
+    painLevel?: number;
+    badDay?: boolean;
+  }>({});
 
   // Antes de que IndexedDB conteste no pintamos números: un "día 1"
   // fantasma que salta a "día 14" es peor que medio segundo en blanco.
@@ -68,6 +85,23 @@ export default function Hoy() {
   // El deshacer vale durante toda la regla en curso: darse cuenta
   // del dedazo al dia siguiente es lo normal.
   const canUndo = reglaAbierta || latest?.startDate === dateKey;
+
+  // El borrador se aplica junto, en un solo upsertDay: así "Me ha
+  // bajado" cuenta como un único gesto, no como el primer toque que
+  // diera la casualidad de tocarse.
+  function draftPatch(): Partial<DayLog> {
+    const patch: Partial<DayLog> = {};
+    if (draftFlow !== undefined) patch.flow = draftFlow;
+    if (draftMood.painLevel !== undefined || draftMood.badDay !== undefined) {
+      patch.painLevel = draftMood.painLevel;
+      patch.badDay = draftMood.badDay;
+    }
+    return patch;
+  }
+  function resetDraft() {
+    setDraftFlow(undefined);
+    setDraftMood({});
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-lg px-safe pt-safe pb-lg">
@@ -141,6 +175,7 @@ export default function Hoy() {
               onClick={() => {
                 haptic(8);
                 void clearPeriodAround(latest.startDate);
+                resetDraft();
               }}
               className="-ml-1 mt-1 flex min-h-[44px] items-center px-1 text-xs text-faint underline underline-offset-4"
             >
@@ -157,8 +192,22 @@ export default function Hoy() {
         className="sticker flex flex-col gap-md rounded-2xl px-lg py-md"
         style={{ background: "var(--surface)" }}
       >
-        <FlowRow day={today} dateKey={dateKey} />
-        <MoodRow day={today} dateKey={dateKey} />
+        <FlowRow
+          value={loggedToday ? today?.flow : draftFlow}
+          onChange={(v) => {
+            if (loggedToday) void upsertDay(dateKey, { flow: v });
+            else setDraftFlow(v);
+          }}
+          dateKey={dateKey}
+        />
+        <MoodRow
+          value={loggedToday ? today : draftMood}
+          onChange={(patch) => {
+            if (loggedToday) void upsertDay(dateKey, patch);
+            else setDraftMood(patch);
+          }}
+          dateKey={dateKey}
+        />
 
         {/* Abre el detalle —sintomas, animo, nota— sin ocupar sitio en
             la pantalla mientras no se use. */}
@@ -188,8 +237,21 @@ export default function Hoy() {
               setDetailing(true);
             } else if (accion === "hoy") {
               // Un toque y ya: es "hoy", no hace falta preguntar cuando.
+              // Aquí es donde el borrador (flujo/ánimo) se hace de
+              // verdad — no antes, por mucho que se haya tocado.
               haptic([18, 40, 26]);
-              void setBleeding(dateKey, true);
+              void (async () => {
+                const patch = draftPatch();
+                if (patch.flow !== undefined) {
+                  await upsertDay(dateKey, patch);
+                } else {
+                  await setBleeding(dateKey, true);
+                  if (Object.keys(patch).length) {
+                    await upsertDay(dateKey, patch);
+                  }
+                }
+                resetDraft();
+              })();
             } else {
               haptic(12);
               setAsking(true);
@@ -228,7 +290,17 @@ export default function Hoy() {
         open={asking}
         todayKey={dateKey}
         onPick={(when) => {
-          void startPeriod(when);
+          void (async () => {
+            await startPeriod(when);
+            // El borrador es de HOY (síntomas/ánimo de "cómo estoy"),
+            // así que se aplica a hoy aunque el inicio elegido sea
+            // otro día — "hace 2 días" no cambia lo que sientes hoy.
+            const patch = draftPatch();
+            if (Object.keys(patch).length) {
+              await upsertDay(dateKey, patch);
+            }
+            resetDraft();
+          })();
           setCelebrating(true);
         }}
         onClose={() => setAsking(false)}

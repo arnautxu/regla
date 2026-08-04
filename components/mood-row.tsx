@@ -1,6 +1,5 @@
 "use client";
 
-import { upsertDay, type DayLog } from "@/lib/db";
 import { haptic } from "@/lib/use-lilaila";
 
 /* Cuatro botones, un toque, se acabó. Un slider de dolor del 0 al 10
@@ -8,7 +7,10 @@ import { haptic } from "@/lib/use-lilaila";
    precisión decimal a las tres de la mañana.
 
    El último botón es el freno de mano de Lilita. Está a la vista a
-   propósito: tiene que ser tan fácil callarla como registrar nada. */
+   propósito: tiene que ser tan fácil callarla como registrar nada.
+
+   Componente controlado, igual que FlowRow: no escribe en la base de
+   datos por su cuenta. */
 
 const OPTIONS = [
   { key: "bien", label: "Bien", pain: 0, bad: false },
@@ -17,22 +19,26 @@ const OPTIONS = [
   { key: "mierda", label: "De mierda", pain: 9, bad: true },
 ] as const;
 
-function activeKey(day: DayLog | undefined) {
-  if (!day || day.painLevel === undefined) return undefined;
-  if (day.badDay) return "mierda";
-  if (day.painLevel >= 7) return "mal";
-  if (day.painLevel >= 3) return "regular";
+type MoodValue = { painLevel?: number; badDay?: boolean };
+
+function activeKey(value: MoodValue | undefined) {
+  if (!value || value.painLevel === undefined) return undefined;
+  if (value.badDay) return "mierda";
+  if (value.painLevel >= 7) return "mal";
+  if (value.painLevel >= 3) return "regular";
   return "bien";
 }
 
 export function MoodRow({
-  day,
+  value,
+  onChange,
   dateKey,
 }: {
-  day: DayLog | undefined;
+  value: MoodValue | undefined;
+  onChange: (patch: { painLevel: number | undefined; badDay: boolean }) => void;
   dateKey: string;
 }) {
-  const current = activeKey(day);
+  const current = activeKey(value);
 
   return (
     <section aria-labelledby={`mood-${dateKey}`}>
@@ -53,7 +59,7 @@ export function MoodRow({
               aria-pressed={active}
               onClick={() => {
                 haptic(active ? 6 : 14);
-                void upsertDay(dateKey, {
+                onChange({
                   painLevel: active ? undefined : opt.pain,
                   badDay: active ? false : opt.bad,
                 });

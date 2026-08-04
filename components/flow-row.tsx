@@ -1,11 +1,18 @@
 "use client";
 
-import { upsertDay, type DayLog, type FlowLevel } from "@/lib/db";
+import { type FlowLevel } from "@/lib/db";
 import { haptic } from "@/lib/use-lilaila";
 
 /* Cinco niveles, un toque. Vive en Hoy mientras sangra (que es el
    registro más probable de esos días) y en la hoja del calendario
-   para rellenar atrasados. */
+   para rellenar atrasados.
+
+   Componente controlado: no escribe en la base de datos por su
+   cuenta. Quien lo usa decide qué pasa con el valor — en la hoja del
+   calendario se guarda al toque, pero en Hoy antes de confirmar es
+   solo un borrador (ver app/page.tsx): tocar el flujo no puede
+   contar el día por sí solo, o "Me ha bajado" deja de significar
+   nada. */
 
 const FLOW: { value: FlowLevel; label: string }[] = [
   { value: 0, label: "Nada" },
@@ -16,10 +23,12 @@ const FLOW: { value: FlowLevel; label: string }[] = [
 ];
 
 export function FlowRow({
-  day,
+  value,
+  onChange,
   dateKey,
 }: {
-  day: DayLog | undefined;
+  value: FlowLevel | undefined;
+  onChange: (value: FlowLevel | undefined) => void;
   dateKey: string;
 }) {
   return (
@@ -33,7 +42,7 @@ export function FlowRow({
 
       <div className="mt-2 grid grid-cols-5 gap-1.5">
         {FLOW.map((opt) => {
-          const active = day?.flow === opt.value;
+          const active = value === opt.value;
           return (
             <button
               key={opt.value}
@@ -41,9 +50,7 @@ export function FlowRow({
               aria-pressed={active}
               onClick={() => {
                 haptic(active ? 6 : 14);
-                void upsertDay(dateKey, {
-                  flow: active ? undefined : opt.value,
-                });
+                onChange(active ? undefined : opt.value);
               }}
               className="min-h-[46px] rounded-lg px-1 text-2xs font-medium leading-[1.15] transition-[transform,box-shadow,color] duration-150 active:scale-[0.96] active:translate-x-[1px] active:translate-y-[1px]"
               style={{
