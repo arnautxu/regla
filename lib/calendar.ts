@@ -17,7 +17,8 @@ import {
   type FlowLevel,
   type Settings,
 } from "./db";
-import { cycleLengths } from "./cycle";
+import { buildModel } from "./predict";
+import { dayRange } from "./format";
 
 /* ═══════════════════════════════════════════════════════════════
    Construcción del mes.
@@ -27,6 +28,22 @@ import { cycleLengths } from "./cycle";
    puntos independientes pierde justo la información que importa —
    cuánto dura y dónde empieza. Por eso cada celda sabe si es
    principio o final de su racha, y el fondo se dibuja continuo.
+
+   Dos reglas que esta pantalla incumplía y ahora sostiene:
+
+   1. UNA SOLA PREDICCIÓN. Esto se calculaba su propia media de los
+      últimos seis ciclos mientras la pantalla Hoy usaba buildModel
+      (mediana, descarte de atípicos, pesos que decaen). Dos motores,
+      dos respuestas: la rejilla pintaba cinco días a partir del 1 de
+      septiembre y la tarjeta de debajo decía "entre el 29 y el 4".
+      Ahora las dos salen de buildModel y no pueden discrepar.
+
+   2. SE PINTA EL MARGEN, NO EL PUNTO. Antes se pintaba un bloque
+      sólido de cinco días en la fecha estimada: la forma de un hecho
+      para una conjetura. Ahora se pinta la VENTANA en la que puede
+      empezar —que es lo que la app sabe— y dentro de ella se marca
+      el día con más papeletas. Ya no se pinta la duración prevista:
+      no se sabe, y fingirlo era la mitad del problema.
    ═══════════════════════════════════════════════════════════════ */
 
 /** Qué se pinta detrás del número. Excluyentes: solo gana una. */
@@ -44,6 +61,8 @@ export interface DayCell {
   bandStart: boolean;
   bandEnd: boolean;
   flow?: FlowLevel;
+  /** Dentro de la ventana prevista, el día con más papeletas */
+  mostLikely: boolean;
   /** Hay algo registrado ese día (ánimo, dolor, nota…) */
   logged: boolean;
   /**
@@ -62,120 +81,51 @@ const WEEK_OPTS = { weekStartsOn: 1 } as const; // lunes, que esto es España
 
 export const WEEKDAY_LABELS = ["L", "M", "X", "J", "V", "S", "D"];
 
-function mean(xs: number[]) {
-  return xs.reduce((a, b) => a + b, 0) / xs.length;
-}
-
 function addRange(set: Set<string>, from: Date, days: number) {
   for (let i = 0; i < days; i++) set.add(toKey(addDays(from, i)));
+}
+
+/**
+ * Una fila del bloque de resumen: la forma, qué es y cuándo.
+ *
+ * Sustituye a la leyenda suelta que había debajo. Una leyenda aparte
+ * obliga a mirar dos sitios y a acordarse del código de formas; si la
+ * misma fila lleva la forma Y las fechas, se aprende leyéndola y de
+ * paso contesta la pregunta por la que se abre el calendario.
+ */
+export interface SummaryRow {
+  band: NonNullable<Band>;
+  label: string;
+  detail: string;
 }
 
 export interface MonthData {
   weeks: DayCell[][];
   /** Cuántos días del mes tienen algo pintado — para el estado vacío */
   painted: number;
-}
-
-export interface Upcoming {
-  periodStart?: Date;
-  periodEnd?: Date;
-  /** Margen de incertidumbre del inicio, que es lo que se enseña */
-  startEarliest?: Date;
-  startLatest?: Date;
-  fertileStart?: Date;
-  fertileEnd?: Date;
-  /** La ventana fértil está corriendo ahora mismo */
-  fertileNow: boolean;
+  /** Lo que se ve en pantalla, dicho con palabras y fechas */
+  summary: SummaryRow[];
 }
 
 /**
- * Lo siguiente que toca. Se calcula aparte del mes porque casi nunca
- * cae dentro del mes que se está mirando, y es justo lo que se quiere
- * saber al abrir el calendario.
+ * Qué se pinta y dónde, sin decidir todavía en qué rejilla.
+ *
+ * Sigue separado de buildMonth aunque ahora solo haya una vista: es
+ * la frontera entre "qué sabe la app de estos días" y "cómo se
+ * coloca en una cuadrícula", y tenerla escrita es lo que hizo que
+ * probar una segunda disposición costara una tarde y no una copia
+ * del cálculo — que es como se llega a dos predicciones que no
+ * coinciden.
  */
-export function upcoming(
-  cycles: Cycle[],
-  settings: Settings,
-  today = todayKey(),
-): Upcoming {
+function paint(cycles: Cycle[], days: DayLog[], settings: Settings, today: string) {
   const sorted = [...cycles].sort((a, b) =>
     a.startDate.localeCompare(b.startDate),
   );
-  const last = sorted[sorted.length - 1];
-  if (!last) return { fertileNow: false };
 
-  const lengths = cycleLengths(sorted).slice(-6);
-  const avg = lengths.length
-    ? Math.round(mean(lengths))
-    : settings.avgCycleLength;
-
-  const now = fromKey(today);
-  const base = fromKey(last.startDate);
-
-  // Avanza ciclos hasta dar con el primero que aún no ha terminado.
-  let k = 0;
-  let periodStart = addDays(base, avg);
-  while (
-    differenceInCalendarDays(
-      addDays(periodStart, settings.avgPeriodLength - 1),
-      now,
-    ) < 0 &&
-    k < 24
-  ) {
-    k++;
-    periodStart = addDays(base, avg * (k + 1));
-  }
-
-  const ovulation = avg - 14;
-  let fertileStart = addDays(base, ovulation - 1 - 4);
-  let fertileEnd = addDays(fertileStart, 5);
-  if (differenceInCalendarDays(fertileEnd, now) < 0) {
-    // La de este ciclo ya pasó: la siguiente cuelga de la regla prevista.
-    fertileStart = addDays(periodStart, ovulation - 1 - 4);
-    fertileEnd = addDays(fertileStart, 5);
-  }
-
-  // Mismo margen que usa la pantalla Hoy: desviación de los ciclos
-  // recientes, con suelo de 1 día. Con menos de tres ciclos ni
-  // siquiera hay desviación fiable, así que se abre a 3.
-  const m = lengths.length ? mean(lengths) : avg;
-  const spread =
-    lengths.length >= 3
-      ? Math.max(
-          1,
-          Math.round(
-            Math.sqrt(mean(lengths.map((x) => (x - m) ** 2))),
-          ),
-        )
-      : 3;
-
-  return {
-    periodStart,
-    periodEnd: addDays(periodStart, settings.avgPeriodLength - 1),
-    startEarliest: addDays(periodStart, -spread),
-    startLatest: addDays(periodStart, spread),
-    fertileStart,
-    fertileEnd,
-    fertileNow:
-      differenceInCalendarDays(now, fertileStart) >= 0 &&
-      differenceInCalendarDays(fertileEnd, now) >= 0,
-  };
-}
-
-export function buildMonth(
-  monthDate: Date,
-  cycles: Cycle[],
-  days: DayLog[],
-  settings: Settings,
-  today = todayKey(),
-): MonthData {
-  const sorted = [...cycles].sort((a, b) =>
-    a.startDate.localeCompare(b.startDate),
-  );
-  const lengths = cycleLengths(sorted).slice(-6);
-  const avgLength = lengths.length
-    ? Math.round(mean(lengths))
-    : settings.avgCycleLength;
+  // El MISMO modelo que usa la pantalla Hoy. Ver la nota 1 de arriba.
+  const model = buildModel(sorted, settings);
+  const avgLength = model.length;
+  const spread = model.spread;
 
   // El sangrado se pinta desde los DIAS, no desde el rango del ciclo.
   // Derivando el ciclo de una racha con huecos permitidos, rellenar
@@ -186,42 +136,63 @@ export function buildMonth(
   );
   const fertile = new Set<string>();
   const predicted = new Set<string>();
+  let mostLikelyKey: string | undefined;
+
+  /** Ventana fértil del ciclo que empieza en `start` y dura `length`. */
+  const addFertile = (start: Date, length: number) => {
+    if (length < 15 || length > 60) return;
+    // Ojo con el off-by-one: `ovulation` es un DÍA del ciclo (el 1 es
+    // el primer día de regla), y addDays cuenta OFFSETS desde el
+    // inicio. El día N está en el offset N-1.
+    const ovulation = length - 14;
+    addRange(fertile, addDays(start, ovulation - 1 - 4), 6);
+  };
 
   sorted.forEach((cycle, i) => {
     const start = fromKey(cycle.startDate);
     const next = sorted[i + 1];
-
-    // --- Ventana fértil de ESE ciclo.
     // La fase lútea dura ~14 días y es la constante; la folicular es
     // la que varía. Así que la ovulación se ancla al final del ciclo,
     // usando su longitud real cuando se conoce.
-    const thisLength = next
-      ? differenceInCalendarDays(fromKey(next.startDate), start)
-      : avgLength;
-    if (thisLength >= 15 && thisLength <= 60) {
-      // Ojo con el off-by-one: `ovulation` es un DÍA del ciclo (el 1
-      // es el primer día de regla), y addDays cuenta OFFSETS desde el
-      // inicio. El día N está en el offset N-1.
-      const ovulation = thisLength - 14;
-      addRange(fertile, addDays(start, ovulation - 1 - 4), 6);
-    }
+    addFertile(
+      start,
+      next
+        ? differenceInCalendarDays(fromKey(next.startDate), start)
+        : avgLength,
+    );
   });
 
-  // --- Reglas previstas: tres ciclos hacia delante y para de contar.
+  // --- Lo que viene: tres ciclos hacia delante y para de contar.
   const last = sorted[sorted.length - 1];
+  const hoy = fromKey(today);
   if (last) {
     for (let k = 1; k <= 3; k++) {
       const start = addDays(fromKey(last.startDate), avgLength * k);
-      if (differenceInCalendarDays(start, fromKey(today)) < 0) continue;
-      addRange(predicted, start, settings.avgPeriodLength);
+      const latest = addDays(start, spread);
+      // Ventana ya pasada: si no bajó, eso es un retraso y lo cuenta
+      // la pantalla Hoy. Pintarla aquí serían días marcados como
+      // "puede empezar" que ya se sabe que no empezaron.
+      if (differenceInCalendarDays(latest, hoy) < 0) continue;
+
+      // Recortada por hoy: la mitad de atrás de la ventana ya no
+      // puede ocurrir, y dejarla pintada la haría parecer un error.
+      const earliest = addDays(start, -spread);
+      const desde =
+        differenceInCalendarDays(earliest, hoy) < 0 ? hoy : earliest;
+      addRange(predicted, desde, differenceInCalendarDays(latest, desde) + 1);
+
+      // Solo la primera lleva "lo más probable". Marcar también la de
+      // dentro de tres meses sería fingir una puntería que no hay.
+      if (k === 1) mostLikelyKey = toKey(start);
+
+      // Y su ventana fértil, que antes no se calculaba para ciclos
+      // futuros: al pasar de mes, la tarjeta seguía anunciando una
+      // ventana fértil que la rejilla no pintaba por ninguna parte.
+      addFertile(start, avgLength);
     }
   }
 
   const logs = new Map(days.map((d) => [d.date, d]));
-
-  const gridStart = startOfWeek(startOfMonth(monthDate), WEEK_OPTS);
-  const gridEnd = endOfWeek(endOfMonth(monthDate), WEEK_OPTS);
-  const all = eachDayOfInterval({ start: gridStart, end: gridEnd });
 
   // La regla registrada gana a la prevista, y ambas a la fértil: si
   // ya sabemos que sangró, la estimación sobra.
@@ -234,53 +205,160 @@ export function buildMonth(
           ? "fertil"
           : null;
 
-  const cells: DayCell[] = all.map((date) => {
-    const key = toKey(date);
-    const log = logs.get(key);
-    const band = bandOf(key);
-    const prev = bandOf(toKey(addDays(date, -1)));
-    const next = bandOf(toKey(addDays(date, 1)));
-
-    return {
-      key,
-      date,
-      dayNumber: date.getDate(),
-      inMonth: isSameMonth(date, monthDate),
-      isToday: key === today,
-      isFuture: key > today,
-      band,
-      bandStart: band !== null && prev !== band,
-      bandEnd: band !== null && next !== band,
-      flow: log?.flow,
-      logged:
-        log !== undefined &&
-        (log.painLevel !== undefined ||
-          log.flow !== undefined ||
-          !!log.note ||
-          !!log.mood?.length ||
-          !!log.symptoms?.length ||
-          log.sex === true),
-      pillSkipped: log?.pill === false,
-    };
-  });
-
-  const weeks: DayCell[][] = [];
-  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
-
-  // Una racha que cruza de semana se rompe igualmente al saltar de
-  // fila, así que también se redondea contra los bordes de la fila.
-  // Sin esto la banda queda cortada a hueso contra el margen y parece
-  // un fallo de render en vez de una continuación.
-  for (const week of weeks) {
-    week.forEach((cell, i) => {
-      if (!cell.band) return;
-      if (i === 0) cell.bandStart = true;
-      if (i === 6) cell.bandEnd = true;
+  /**
+   * Las celdas de un rango cualquiera, en semanas de lunes a domingo.
+   *
+   * `focusMonth` solo lo usa la vista de mes, para saber qué días son
+   * de arrastre. La tira continua no tiene "fuera de mes": ahí todos
+   * los días son igual de suyos, que es justamente su gracia.
+   */
+  const cellsBetween = (from: Date, to: Date, focusMonth?: Date): DayCell[][] => {
+    const all = eachDayOfInterval({
+      start: startOfWeek(from, WEEK_OPTS),
+      end: endOfWeek(to, WEEK_OPTS),
     });
-  }
+
+    const cells: DayCell[] = all.map((date) => {
+      const key = toKey(date);
+      const log = logs.get(key);
+      const band = bandOf(key);
+      const prev = bandOf(toKey(addDays(date, -1)));
+      const next = bandOf(toKey(addDays(date, 1)));
+
+      return {
+        key,
+        date,
+        dayNumber: date.getDate(),
+        inMonth: focusMonth ? isSameMonth(date, focusMonth) : true,
+        isToday: key === today,
+        isFuture: key > today,
+        band,
+        bandStart: band !== null && prev !== band,
+        bandEnd: band !== null && next !== band,
+        flow: log?.flow,
+        mostLikely: band === "prevista" && key === mostLikelyKey,
+        logged:
+          log !== undefined &&
+          (log.painLevel !== undefined ||
+            log.flow !== undefined ||
+            !!log.note ||
+            !!log.mood?.length ||
+            !!log.symptoms?.length ||
+            log.sex === true),
+        pillSkipped: log?.pill === false,
+      };
+    });
+
+    const weeks: DayCell[][] = [];
+    for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+
+    // Una racha que cruza de semana se rompe igualmente al saltar de
+    // fila, así que también se redondea contra los bordes de la fila.
+    // Sin esto la banda queda cortada a hueso contra el margen y parece
+    // un fallo de render en vez de una continuación.
+    for (const week of weeks) {
+      week.forEach((cell, i) => {
+        if (!cell.band) return;
+        if (i === 0) cell.bandStart = true;
+        if (i === 6) cell.bandEnd = true;
+      });
+    }
+
+    return weeks;
+  };
+
+  return { cellsBetween, mostLikelyKey, firstCycleStart: sorted[0]?.startDate };
+}
+
+export function buildMonth(
+  monthDate: Date,
+  cycles: Cycle[],
+  days: DayLog[],
+  settings: Settings,
+  today = todayKey(),
+): MonthData {
+  const { cellsBetween, mostLikelyKey } = paint(cycles, days, settings, today);
+  const weeks = cellsBetween(
+    startOfMonth(monthDate),
+    endOfMonth(monthDate),
+    monthDate,
+  );
+  const cells = weeks.flat();
 
   return {
     weeks,
     painted: cells.filter((c) => c.inMonth && c.band !== null).length,
+    // Del MISMO array de celdas que se acaba de pintar. Es lo que
+    // impide que el bloque de abajo y la rejilla vuelvan a contar
+    // historias distintas: no hay dos cálculos que sincronizar.
+    summary: summarize(cells, mostLikelyKey),
   };
+}
+
+/* --- Resumen ----------------------------------------------------- */
+
+const LABEL: Record<NonNullable<Band>, string> = {
+  regla: "Regla",
+  prevista: "Puede empezar",
+  fertil: "Ventana fértil",
+};
+
+/** Tramos seguidos de una misma banda, en el orden en que se ven. */
+function runsOf(cells: DayCell[], band: Band): { start: Date; end: Date }[] {
+  const out: { start: Date; end: Date }[] = [];
+  let open: { start: Date; end: Date } | null = null;
+
+  for (const cell of cells) {
+    if (cell.band === band) {
+      if (open) open.end = cell.date;
+      else open = { start: cell.date, end: cell.date };
+    } else if (open) {
+      out.push(open);
+      open = null;
+    }
+  }
+  if (open) out.push(open);
+  return out;
+}
+
+function summarize(
+  cells: DayCell[],
+  mostLikelyKey: string | undefined,
+): SummaryRow[] {
+  const rows: SummaryRow[] = [];
+
+  const marcado = mostLikelyKey
+    ? cells.find((c) => c.key === mostLikelyKey)
+    : undefined;
+
+  for (const band of ["regla", "prevista", "fertil"] as const) {
+    const runs = runsOf(cells, band);
+    if (!runs.length) continue;
+
+    const detail = runs
+      .map((r) => {
+        const texto = dayRange(r.start, r.end);
+        // El día con más papeletas, dicho con palabras: la rejilla lo
+        // marca en rojo y en negrita, pero un número resaltado dentro
+        // de una banda punteada no se explica solo.
+        //
+        // Va DENTRO del paréntesis de su tramo y no al final de la
+        // fila. Cuando en un mes caben dos ventanas —pasa siempre que
+        // el ciclo es corto—, colgarlo al final lo dejaba pegado a la
+        // segunda, que es justo la que no tiene día probable.
+        const suyo =
+          band === "prevista" &&
+          marcado &&
+          marcado.date >= r.start &&
+          marcado.date <= r.end;
+        return suyo
+          ? `${texto} (lo más probable, ${dayRange(marcado.date)})`
+          : texto;
+      })
+      .join(" · ");
+
+    rows.push({ band, label: LABEL[band], detail });
+  }
+
+  return rows;
 }

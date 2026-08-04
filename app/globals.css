@@ -224,13 +224,36 @@
      ventana fértil   → subrayado tenue. Es el cálculo MENOS fiable
                         de la app (asume ovulación el día 14, que en
                         ciclos reales se mueve varios días), así que
-                        es lo más callado de la pantalla. */
+                        es lo más callado de la pantalla.
+
+   La rampa de flujo (1..4) existe porque la app guarda cinco niveles
+   y el calendario los pintaba todos idénticos: un "Diluvio" y un
+   "Poco" eran la misma mancha roja. Ahora la banda dice cuánto, no
+   solo cuándo, y una regla se lee de un vistazo — arranca floja,
+   sube, y se apaga.
+
+   Cada escalón lleva SU color de número. Con un solo color de texto
+   había que elegir entre que los tonos claros no se distinguieran o
+   que el número se perdiera encima, y ninguna de las dos es
+   aceptable. En claro: los dos escalones flojos llevan número
+   oscuro, los dos fuertes lo llevan blanco. En oscuro se invierte,
+   porque ahí "más flujo" es más brillo sobre fondo negro. Los cortes
+   están puestos para que todos pasen 4.5:1 con margen. */
 
 :root {
   --cal-regla: oklch(51% 0.2 26);
   --cal-regla-fg: oklch(99% 0.004 45);
   --cal-prevista: oklch(66.5% 0.12 26);
   --cal-fertil: oklch(66.5% 0.1 350);
+
+  --cal-flow-1: oklch(85% 0.07 26);
+  --cal-flow-1-fg: oklch(21% 0.016 30);
+  --cal-flow-2: oklch(72% 0.13 26);
+  --cal-flow-2-fg: oklch(21% 0.016 30);
+  --cal-flow-3: oklch(48% 0.2 26);
+  --cal-flow-3-fg: oklch(99% 0.004 45);
+  --cal-flow-4: oklch(36% 0.15 26);
+  --cal-flow-4-fg: oklch(99% 0.004 45);
 }
 
 [data-theme="dark"] {
@@ -238,6 +261,15 @@
   --cal-regla-fg: oklch(98% 0.006 45);
   --cal-prevista: oklch(52% 0.13 26);
   --cal-fertil: oklch(55% 0.11 350);
+
+  --cal-flow-1: oklch(38% 0.1 26);
+  --cal-flow-1-fg: oklch(95% 0.006 30);
+  --cal-flow-2: oklch(47% 0.15 26);
+  --cal-flow-2-fg: oklch(98% 0.006 45);
+  --cal-flow-3: oklch(62% 0.19 26);
+  --cal-flow-3-fg: oklch(15% 0.01 30);
+  --cal-flow-4: oklch(72% 0.17 26);
+  --cal-flow-4-fg: oklch(15% 0.01 30);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -246,6 +278,15 @@
     --cal-regla-fg: oklch(98% 0.006 45);
     --cal-prevista: oklch(52% 0.13 26);
     --cal-fertil: oklch(55% 0.11 350);
+
+    --cal-flow-1: oklch(38% 0.1 26);
+    --cal-flow-1-fg: oklch(95% 0.006 30);
+    --cal-flow-2: oklch(47% 0.15 26);
+    --cal-flow-2-fg: oklch(98% 0.006 45);
+    --cal-flow-3: oklch(62% 0.19 26);
+    --cal-flow-3-fg: oklch(15% 0.01 30);
+    --cal-flow-4: oklch(72% 0.17 26);
+    --cal-flow-4-fg: oklch(15% 0.01 30);
   }
 }
 
