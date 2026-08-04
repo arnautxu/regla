@@ -3,8 +3,9 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   db,
+  pillStreak,
   todayKey,
-  DEFAULT_SETTINGS,
+  withDefaults,
   type Cycle,
   type DayLog,
   type Settings,
@@ -21,6 +22,8 @@ export interface Lilaila {
   state: CycleState;
   line: Line;
   dateKey: string;
+  /** Días seguidos de pastilla hasta hoy incluido. 0 si hoy falta. */
+  pillStreak: number;
 }
 
 /**
@@ -41,17 +44,30 @@ export function useLilaila(): Lilaila {
   );
   // Los ciclos se derivan de los dias: una sola verdad. Al escuchar
   // la tabla de dias, marcar el flujo repinta el ciclo al instante.
-  const cycles = useLiveQuery(
-    async () => derivedCycles(await db.days.toArray(), dateKey),
-    [dateKey],
-  );
+  //
+  // La racha de pastilla sale de la MISMA lectura y no de una consulta
+  // aparte: la tabla entera ya está en memoria aquí, así que contar la
+  // racha es gratis y una segunda liveQuery sobre lo mismo solo
+  // añadiría un repintado más por cada escritura.
+  const derived = useLiveQuery(async () => {
+    const days = await db.days.toArray();
+    return {
+      cycles: derivedCycles(days, dateKey),
+      streak: pillStreak(days, dateKey),
+    };
+  }, [dateKey]);
+  const cycles = derived?.cycles;
   const today = useLiveQuery(
     async () => (await db.days.get(dateKey)) ?? null,
     [dateKey],
   );
 
   const ready = settings !== undefined && cycles !== undefined;
-  const resolvedSettings = settings ?? DEFAULT_SETTINGS;
+  // withDefaults y no `?? DEFAULT_SETTINGS`: una fila guardada antes
+  // de que existiera un ajuste existe pero no lo tiene, asi que el
+  // `??` no salta y se lee `undefined` de un campo que el resto del
+  // codigo da por seguro.
+  const resolvedSettings = withDefaults(settings);
   const resolvedCycles = cycles ?? [];
 
   const state = computeCycleState(
@@ -97,6 +113,7 @@ export function useLilaila(): Lilaila {
     state,
     line,
     dateKey,
+    pillStreak: derived?.streak ?? 0,
   };
 }
 

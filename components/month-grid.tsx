@@ -93,7 +93,9 @@ export function MonthGrid({
                   haptic(8);
                   onSelect(cell);
                 }}
-                aria-label={`${cell.dayNumber}${BAND_ALT[cell.band ?? "none"]}`}
+                aria-label={`${cell.dayNumber}${BAND_ALT[cell.band ?? "none"]}${
+                  cell.pillSkipped ? ", sin pastilla" : ""
+                }`}
                 aria-current={cell.isToday ? "date" : undefined}
                 className="relative flex h-11 items-center justify-center"
               >
@@ -138,6 +140,18 @@ export function MonthGrid({
                     aria-hidden="true"
                     className="absolute right-1.5 top-1 size-1 rounded-full"
                     style={{ background: numberColor(cell), opacity: 0.75 }}
+                  />
+                )}
+
+                {/* Pastilla olvidada: anillo hueco abajo a la
+                    izquierda. Hueco y no relleno a propósito — es la
+                    forma de "falta algo", y se distingue del punto de
+                    registro en escala de grises, no solo por sitio. */}
+                {cell.inMonth && cell.pillSkipped && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute bottom-1 left-1.5 size-[5px] rounded-full"
+                    style={{ boxShadow: `inset 0 0 0 1.5px ${numberColor(cell)}` }}
                   />
                 )}
               </button>

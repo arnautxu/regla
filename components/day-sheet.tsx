@@ -6,15 +6,20 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   db,
+  pillStreak,
   setBleeding,
+  setPill,
+  setSex,
   upsertDay,
   type MoodTag,
   type SymptomTag,
 } from "@/lib/db";
 import { capitalize } from "@/lib/format";
-import { haptic } from "@/lib/use-lilaila";
+import { haptic, useLilaila } from "@/lib/use-lilaila";
 import { FlowRow } from "./flow-row";
 import { MoodRow } from "./mood-row";
+import { PillRow } from "./pill-row";
+import { SexRow } from "./sex-row";
 import { TagPicker } from "./tag-picker";
 
 /**
@@ -72,6 +77,7 @@ export function DaySheet({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const { settings } = useLilaila();
 
   // <dialog> nativo: da trampa de foco, Escape y scroll bloqueado sin
   // escribirlos a mano, y todos suelen salir mal escritos a mano.
@@ -85,6 +91,17 @@ export function DaySheet({
   const log = useLiveQuery(
     async () => (day ? ((await db.days.get(day.key)) ?? null) : null),
     [day?.key],
+  );
+
+  // La racha necesita todos los días, así que solo se calcula con la
+  // hoja abierta y la pastilla encendida. Sin esas dos guardas, cada
+  // celda del calendario tendría detrás una consulta a la tabla entera.
+  const streak = useLiveQuery(
+    async () =>
+      day && settings.pill.enabled
+        ? pillStreak(await db.days.toArray(), day.key)
+        : 0,
+    [day?.key, settings.pill.enabled],
   );
 
   // Ya no se pregunta si es "el primer dia": se pregunta si ese dia
@@ -138,6 +155,29 @@ export function DaySheet({
               <MoodRow
                 value={log ?? undefined}
                 onChange={(patch) => void upsertDay(day.key, patch)}
+                dateKey={day.key}
+              />
+
+              {/* La pastilla va arriba del todo del detalle: es lo
+                  único de esta hoja que se pregunta TODOS los días,
+                  sangre o no, y enterrarla bajo diez síntomas la
+                  convertiría en algo que solo se rellena en marzo. */}
+              {settings.pill.enabled && (
+                <PillRow
+                  value={log?.pill}
+                  takenAt={log?.pillAt}
+                  streak={streak}
+                  onChange={(v) =>
+                    void setPill(day.key, v, day.isToday ? new Date() : undefined)
+                  }
+                  dateKey={day.key}
+                />
+              )}
+
+              <SexRow
+                log={log ?? undefined}
+                onSet={(v) => void setSex(day.key, v)}
+                onPatch={(patch) => void upsertDay(day.key, patch)}
                 dateKey={day.key}
               />
 

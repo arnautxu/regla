@@ -32,6 +32,23 @@ export type SymptomTag =
 /** 0 = nada, 4 = escena de Tarantino */
 export type FlowLevel = 0 | 1 | 2 | 3 | 4;
 
+/* Sexo. Se guarda en campos planos y no en un objeto anidado porque
+   todo se escribe con upsertDay(fecha, parche) y un objeto obligaria
+   a leer-fusionar-escribir a mano en cada toque de un chip. */
+
+export type SexActivity =
+  | "penetracion"
+  | "oral"
+  | "manos"
+  | "juguetes"
+  | "sola";
+
+export type SexProtection =
+  | "pastilla"
+  | "condon"
+  | "marcha-atras"
+  | "nada";
+
 export interface Cycle {
   id: string;
   /** Primer dia de sangrado, 'YYYY-MM-DD' */
@@ -51,14 +68,36 @@ export interface DayLog {
   /** 0-10 */
   painLevel?: number;
   note?: string;
+  /** Hubo sexo ese dia. Lo de abajo solo tiene sentido si es true. */
   sex?: boolean;
+  sexActivities?: SexActivity[];
+  sexProtection?: SexProtection[];
+  sexOrgasm?: boolean;
   medication?: string[];
+  /**
+   * Anticonceptiva del dia. `true` = tomada, `false` = saltada a
+   * conciencia, `undefined` = sin contestar todavia. Los tres estados
+   * se distinguen a proposito: "no la he tomado" y "aun no lo se" son
+   * cosas muy distintas cuando el recordatorio pregunta cada noche.
+   */
+  pill?: boolean;
+  /** Hora real en que se marco, ISO. Sirve para "la tomaste a las 22:04". */
+  pillAt?: string;
   /** Marca manual de "hoy no estoy para bromas" */
   badDay?: boolean;
   updatedAt?: string;
 }
 
 export type HumorLevel = "gamberro" | "suave" | "off";
+
+export interface PillSettings {
+  /** Lleva la cuenta de la anticonceptiva */
+  enabled: boolean;
+  /** Hora local del aviso, 0-23. Por defecto las diez de la noche. */
+  hour: number;
+  /** Manda el aviso a esa hora por push */
+  remind: boolean;
+}
 
 export interface Settings {
   id: "singleton";
@@ -71,6 +110,7 @@ export interface Settings {
     daysBefore: number;
     hourOfDay: number;
   };
+  pill: PillSettings;
   theme: "auto" | "light" | "dark";
   onboarded: boolean;
 }
@@ -82,9 +122,33 @@ export const DEFAULT_SETTINGS: Settings = {
   avgPeriodLength: 5,
   humorLevel: "gamberro",
   notifications: { enabled: false, daysBefore: 2, hourOfDay: 9 },
+  pill: { enabled: false, hour: 22, remind: false },
   theme: "light",
   onboarded: false,
 };
+
+/**
+ * Rellena lo que falte con los valores por defecto.
+ *
+ * Los ajustes se guardan como UN objeto entero, asi que una fila
+ * escrita antes de que existiera `pill` no lo tiene — y leerla tal
+ * cual reventaria en el primer `settings.pill.enabled`. Esto no es
+ * una migracion: es la unica puerta por la que se leen los ajustes,
+ * de modo que anyadir un campo nuevo nunca vuelve a hacer falta
+ * tocar la version de Dexie.
+ */
+export function withDefaults(stored: Partial<Settings> | null | undefined): Settings {
+  return {
+    ...DEFAULT_SETTINGS,
+    ...stored,
+    notifications: {
+      ...DEFAULT_SETTINGS.notifications,
+      ...stored?.notifications,
+    },
+    pill: { ...DEFAULT_SETTINGS.pill, ...stored?.pill },
+    id: "singleton",
+  };
+}
 
 const db = new Dexie("lilaila") as Dexie & {
   cycles: EntityTable<Cycle, "id">;
@@ -214,7 +278,7 @@ export function todayKey(): string {
 
 export async function getSettings(): Promise<Settings> {
   const stored = await db.settings.get("singleton");
-  if (stored) return stored;
+  if (stored) return withDefaults(stored);
   await db.settings.put(DEFAULT_SETTINGS);
   return DEFAULT_SETTINGS;
 }
@@ -325,6 +389,71 @@ export async function setBleeding(
   touch();
 }
 
+
+/* ── La pastilla ─────────────────────────────────────────────────
+   Una anticonceptiva se toma TODOS los dias, sangre o no. Por eso no
+   cuelga del ciclo ni de la racha de regla: es su propia columna del
+   dia, y el unico registro de esta app que tiene hora ademas de
+   fecha — "¿me la he tomado ya?" a las 23:50 es una pregunta real.
+   ─────────────────────────────────────────────────────────────── */
+
+export async function setPill(
+  date: string,
+  taken: boolean | undefined,
+  /**
+   * Momento real de la toma. Se omite a proposito al rellenar dias
+   * atrasados: sellar las 14:32 de hoy en el martes pasado seria
+   * apuntar la hora en que se acordo, no la hora en que se la tomo,
+   * y luego se lee como si fuera lo segundo.
+   */
+  at?: Date,
+): Promise<void> {
+  const previo = await db.days.get(date);
+  await db.days.put({
+    ...previo,
+    date,
+    pill: taken,
+    // La hora solo se sella al TOMARLA. Saltarsela o desmarcarla no
+    // deja hora: una hora sin pastilla detras no significa nada.
+    pillAt: taken && at ? at.toISOString() : undefined,
+    updatedAt: now(),
+  });
+  touch();
+}
+
+/** Cuántos dias seguidos hasta `date` (incluido) lleva tomandola. */
+export function pillStreak(days: DayLog[], date: string): number {
+  const porFecha = new Map(days.map((d) => [d.date, d]));
+  let n = 0;
+  // Por dias de calendario, no restando 86400000 ms: en el cambio de
+  // hora el dia dura 25 h y la resta en ms repite fecha.
+  for (const cursor = fromKey(date); ; cursor.setDate(cursor.getDate() - 1)) {
+    if (porFecha.get(toKey(cursor))?.pill !== true) return n;
+    n++;
+    if (n > 400) return n; // freno: un año seguido ya es suficiente elogio
+  }
+}
+
+/** Marca, desmarca o deja sin contestar. Solo el "sí" conserva el detalle. */
+export async function setSex(
+  date: string,
+  yes: boolean | undefined,
+): Promise<void> {
+  const previo = await db.days.get(date);
+  await db.days.put({
+    ...previo,
+    date,
+    sex: yes,
+    // Sin esto, decir "no, hoy nada" dejaba las etiquetas de ayer
+    // colgando invisibles en la base de datos, listas para reaparecer
+    // en cuanto se volviera a marcar el dia.
+    sexActivities: yes ? previo?.sexActivities : undefined,
+    sexProtection: yes ? previo?.sexProtection : undefined,
+    sexOrgasm: yes ? previo?.sexOrgasm : undefined,
+    updatedAt: now(),
+  });
+  touch();
+}
 
 export async function upsertDay(
   date: string,

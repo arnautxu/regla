@@ -46,6 +46,16 @@ export interface DayCell {
   flow?: FlowLevel;
   /** Hay algo registrado ese día (ánimo, dolor, nota…) */
   logged: boolean;
+  /**
+   * Ese día contestó que NO se tomó la pastilla.
+   *
+   * Se marca el olvido y no la toma. Una anticonceptiva se toma todos
+   * los días, así que pintar los días tomados llenaría el mes de
+   * puntos que no dicen nada; lo que se busca de un vistazo es el
+   * hueco. Un día sin contestar no es un olvido y no se pinta: eso
+   * sería acusarla de algo que no ha dicho.
+   */
+  pillSkipped: boolean;
 }
 
 const WEEK_OPTS = { weekStartsOn: 1 } as const; // lunes, que esto es España
@@ -248,7 +258,9 @@ export function buildMonth(
           log.flow !== undefined ||
           !!log.note ||
           !!log.mood?.length ||
-          !!log.symptoms?.length),
+          !!log.symptoms?.length ||
+          log.sex === true),
+      pillSkipped: log?.pill === false,
     };
   });
 

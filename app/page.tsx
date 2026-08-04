@@ -10,12 +10,14 @@ import { MoodRow } from "@/components/mood-row";
 import { PeriodSheet } from "@/components/period-sheet";
 import { PeriodStartFX } from "@/components/period-start-fx";
 import { DaySheet } from "@/components/day-sheet";
+import { PillRow } from "@/components/pill-row";
 import { PHASE_LABEL, type CycleState } from "@/lib/cycle";
 import { capitalize, dateRange } from "@/lib/format";
 import {
   clearPeriodAround,
   fromKey,
   setBleeding,
+  setPill,
   startPeriod,
   upsertDay,
   type DayLog,
@@ -30,7 +32,8 @@ export default function Hoy() {
   // está escrito y calibrado a mano, y lo generado sonaba peor. Ya no
   // se llama a /api/lilita aquí; ese endpoint sigue vivo solo para el
   // chat, que sí es una conversación abierta y no tiene banco posible.
-  const { ready, state, today, line, dateKey, cycles } = useLilaila();
+  const { ready, state, today, line, dateKey, cycles, settings, pillStreak } =
+    useLilaila();
 
   const [asking, setAsking] = useState(false);
   // Solo al CONFIRMAR que empieza la regla, no en cada "Registrar
@@ -185,6 +188,37 @@ export default function Hoy() {
         </section>
       )}
 
+      {/* ── La pastilla ───────────────────────────────────────────
+          En su propia tarjeta y por encima del registro rápido. Es lo
+          único de esta pantalla que hay que contestar TODOS los días
+          —el ciclo va a su ritmo, la anticonceptiva no— y es adonde
+          lleva el aviso de las diez de la noche.
+
+          Escribe al toque, sin pasar por el borrador de abajo: aquí
+          no hay nada que confirmar después. Pulsar "Tomada" ES el
+          gesto completo, y hacerle pulsar otro botón para que cuente
+          sería exactamente el fallo que se busca evitar. */}
+      {settings.pill.enabled && (
+        <section
+          className="sticker rounded-2xl px-lg py-md"
+          style={{ background: "var(--surface)" }}
+        >
+          <PillRow
+            value={today?.pill}
+            takenAt={today?.pillAt}
+            streak={pillStreak}
+            onChange={(v) => void setPill(dateKey, v, new Date())}
+            dateKey={dateKey}
+          />
+          {today?.pill === undefined && settings.pill.remind && (
+            <p className="mt-2 text-xs text-faint">
+              Si a las {String(settings.pill.hour).padStart(2, "0")}:00 sigues
+              sin contestar, te doy la brasa.
+            </p>
+          )}
+        </section>
+      )}
+
       {/* ── Registro rápido ────────────────────────────────────────
           Agrupados en una sola superficie: son un mismo gesto ("cómo
           estoy hoy"), no controles sueltos flotando en la página. */}
@@ -328,8 +362,11 @@ export default function Hoy() {
 /* El enlace dice lo que ya hay apuntado, no solo "añadir detalles":
    asi se ve de un vistazo si el dia esta registrado sin abrir nada. */
 function resumenDetalle(day: DayLog | undefined): string {
-  const n = (day?.symptoms?.length ?? 0) + (day?.mood?.length ?? 0);
-  if (n === 0) return "Añadir síntomas, ánimo o una nota";
+  const n =
+    (day?.symptoms?.length ?? 0) +
+    (day?.mood?.length ?? 0) +
+    (day?.sex === true ? 1 : 0);
+  if (n === 0) return "Añadir síntomas, ánimo, sexo o una nota";
   const nota = day?.note ? " y una nota" : "";
   return `${n} ${n === 1 ? "cosa apuntada" : "cosas apuntadas"}${nota} — editar`;
 }
