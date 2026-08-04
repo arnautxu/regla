@@ -1,14 +1,9 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "motion/react";
+import { Lilita } from "./lilita";
 import { PERIOD_FLIGHT_DURATION_S } from "@/lib/motion";
-
-const PeriodStartScene = dynamic(
-  () => import("./period-start-scene").then((m) => m.PeriodStartScene),
-  { ssr: false },
-);
 
 const REDUCE_QUERY = "(prefers-reduced-motion: reduce)";
 
@@ -24,12 +19,24 @@ function getReducedMotionServer() {
   return false;
 }
 
+/* Entra fuera de cuadro abajo a la izquierda, pasa grande y cerca por
+   el centro, sale fuera de cuadro arriba a la derecha — el "cerca de
+   cámara" de la versión en Three.js, fingido aquí con escala en vez
+   de profundidad real. Un sprite 2D no tiene z, pero el ojo lee
+   "grande y rápido" como "cerca" igual de bien. */
+const TIMES = [0, 0.15, 0.85, 1];
+const FLIGHT = {
+  x: ["-34vw", "-8vw", "26vw", "46vw"],
+  y: ["36vh", "2vh", "-34vh", "-50vh"],
+  scale: [0.35, 1.55, 1.3, 0.4],
+  rotate: [-25, -2, 14, 30],
+  opacity: [0, 1, 1, 0],
+};
+
 /* ═══════════════════════════════════════════════════════════════
    Se dispara UNA vez, al confirmar que ha empezado la regla — no en
    cada "Registrar hoy" de los días siguientes, que gastaría la
-   broma en un solo día. El motor 3D se carga en ese instante
-   (dynamic import, sin SSR): la app no lo descarga nunca si no se
-   usa, que es el 99% de las sesiones.
+   broma en un solo día.
    ═══════════════════════════════════════════════════════════════ */
 
 export function PeriodStartFX({
@@ -44,14 +51,17 @@ export function PeriodStartFX({
     getReducedMotion,
     getReducedMotionServer,
   );
+  const duration = reduced ? 0.35 : PERIOD_FLIGHT_DURATION_S;
 
   useEffect(() => {
-    // Con reduce no se monta el motor 3D en absoluto: un flash breve
-    // y se acabó. Es lo mismo que ya hace el resto de la app.
-    if (!show || !reduced) return;
-    const id = setTimeout(onDone, 350);
+    if (!show) return;
+    // Sin reduce, motion/react ya llama a onDone via onAnimationComplete
+    // del sprite; con reduce no hay sprite que lo dispare, así que el
+    // temporizador es quien cierra el flash.
+    if (!reduced) return;
+    const id = setTimeout(onDone, duration * 1000);
     return () => clearTimeout(id);
-  }, [show, reduced, onDone]);
+  }, [show, reduced, duration, onDone]);
 
   return (
     <AnimatePresence>
@@ -70,12 +80,26 @@ export function PeriodStartFX({
             }}
             initial={{ opacity: 0 }}
             animate={{ opacity: [0, 0.6, 0] }}
-            transition={{
-              duration: reduced ? 0.35 : PERIOD_FLIGHT_DURATION_S,
-              times: [0, 0.32, 1],
-            }}
+            transition={{ duration, times: [0, 0.32, 1] }}
           />
-          {!reduced && <PeriodStartScene onDone={onDone} />}
+
+          {!reduced && (
+            <motion.div
+              className="absolute left-1/2 top-1/2"
+              initial={{
+                x: FLIGHT.x[0],
+                y: FLIGHT.y[0],
+                scale: FLIGHT.scale[0],
+                rotate: FLIGHT.rotate[0],
+                opacity: 0,
+              }}
+              animate={FLIGHT}
+              transition={{ duration, times: TIMES, ease: "easeInOut" }}
+              onAnimationComplete={onDone}
+            >
+              <Lilita mood="volando" size={132} />
+            </motion.div>
+          )}
         </motion.div>
       )}
     </AnimatePresence>

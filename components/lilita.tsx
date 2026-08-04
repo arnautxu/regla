@@ -308,6 +308,30 @@ const FACES: Record<Mood, Face> = {
       </g>
     ),
   },
+
+  /* Superman, no una interpretación libre: un puño por delante, el
+     otro atrás partiendo el viento, piernas juntas a rastra. Solo
+     aparece en el vuelo de "me ha bajado" — el resto de la app la ve
+     con los pies en el suelo. */
+  volando: {
+    tilt: -6,
+    brows: ["M36 52 Q45 46 54 51", "M84 52 Q75 46 66 51"],
+    pupil: { dx: 0, dy: -2, r: 7 },
+    mouth: { d: "M46 102 Q58 108 74 100" },
+    arms: ["M22 94 C8 82 2 62 6 38", "M98 94 C110 100 118 112 120 128"],
+    legs: ["M48 122 C42 136 30 148 20 158", "M72 122 C78 136 90 148 100 158"],
+    shoes: [
+      "M10 158 h20 a4 4 0 0 1 4 4 v4 a3 3 0 0 1 -3 3 h-21 a4 4 0 0 1 -4 -4 v-3 a4 4 0 0 1 4 -4 z",
+      "M90 158 h20 a4 4 0 0 1 4 4 v3 a4 4 0 0 1 -4 4 h-21 a3 3 0 0 1 -3 -3 v-4 a4 4 0 0 1 4 -4 z",
+    ],
+    extra: (
+      <g stroke="var(--li-line)" strokeWidth="3" strokeLinecap="round" opacity={0.55}>
+        <path d="M100 116 L114 120" />
+        <path d="M103 127 L119 129" />
+        <path d="M96 105 L108 104" />
+      </g>
+    ),
+  },
 };
 
 const MOOD_ALT: Record<Mood, string> = {
@@ -318,5 +342,6 @@ const MOOD_ALT: Record<Mood, string> = {
   gremlin: "furiosa",
   panico: "en pánico",
   cuidando: "cuidándote",
+  volando: "volando como Superman",
   dormida: "dormida",
 };
