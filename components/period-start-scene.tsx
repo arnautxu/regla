@@ -135,6 +135,19 @@ export function PeriodStartScene({ onDone }: { onDone: () => void }) {
     }
     window.addEventListener("resize", onResize);
 
+    // Media altura del frustum a una distancia dada de cámara — para
+    // situar a Lilita como FRACCIÓN del encuadre real en cada
+    // profundidad, no en unidades de mundo fijas. Con unidades fijas,
+    // el primer intento la cruzaba de punta a punta en 4 de 81
+    // frames: el encuadre visible a esa distancia es muchísimo más
+    // estrecho de lo que "se siente" mirando la escena desde fuera.
+    const tanHalfV = Math.tan((camera.fov * Math.PI) / 360);
+    function halfExtentsAt(z: number) {
+      const dist = camera.position.z - z;
+      const halfH = dist * tanHalfV;
+      return { halfW: halfH * camera.aspect, halfH };
+    }
+
     const clock = new Clock();
     let raf = 0;
     let stopped = false;
@@ -144,12 +157,20 @@ export function PeriodStartScene({ onDone }: { onDone: () => void }) {
       const e = easeInOutQuart(t);
       const bulge = Math.sin(t * Math.PI); // 0 en los bordes, 1 a mitad de camino
 
-      lilita.position.x = -5.5 + e * 11;
-      lilita.position.y = -3.2 + e * 6.6 + bulge * 0.5;
       // De lejos (-9) a cerca de cámara (2) y otra vez lejos: el
       // "pasa rozándote" que en 2D no se puede fingir con una simple
       // traslación en pantalla.
-      lilita.position.z = -9 + bulge * 11;
+      const z = -9 + bulge * 11;
+      const { halfW, halfH } = halfExtentsAt(z);
+
+      // -1.15 → 0 → 1.15 del ancho/alto visible EN ESA PROFUNDIDAD:
+      // entra fuera de cuadro, cruza por dentro, sale fuera de
+      // cuadro — proporcional siempre, así que se ve igual de bien
+      // de cerca que de lejos.
+      const xFrac = -1.15 + e * 2.3;
+      const yFrac = -1.05 + e * 1.85 + bulge * 0.15;
+
+      lilita.position.set(xFrac * halfW, yFrac * halfH, z);
 
       lilita.rotation.z = -0.5 + e * 1.0;
       lilita.rotation.y = -0.3;
