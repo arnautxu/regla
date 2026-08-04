@@ -9,7 +9,9 @@ export type Mood =
   | "gremlin"
   | "panico"
   | "cuidando"
-  | "dormida";
+  | "dormida"
+  /** Solo para la animación de "me ha bajado" — nunca la elige lilitaSays. */
+  | "volando";
 
 export interface LineContext {
   phase?: Phase;
@@ -69,6 +71,18 @@ const SIN_DATOS: Line[] = [
     text: "Pantalla vacía, como mi conocimiento de tu ciclo. Dale al botón rojo cuando toque.",
     mood: "neutral",
   },
+  {
+    text: "Todavía no tengo ni idea de tu ciclo. Cuéntamelo y empiezo a hacer cuentas.",
+    mood: "neutral",
+  },
+  {
+    text: "Aquí no hay nada mío que decir todavía. La pantalla en blanco eres tú, sin datos.",
+    mood: "neutral",
+  },
+  {
+    text: "Primer día conmigo. Dame algo que apuntar y dejo de estar tan callada.",
+    mood: "neutral",
+  },
 ];
 
 const PRIMER_CICLO: Line[] = [
@@ -78,6 +92,18 @@ const PRIMER_CICLO: Line[] = [
   },
   {
     text: "Ya tenemos un dato. Con tres empiezo a adivinar. Con seis me pongo chulita.",
+    mood: "neutral",
+  },
+  {
+    text: "Segundo ciclo en marcha. Todavía adivino a ciegas, pero ya menos.",
+    mood: "neutral",
+  },
+  {
+    text: "Con esto ya son dos. Empiezo a intuir un patrón, no me hagas mucho caso aún.",
+    mood: "neutral",
+  },
+  {
+    text: "Cuatro ciclos y voy afinando la puntería. Cinco y ya presumo.",
     mood: "neutral",
   },
 ];
@@ -91,6 +117,26 @@ const MENSTRUAL: Record<number, Line[]> = {
     },
     {
       text: "Día 1. El útero ha empezado las obras y no ha pedido licencia.",
+      mood: "exhausta",
+    },
+    {
+      text: "Ha llegado. Como siempre, sin avisar y con mala educación.",
+      mood: "exhausta",
+    },
+    {
+      text: "Bienvenida al primer acto. El público no aplaude, pero yo sí, un poco.",
+      mood: "exhausta",
+    },
+    {
+      text: "Hoy toca. Bolsa de agua caliente, pijama, y el mundo espera.",
+      mood: "exhausta",
+    },
+    {
+      text: "Se ha abierto el telón. Trágico, previsible, puntual.",
+      mood: "exhausta",
+    },
+    {
+      text: "Día 1. Otra vez esta obra, otra vez sin ensayo.",
       mood: "exhausta",
     },
   ],
@@ -107,6 +153,26 @@ const MENSTRUAL: Record<number, Line[]> = {
       text: "Hoy tienes derecho constitucional a no hacer absolutamente nada.",
       mood: "exhausta",
     },
+    {
+      text: "Día 2, el más largo del calendario aunque dure 24 horas como los demás.",
+      mood: "exhausta",
+    },
+    {
+      text: "Hoy no eres tú, es tu útero con el micrófono abierto.",
+      mood: "exhausta",
+    },
+    {
+      text: "El peor día tiene fecha de caducidad. Es mañana. Aguanta hoy.",
+      mood: "exhausta",
+    },
+    {
+      text: "Manta, sofá y cero explicaciones a nadie. Día 2 lo pide.",
+      mood: "exhausta",
+    },
+    {
+      text: "Si hoy cancelas planes, hiciste bien. Firmado: yo.",
+      mood: "exhausta",
+    },
   ],
   3: [
     {
@@ -115,6 +181,22 @@ const MENSTRUAL: Record<number, Line[]> = {
     },
     {
       text: "Día 3. Menos sangre, misma mala hostia. Es lo que hay.",
+      mood: "exhausta",
+    },
+    {
+      text: "Día 3. Baja la intensidad, no la mala leche. Vas mejorando.",
+      mood: "exhausta",
+    },
+    {
+      text: "A partir de hoy cuenta menos y molesta menos. Progreso real.",
+      mood: "exhausta",
+    },
+    {
+      text: "Día 3, mitad del drama ya representada. Sigue el guion.",
+      mood: "exhausta",
+    },
+    {
+      text: "Menos manchas, menos dolor, la misma cara de circunstancias.",
       mood: "exhausta",
     },
   ],
@@ -127,11 +209,43 @@ const MENSTRUAL: Record<number, Line[]> = {
       text: "Día 4 y ya casi eres persona otra vez.",
       mood: "neutral",
     },
+    {
+      text: "Día 4. Ya se puede planear algo que no sea sobrevivir.",
+      mood: "neutral",
+    },
+    {
+      text: "Casi persona otra vez. El útero recoge sus cosas.",
+      mood: "neutral",
+    },
+    {
+      text: "Día 4 y el drama baja el volumen. Se agradece.",
+      mood: "neutral",
+    },
+    {
+      text: "Cuarto acto. Ya sabes cómo termina esto: bien, más o menos.",
+      mood: "neutral",
+    },
   ],
   5: [
     { text: "Día 5. Recta final. Marca «Nada» el día que pare.", mood: "neutral" },
     {
       text: "Día 5. Si esto sigue mucho más, avísame y lo apuntamos como largo.",
+      mood: "neutral",
+    },
+    {
+      text: "Día 5. Si esto sigue, dímelo y lo llevamos aparte.",
+      mood: "neutral",
+    },
+    {
+      text: "Últimos coletazos. Marca «Nada» en cuanto pare de verdad.",
+      mood: "neutral",
+    },
+    {
+      text: "Día 5, telón a punto de bajar. Buen trabajo, como siempre.",
+      mood: "neutral",
+    },
+    {
+      text: "Se acaba. Si no se acaba pronto, avísame y lo vigilamos.",
       mood: "neutral",
     },
   ],
@@ -150,6 +264,18 @@ const PENDIENTE_HOY: Line[] = [
     text: "No sé cómo vas hoy. Un toque en el flujo y me entero.",
     mood: "neutral",
   },
+  {
+    text: "¿Sigue la regla o ya se fue? Marca el flujo y salgo de dudas.",
+    mood: "neutral",
+  },
+  {
+    text: "Tengo el dato de ayer, no el de hoy. Un toque y me pongo al día.",
+    mood: "neutral",
+  },
+  {
+    text: "No sé si hoy toca todavía. Dímelo con el flujo, no conmigo.",
+    mood: "neutral",
+  },
 ];
 
 const MENSTRUAL_LARGA: Line[] = [
@@ -159,6 +285,18 @@ const MENSTRUAL_LARGA: Line[] = [
   },
   {
     text: "Séptimo día o más. ¿Sigue de verdad o se te ha olvidado marcar que paró?",
+    mood: "neutral",
+  },
+  {
+    text: "Ocho días y contando. Yo apunto, pero esto ya lo hablaría con un médico.",
+    mood: "neutral",
+  },
+  {
+    text: "Esto se está alargando más de lo normal-normal. No lo ignores.",
+    mood: "neutral",
+  },
+  {
+    text: "Novena jornada. O sigue de verdad, o se te olvidó cerrarlo. Compruébalo.",
     mood: "neutral",
   },
 ];
@@ -184,6 +322,22 @@ const FOLICULAR: Line[] = [
     text: "Piel decente, humor decente, mundo tolerable. Fase folicular, señores.",
     mood: "energica",
   },
+  {
+    text: "Fase folicular: la versión de ti que sí contesta los mensajes.",
+    mood: "energica",
+  },
+  {
+    text: "Hoy rindes el doble y te enteras la mitad tarde. Aprovecha mientras dure.",
+    mood: "energica",
+  },
+  {
+    text: "Ganas de todo, energía de sobra. Que no se note que es hormonal.",
+    mood: "energica",
+  },
+  {
+    text: "Buena racha en marcha. No la analices, solo úsala.",
+    mood: "energica",
+  },
 ];
 
 const OVULACION: Line[] = [
@@ -205,6 +359,22 @@ const OVULACION: Line[] = [
   },
   {
     text: "Aviso: esto es una estimación, no un método anticonceptivo. Que quede claro.",
+    mood: "flirty",
+  },
+  {
+    text: "Pico de fertilidad. Tú sabrás qué haces con esa información.",
+    mood: "flirty",
+  },
+  {
+    text: "Hoy ligas hasta con el cartero. No es magia, es biología presumiendo.",
+    mood: "flirty",
+  },
+  {
+    text: "Ventana fértil activa. Repito: estimación, no anticonceptivo.",
+    mood: "flirty",
+  },
+  {
+    text: "Te miras al espejo y apruebas. Disfrútalo, dura tres días.",
     mood: "flirty",
   },
 ];
@@ -234,6 +404,22 @@ const LUTEA: Line[] = [
     text: "No estás loca. Estás en la fase lútea. Es distinto y es temporal.",
     mood: "gremlin",
   },
+  {
+    text: "Fase lútea. Si el mundo te cae mal hoy, no eres tú, es el calendario.",
+    mood: "gremlin",
+  },
+  {
+    text: "Paciencia a la baja, antojos al alza. Combinación clásica.",
+    mood: "gremlin",
+  },
+  {
+    text: "Hoy todo te parece una ofensa personal. Bienvenida a la lútea.",
+    mood: "gremlin",
+  },
+  {
+    text: "Si lloras viendo un anuncio de seguros, esto lo explica todo.",
+    mood: "gremlin",
+  },
 ];
 
 const INMINENTE: Line[] = [
@@ -249,6 +435,18 @@ const INMINENTE: Line[] = [
     text: "Últimos días de calma. Compra chocolate ahora, luego no querrás salir.",
     mood: "gremlin",
   },
+  {
+    text: "Se acerca. Lleva compresa de repuesto, que luego no hay tiempo.",
+    mood: "gremlin",
+  },
+  {
+    text: "Cuenta atrás corta. El útero ya está haciendo las maletas.",
+    mood: "gremlin",
+  },
+  {
+    text: "Días contados para que caiga. No hagas planes con ropa clara.",
+    mood: "gremlin",
+  },
 ];
 
 const HOY_TOCA: Line[] = [
@@ -258,6 +456,18 @@ const HOY_TOCA: Line[] = [
   },
   {
     text: "Según mis cuentas, hoy. Según tu cuerpo, ya veremos.",
+    mood: "panico",
+  },
+  {
+    text: "Hoy toca, según el cálculo. El cuerpo no siempre lee el calendario.",
+    mood: "panico",
+  },
+  {
+    text: "Fecha prevista: hoy. Que no venga es tan normal como que venga.",
+    mood: "panico",
+  },
+  {
+    text: "Es el día que yo tenía apuntado. El útero decidirá si coincide.",
     mood: "panico",
   },
 ];
@@ -276,6 +486,14 @@ const RETRASO: Record<string, Line[]> = {
       text: "Dos días. Sigue siendo territorio absolutamente normal.",
       mood: "neutral",
     },
+    {
+      text: "Tres días tarde, todavía dentro de lo esperable. Sin sustos.",
+      mood: "neutral",
+    },
+    {
+      text: "Un poco de retraso no es noticia. El cuerpo también tiene días malos.",
+      mood: "neutral",
+    },
   ],
   medio: [
     {
@@ -286,6 +504,18 @@ const RETRASO: Record<string, Line[]> = {
       text: "Vamos tarde. No entremos en pánico las dos a la vez, que ya lo hago yo.",
       mood: "panico",
     },
+    {
+      text: "Cinco días. Podría ser estrés, podría ser nada. Suele ser nada.",
+      mood: "panico",
+    },
+    {
+      text: "Vamos con retraso de verdad. Respira, esto no siempre significa algo.",
+      mood: "panico",
+    },
+    {
+      text: "Una semana casi. Yo no salto a conclusiones, pero las tengo cerca.",
+      mood: "panico",
+    },
   ],
   mucho: [
     {
@@ -294,6 +524,18 @@ const RETRASO: Record<string, Line[]> = {
     },
     {
       text: "Diez días o más. Yo solo soy una gota de sangre animada, pero aquí ya hablaría con alguien con carrera.",
+      mood: "panico",
+    },
+    {
+      text: "Doce días de retraso. Yo apunto números, no diagnósticos. Habla con alguien.",
+      mood: "panico",
+    },
+    {
+      text: "Esto ya se sale de lo que yo puedo explicarte con gracia.",
+      mood: "panico",
+    },
+    {
+      text: "Más de una semana y media. El chiste se acaba aquí: consulta.",
       mood: "panico",
     },
   ],
