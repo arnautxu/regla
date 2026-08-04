@@ -5,12 +5,23 @@ import { useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useLiveQuery } from "dexie-react-hooks";
+import { motion } from "motion/react";
 import { Lilita } from "@/components/lilita";
 import { buildContext } from "@/lib/ai-context";
 import { computeInsights } from "@/lib/insights";
 import { phaseByDay } from "@/lib/cycle";
 import { db } from "@/lib/db";
+import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
+
+const LIST = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.04 } },
+};
+const ITEM = {
+  hidden: { opacity: 0, y: 6 },
+  show: { opacity: 1, y: 0, transition: { duration: DURATION.standard, ease: EASE_OUT_QUART } },
+};
 
 const SUGERENCIAS = [
   "¿Por qué llevo unos meses con más dolor?",
@@ -78,16 +89,26 @@ export default function Chat() {
 
       <div className="flex flex-1 flex-col gap-lg overflow-y-auto pb-md">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center gap-md pt-lg">
-            <Lilita mood={line.mood} size={116} />
-            <p className="max-w-[30ch] text-center text-sm leading-relaxed text-muted">
+          <motion.div
+            initial="hidden"
+            animate="show"
+            variants={LIST}
+            className="flex flex-col items-center gap-md pt-lg"
+          >
+            <motion.div variants={ITEM}>
+              <Lilita mood={line.mood} size={116} />
+            </motion.div>
+            <motion.p
+              variants={ITEM}
+              className="max-w-[30ch] text-center text-sm leading-relaxed text-muted"
+            >
               Tengo tus datos delante. Pregúntame lo que quieras — pero recuerda
               que soy una gota de sangre animada, no una ginecóloga.
-            </p>
+            </motion.p>
 
             <ul className="mt-sm flex w-full flex-col gap-2">
               {SUGERENCIAS.map((s) => (
-                <li key={s}>
+                <motion.li key={s} variants={ITEM}>
                   <button
                     type="button"
                     onClick={() => send(s)}
@@ -96,10 +117,10 @@ export default function Chat() {
                   >
                     {s}
                   </button>
-                </li>
+                </motion.li>
               ))}
             </ul>
-          </div>
+          </motion.div>
         )}
 
         {messages.map((m) => {
@@ -110,7 +131,13 @@ export default function Chat() {
           if (!text) return null;
 
           return (
-            <div key={m.id} className={mine ? "flex justify-end" : "flex justify-start"}>
+            <motion.div
+              key={m.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: DURATION.standard, ease: EASE_OUT_QUART }}
+              className={mine ? "flex justify-end" : "flex justify-start"}
+            >
               <p
                 className={
                   mine
@@ -129,12 +156,19 @@ export default function Chat() {
               >
                 {text}
               </p>
-            </div>
+            </motion.div>
           );
         })}
 
         {status === "submitted" && (
-          <p className="text-sm text-faint">Lilita está pensando…</p>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: DURATION.standard, ease: EASE_OUT_QUART }}
+            className="text-sm text-faint"
+          >
+            Lilita está pensando…
+          </motion.p>
         )}
         {error && (
           <p role="alert" className="text-sm" style={{ color: "var(--accent)" }}>

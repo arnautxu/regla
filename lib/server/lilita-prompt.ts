@@ -82,27 +82,6 @@ function tono(c: LilitaContext): string {
   return "";
 }
 
-/** Instrucciones para la frase diaria de la pantalla de inicio. */
-export function lineInstructions(c: LilitaContext): string {
-  return [
-    PERSONAJE,
-    tono(c),
-    `
-TAREA
-Escribe UNA sola intervención para la pantalla de inicio de hoy.
-
-- Entre 8 y 26 palabras. Una o dos frases. Ni una más.
-- Texto plano. Sin comillas, sin markdown, sin emojis.
-- Que hable de HOY y de su situación concreta, no genérica.
-- No repitas su fase ni sus números como si leyeras una ficha: la
-  pantalla ya los enseña. Comenta, no informes.
-`.trim(),
-    `DATOS DE HOY\n${contexto(c)}`,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-}
-
 /** Instrucciones para el chat. */
 export function chatInstructions(c: LilitaContext): string {
   return [

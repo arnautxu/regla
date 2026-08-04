@@ -3,10 +3,22 @@
 import { useState } from "react";
 import { addDays, format } from "date-fns";
 import { es } from "date-fns/locale";
+import { AnimatePresence, motion } from "motion/react";
 import { Lilita } from "./lilita";
 import { fromKey, startPeriod, toKey, todayKey, updateSettings } from "@/lib/db";
+import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import { haptic } from "@/lib/use-lilaila";
 import { capitalize } from "@/lib/format";
+
+/* Un paso entra por donde se fue el anterior: hacia delante viene de
+   la derecha, hacia atrás de la izquierda — el mismo lenguaje que
+   "pasar página", no un simple fundido que no dice en qué sentido te
+   mueves. */
+const STEP_VARIANTS = {
+  enter: (dir: number) => ({ opacity: 0, x: dir > 0 ? 28 : -28 }),
+  center: { opacity: 1, x: 0 },
+  exit: (dir: number) => ({ opacity: 0, x: dir > 0 ? -28 : 28 }),
+};
 
 /* ═══════════════════════════════════════════════════════════════
    ONBOARDING
@@ -24,10 +36,20 @@ const DURACIONES = [24, 26, 28, 30, 32, 35];
 
 export function Onboarding() {
   const [step, setStep] = useState(0);
+  const [dir, setDir] = useState(1);
   const [name, setName] = useState("");
   const [lastPeriod, setLastPeriod] = useState<string | "unsure" | null>(null);
   const [avgLength, setAvgLength] = useState(28);
   const [saving, setSaving] = useState(false);
+
+  function goNext() {
+    setDir(1);
+    setStep((s) => s + 1);
+  }
+  function goBack() {
+    setDir(-1);
+    setStep((s) => s - 1);
+  }
 
   const base = fromKey(todayKey());
 
@@ -57,8 +79,18 @@ export function Onboarding() {
         ))}
       </div>
 
+      <AnimatePresence mode="wait" custom={dir} initial={false}>
       {step === 0 && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-lg">
+        <motion.div
+          key="step-0"
+          custom={dir}
+          variants={STEP_VARIANTS}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          transition={{ duration: DURATION.standard, ease: EASE_OUT_QUART }}
+          className="flex flex-1 flex-col items-center justify-center gap-lg"
+        >
           <Lilita mood="energica" size={128} />
           <div className="text-balance text-center">
             <h1 className="font-display text-xl font-bold leading-[1.15] tracking-[-0.03em]">
@@ -75,11 +107,20 @@ export function Onboarding() {
             className="w-full rounded-2xl px-4 py-3.5 text-center font-display text-lg outline-none"
             style={{ background: "var(--surface)", boxShadow: "var(--depth-sm)" }}
           />
-        </div>
+        </motion.div>
       )}
 
       {step === 1 && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-lg">
+        <motion.div
+          key="step-1"
+          custom={dir}
+          variants={STEP_VARIANTS}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          transition={{ duration: DURATION.standard, ease: EASE_OUT_QUART }}
+          className="flex flex-1 flex-col items-center justify-center gap-lg"
+        >
           <Lilita mood="neutral" size={116} />
           <div className="text-balance text-center">
             <h1 className="font-display text-lg font-bold leading-[1.2] tracking-[-0.02em]">
@@ -143,11 +184,20 @@ export function Onboarding() {
               </button>
             </li>
           </ul>
-        </div>
+        </motion.div>
       )}
 
       {step === 2 && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-lg">
+        <motion.div
+          key="step-2"
+          custom={dir}
+          variants={STEP_VARIANTS}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          transition={{ duration: DURATION.standard, ease: EASE_OUT_QUART }}
+          className="flex flex-1 flex-col items-center justify-center gap-lg"
+        >
           <Lilita mood="cuidando" size={116} />
           <div className="text-balance text-center">
             <h1 className="font-display text-lg font-bold leading-[1.2] tracking-[-0.02em]">
@@ -192,8 +242,9 @@ export function Onboarding() {
           <p className="text-xs text-faint">
             No hace falta saberlo seguro: 28 es razonable si no tienes ni idea.
           </p>
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       <div className="flex gap-2">
         {step > 0 && (
@@ -201,7 +252,7 @@ export function Onboarding() {
             type="button"
             onClick={() => {
               haptic(6);
-              setStep((s) => s - 1);
+              goBack();
             }}
             className="min-h-[52px] flex-1 rounded-full text-base font-bold"
             style={{ color: "var(--fg-muted)" }}
@@ -215,7 +266,7 @@ export function Onboarding() {
           onClick={() => {
             if (step < 2) {
               haptic(10);
-              setStep((s) => s + 1);
+              goNext();
             } else {
               void finish();
             }

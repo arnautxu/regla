@@ -2,7 +2,9 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { motion, MotionConfig } from "motion/react";
 import { updateSettings } from "@/lib/db";
+import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import { useLilaila } from "@/lib/use-lilaila";
 import { Onboarding } from "./onboarding";
 import { PinGate } from "./pin-gate";
@@ -68,21 +70,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [settings.theme]);
 
   return (
-    <PinGate>
-      <div className="mx-auto flex min-h-dvh w-full max-w-[440px] flex-col">
-        {needsOnboarding ? (
-          <Onboarding />
-        ) : (
-          <>
-            {/* flex-1 + flex col: las páginas se estiran hasta la tab bar y
-                ni una más. Si la página pide min-h-dvh por su cuenta, suma
-                la altura de la barra y el botón principal se va fuera. */}
-            <main className="flex flex-1 flex-col">{children}</main>
-            {!fullscreen && <TabBar />}
-          </>
-        )}
-        <ServiceWorker />
-      </div>
-    </PinGate>
+    // reducedMotion="user": lee prefers-reduced-motion del sistema y
+    // recorta toda animación de motion/react por debajo de esto sin
+    // que cada componente tenga que comprobarlo por su cuenta. La
+    // regla CSS de globals.css cubre las transiciones normales; esta
+    // cubre las que mueve JS (páginas, mensajes, Lilita, el mes).
+    <MotionConfig reducedMotion="user">
+      <PinGate>
+        <div className="mx-auto flex min-h-dvh w-full max-w-[440px] flex-col">
+          {needsOnboarding ? (
+            <Onboarding />
+          ) : (
+            <>
+              {/* Entra desde abajo al cambiar de pestaña: la salida no se
+                  anima —Next desmonta la página vieja antes de que
+                  pudiéramos animarla— pero la entrada sola ya da la
+                  sensación de "una hoja de papel más", no un salto seco.
+                  flex-1 + flex col: las páginas se estiran hasta la tab
+                  bar y ni una más. */}
+              <motion.main
+                key={pathname}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: DURATION.slow, ease: EASE_OUT_QUART }}
+                className="flex flex-1 flex-col"
+              >
+                {children}
+              </motion.main>
+              {!fullscreen && <TabBar />}
+            </>
+          )}
+          <ServiceWorker />
+        </div>
+      </PinGate>
+    </MotionConfig>
   );
 }

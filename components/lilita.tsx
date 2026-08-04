@@ -1,5 +1,7 @@
 "use client";
 
+import { motion } from "motion/react";
+import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import type { Mood } from "@/lib/lilita/lines";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -27,15 +29,26 @@ export function Lilita({ mood = "neutral", size = 200, className }: Props) {
   const f = FACES[mood];
 
   return (
-    <svg
-      viewBox="0 0 120 168"
-      width={size}
-      height={(size * 168) / 120}
-      className={className}
-      role="img"
-      aria-label={`Lilita, ${MOOD_ALT[mood]}`}
-      style={{ overflow: "visible" }}
+    // key={mood}: al cambiar de humor, el bloque se remonta entero y
+    // entra con un pop breve — la reacción se nota sin depender de
+    // que alguien esté mirando la cara en el momento exacto en que
+    // cambia. Es la única pieza de la app con licencia para "actuar":
+    // el resto del chrome se queda quieto a propósito.
+    <motion.div
+      key={mood}
+      initial={{ scale: 0.86, opacity: 0.5 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ duration: DURATION.standard, ease: EASE_OUT_QUART }}
+      className={`inline-block ${className ?? ""}`}
     >
+      <svg
+        viewBox="0 0 120 168"
+        width={size}
+        height={(size * 168) / 120}
+        role="img"
+        aria-label={`Lilita, ${MOOD_ALT[mood]}`}
+        style={{ overflow: "visible" }}
+      >
       <g className="lilita-idle" style={{ transformOrigin: "60px 140px" }}>
         <g style={{ transform: `rotate(${f.tilt}deg)`, transformOrigin: "60px 120px" }}>
           {/* --- Piernas y zapatillas -------------------------------
@@ -139,7 +152,8 @@ export function Lilita({ mood = "neutral", size = 200, className }: Props) {
           .lilita-idle, .lilita-blink { animation: none }
         }
       `}</style>
-    </svg>
+      </svg>
+    </motion.div>
   );
 }
 

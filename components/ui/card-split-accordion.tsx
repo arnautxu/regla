@@ -159,7 +159,7 @@ export const CardSplitAccordion: FC<{
   const openIndex = items.findIndex((i) => i.id === openId);
 
   return (
-    <MotionConfig transition={spring}>
+    <MotionConfig transition={spring} reducedMotion="user">
       <ul className={className}>
         {items.map((item, index) => (
           <AccordionItem

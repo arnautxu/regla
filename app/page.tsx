@@ -1,22 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { addDays, format } from "date-fns";
 import { es } from "date-fns/locale";
-import { useLiveQuery } from "dexie-react-hooks";
 import { Lilita } from "@/components/lilita";
 import { FlowRow } from "@/components/flow-row";
 import { MoodRow } from "@/components/mood-row";
 import { PeriodSheet } from "@/components/period-sheet";
+import { PeriodStartFX } from "@/components/period-start-fx";
 import { DaySheet } from "@/components/day-sheet";
-import { PHASE_LABEL, phaseByDay, type CycleState } from "@/lib/cycle";
-import { buildContext } from "@/lib/ai-context";
-import { computeInsights } from "@/lib/insights";
-import { useLilitaLine } from "@/lib/use-lilita-line";
+import { PHASE_LABEL, type CycleState } from "@/lib/cycle";
 import { capitalize, dateRange } from "@/lib/format";
 import {
-  db,
   clearPeriodAround,
   fromKey,
   setBleeding,
@@ -26,33 +22,18 @@ import {
 import { haptic, useLilaila } from "@/lib/use-lilaila";
 
 export default function Hoy() {
-  const {
-    ready,
-    state,
-    today,
-    line: fallbackLine,
-    dateKey,
-    cycles,
-    settings,
-  } = useLilaila();
-
-  const days = useLiveQuery(() => db.days.toArray(), [], []);
-
-  const context = useMemo(() => {
-    const insights = computeInsights(
-      cycles,
-      days ?? [],
-      settings,
-      dateKey,
-      (d, len) => phaseByDay(d, len, settings.avgPeriodLength),
-    );
-    return buildContext(state, today, settings.humorLevel, insights);
-  }, [state, today, settings, cycles, days, dateKey]);
-
-  // El banco local se pinta ya; si el modelo contesta, lo sustituye.
-  const { line } = useLilitaLine(fallbackLine, context, dateKey, ready);
+  // La frase de hoy sale siempre del banco local escrito a mano
+  // (lib/lilita/lines.ts). Hubo una versión que la generaba con un
+  // modelo y la sustituía si contestaba a tiempo — pero el banco local
+  // está escrito y calibrado a mano, y lo generado sonaba peor. Ya no
+  // se llama a /api/lilita aquí; ese endpoint sigue vivo solo para el
+  // chat, que sí es una conversación abierta y no tiene banco posible.
+  const { ready, state, today, line, dateKey, cycles } = useLilaila();
 
   const [asking, setAsking] = useState(false);
+  // Solo al CONFIRMAR que empieza la regla, no en cada "Registrar
+  // hoy" de los días siguientes — eso gastaría la broma en un día.
+  const [celebrating, setCelebrating] = useState(false);
   const [detailing, setDetailing] = useState(false);
 
   // Antes de que IndexedDB conteste no pintamos números: un "día 1"
@@ -246,9 +227,14 @@ export default function Hoy() {
       <PeriodSheet
         open={asking}
         todayKey={dateKey}
-        onPick={(when) => void startPeriod(when)}
+        onPick={(when) => {
+          void startPeriod(when);
+          setCelebrating(true);
+        }}
         onClose={() => setAsking(false)}
       />
+
+      <PeriodStartFX show={celebrating} onDone={() => setCelebrating(false)} />
 
       <DaySheet
         day={

@@ -4,18 +4,31 @@ import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { addMonths, format, isSameMonth, startOfMonth } from "date-fns";
 import { es } from "date-fns/locale";
+import { motion } from "motion/react";
 import { Lilita } from "@/components/lilita";
 import { DaySheet } from "@/components/day-sheet";
 import { Legend, MonthGrid } from "@/components/month-grid";
 import { buildMonth, upcoming, type DayCell } from "@/lib/calendar";
 import { dateRange } from "@/lib/format";
 import { db } from "@/lib/db";
+import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
 
 export default function Calendario() {
   const { ready, settings, cycles, dateKey } = useLilaila();
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
   const [selected, setSelected] = useState<DayCell | null>(null);
+  // De dónde viene el mes nuevo: a la derecha si avanzas, a la
+  // izquierda si retrocedes. Solo afecta a la entrada; la salida no
+  // se anima (el mes viejo desaparece al cambiar la key, como en las
+  // pestañas) para no pelear con que cada mes tiene una altura propia
+  // (5 o 6 semanas) y solaparlas se notaría como un salto.
+  const [direction, setDirection] = useState(1);
+
+  function goToMonth(target: Date) {
+    setDirection(target.getTime() >= month.getTime() ? 1 : -1);
+    setMonth(target);
+  }
 
   const days = useLiveQuery(() => db.days.toArray(), [], []);
 
@@ -45,12 +58,12 @@ export default function Calendario() {
         <div className="flex items-center gap-1">
           <MonthButton
             label="Mes anterior"
-            onClick={() => setMonth((m) => addMonths(m, -1))}
+            onClick={() => goToMonth(addMonths(month, -1))}
             d="M14.5 5 L8 12 L14.5 19"
           />
           <MonthButton
             label="Mes siguiente"
-            onClick={() => setMonth((m) => addMonths(m, 1))}
+            onClick={() => goToMonth(addMonths(month, 1))}
             d="M9.5 5 L16 12 L9.5 19"
           />
         </div>
@@ -59,10 +72,17 @@ export default function Calendario() {
       {ready && (
         <>
           <div
-            className="sticker rounded-2xl px-lg py-md"
+            className="sticker overflow-hidden rounded-2xl px-lg py-md"
             style={{ background: "var(--surface)" }}
           >
-            <MonthGrid weeks={weeks} onSelect={setSelected} />
+            <motion.div
+              key={month.toISOString()}
+              initial={{ x: direction * 24, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ duration: DURATION.standard, ease: EASE_OUT_QUART }}
+            >
+              <MonthGrid weeks={weeks} onSelect={setSelected} />
+            </motion.div>
           </div>
 
           {/* Volver a hoy solo aparece cuando te has ido lejos. Un
@@ -72,7 +92,7 @@ export default function Calendario() {
               type="button"
               onClick={() => {
                 haptic(8);
-                setMonth(startOfMonth(new Date()));
+                goToMonth(startOfMonth(new Date()));
               }}
               className="self-start text-xs underline underline-offset-4"
               style={{ color: "var(--accent)" }}
