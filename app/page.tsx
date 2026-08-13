@@ -5,9 +5,6 @@ import Link from "next/link";
 import { addDays, format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Lilita } from "@/components/lilita";
-import { FlowRow } from "@/components/flow-row";
-import { MoodRow } from "@/components/mood-row";
-import { PeriodSheet } from "@/components/period-sheet";
 import { PeriodStartFX } from "@/components/period-start-fx";
 import { DaySheet } from "@/components/day-sheet";
 import { PillRow } from "@/components/pill-row";
@@ -16,12 +13,7 @@ import { capitalize, dateRange } from "@/lib/format";
 import {
   clearPeriodAround,
   fromKey,
-  setBleeding,
   setPill,
-  startPeriod,
-  upsertDay,
-  type DayLog,
-  type FlowLevel,
 } from "@/lib/db";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
 
@@ -35,26 +27,10 @@ export default function Hoy() {
   const { ready, state, today, line, dateKey, cycles, settings, pillStreak } =
     useLilaila();
 
-  const [asking, setAsking] = useState(false);
-  // Solo al CONFIRMAR que empieza la regla, no en cada "Registrar
-  // hoy" de los días siguientes — eso gastaría la broma en un día.
+  // Solo cuando EMPIEZA una regla, no cada día que sigue sangrando:
+  // gastar la fanfarria a diario la convierte en ruido.
   const [celebrating, setCelebrating] = useState(false);
   const [detailing, setDetailing] = useState(false);
-
-  // Borrador de hoy: tocar el flujo o el ánimo NO escribe nada
-  // todavía. Si escribiera al primer toque, "Me ha bajado" dejaría de
-  // significar "confirmar" — ya estaría contado, y encima a media
-  // composición (sin dar tiempo a añadir síntomas). Se confirma todo
-  // junto al pulsar el botón principal. Los síntomas/ánimo detallados
-  // (vía "Añadir síntomas…") sí se guardan al toque, porque esos no
-  // deciden si el día cuenta.
-  const [draftFlow, setDraftFlow] = useState<FlowLevel | undefined>(
-    undefined,
-  );
-  const [draftMood, setDraftMood] = useState<{
-    painLevel?: number;
-    badDay?: boolean;
-  }>({});
 
   // Antes de que IndexedDB conteste no pintamos números: un "día 1"
   // fantasma que salta a "día 14" es peor que medio segundo en blanco.
@@ -68,43 +44,10 @@ export default function Hoy() {
   const bleeding = state.bleeding;
   const latest = cycles[cycles.length - 1];
 
-  /* El boton registra UN dia, no un tramo.
-       · hoy ya apuntado  -> no hay nada que hacer, lo dice y deja editar
-       · regla en marcha  -> "Registrar hoy", de un toque
-       · nada en marcha   -> "Me ha bajado", que pregunta el dia
-     El final de la regla no se declara: se marca "Nada" en el flujo.
-
-     A diferencia de "bleeding" de arriba, esto NO se supone: el botón
-     solo puede decir "ya está apuntado" si hoy tiene un flujo de
-     verdad guardado. El día cuenta cuando le das al botón (o al
-     flujo directamente) — nunca antes. */
-  const loggedToday = today?.flow !== undefined && today.flow > 0;
   const reglaAbierta = Boolean(latest && !latest.endDate);
-  const accion: "apuntado" | "hoy" | "inicio" = loggedToday
-    ? "apuntado"
-    : reglaAbierta
-      ? "hoy"
-      : "inicio";
   // El deshacer vale durante toda la regla en curso: darse cuenta
   // del dedazo al dia siguiente es lo normal.
   const canUndo = reglaAbierta || latest?.startDate === dateKey;
-
-  // El borrador se aplica junto, en un solo upsertDay: así "Me ha
-  // bajado" cuenta como un único gesto, no como el primer toque que
-  // diera la casualidad de tocarse.
-  function draftPatch(): Partial<DayLog> {
-    const patch: Partial<DayLog> = {};
-    if (draftFlow !== undefined) patch.flow = draftFlow;
-    if (draftMood.painLevel !== undefined || draftMood.badDay !== undefined) {
-      patch.painLevel = draftMood.painLevel;
-      patch.badDay = draftMood.badDay;
-    }
-    return patch;
-  }
-  function resetDraft() {
-    setDraftFlow(undefined);
-    setDraftMood({});
-  }
 
   return (
     <div className="flex flex-1 flex-col gap-lg px-safe pt-safe pb-lg">
@@ -178,7 +121,6 @@ export default function Hoy() {
               onClick={() => {
                 haptic(8);
                 void clearPeriodAround(latest.startDate);
-                resetDraft();
               }}
               className="-ml-1 mt-1 flex min-h-[44px] items-center px-1 text-xs text-faint underline underline-offset-4"
             >
@@ -189,15 +131,12 @@ export default function Hoy() {
       )}
 
       {/* ── La pastilla ───────────────────────────────────────────
-          En su propia tarjeta y por encima del registro rápido. Es lo
-          único de esta pantalla que hay que contestar TODOS los días
+          La única excepción a "aquí no se registra nada": es lo único
+          que hay que contestar TODOS los días
           —el ciclo va a su ritmo, la anticonceptiva no— y es adonde
           lleva el aviso de las diez de la noche.
 
-          Escribe al toque, sin pasar por el borrador de abajo: aquí
-          no hay nada que confirmar después. Pulsar "Tomada" ES el
-          gesto completo, y hacerle pulsar otro botón para que cuente
-          sería exactamente el fallo que se busca evitar. */}
+          Escribe al toque: pulsar "Tomada" ES el gesto completo. */}
       {settings.pill.enabled && (
         <section
           className="sticker rounded-2xl px-lg py-md"
@@ -219,126 +158,33 @@ export default function Hoy() {
         </section>
       )}
 
-      {/* ── Registro rápido ────────────────────────────────────────
-          Agrupados en una sola superficie: son un mismo gesto ("cómo
-          estoy hoy"), no controles sueltos flotando en la página. */}
-      <section
-        className="sticker flex flex-col gap-md rounded-2xl px-lg py-md"
-        style={{ background: "var(--surface)" }}
-      >
-        <FlowRow
-          value={loggedToday ? today?.flow : draftFlow}
-          onChange={(v) => {
-            if (loggedToday) void upsertDay(dateKey, { flow: v });
-            else setDraftFlow(v);
-          }}
-          dateKey={dateKey}
-        />
-        <MoodRow
-          value={loggedToday ? today : draftMood}
-          onChange={(patch) => {
-            if (loggedToday) void upsertDay(dateKey, patch);
-            else setDraftMood(patch);
-          }}
-          dateKey={dateKey}
-        />
-
-        {/* Abre el detalle —sintomas, animo, nota— sin ocupar sitio en
-            la pantalla mientras no se use. */}
-        <button
-          type="button"
-          onClick={() => {
-            haptic(8);
-            setDetailing(true);
-          }}
-          className="-ml-1 flex min-h-[44px] items-center self-start px-1 text-xs underline underline-offset-4"
-          style={{ color: "var(--fg-muted)" }}
-        >
-          {resumenDetalle(today)}
-        </button>
-      </section>
-
       {/* ── Acción principal ──────────────────────────────────────
-          En el tercio inferior, siempre. Es el 90% de lo que hará
-          nunca en esta app y se tiene que poder pulsar con el pulgar
-          sin mirar. */}
+          En el tercio inferior, siempre, y es lo ÚNICO que registra
+          desde esta pantalla.
+
+          Aquí había una tarjeta de "registro rápido" con el flujo y el
+          ánimo sueltos. Sobraba desde que existe la ficha: los mismos
+          controles en dos sitios, y un botón que dice "añadir
+          registro" justo debajo de unos controles que ya registraban.
+          Ahora Hoy cuenta cómo va el ciclo y la ficha es donde se
+          escribe. Una pantalla, una pregunta. */}
       <section>
         <button
           type="button"
           onClick={() => {
-            if (accion === "apuntado") {
-              haptic(8);
-              setDetailing(true);
-            } else if (accion === "hoy") {
-              // Un toque y ya: es "hoy", no hace falta preguntar cuando.
-              // Aquí es donde el borrador (flujo/ánimo) se hace de
-              // verdad — no antes, por mucho que se haya tocado.
-              haptic([18, 40, 26]);
-              void (async () => {
-                const patch = draftPatch();
-                if (patch.flow !== undefined) {
-                  await upsertDay(dateKey, patch);
-                } else {
-                  await setBleeding(dateKey, true);
-                  if (Object.keys(patch).length) {
-                    await upsertDay(dateKey, patch);
-                  }
-                }
-                resetDraft();
-              })();
-            } else {
-              haptic(12);
-              setAsking(true);
-            }
+            haptic(12);
+            setDetailing(true);
           }}
           className="w-full rounded-full px-lg py-4 font-display text-base font-bold tracking-[-0.01em] transition-[transform,background-color,box-shadow] duration-150 ease-[var(--ease-out-quart)] active:scale-[0.975] active:translate-x-[1px] active:translate-y-[1px]"
-          style={
-            accion === "apuntado"
-              ? {
-                  background: "transparent",
-                  color: "var(--fg-muted)",
-                  boxShadow: "var(--depth-sm)",
-                }
-              : {
-                  background: "var(--accent)",
-                  color: "var(--on-accent)",
-                  boxShadow: "3px 3px 0 0 var(--depth-shadow)",
-                }
-          }
+          style={{
+            background: "var(--accent)",
+            color: "var(--on-accent)",
+            boxShadow: "3px 3px 0 0 var(--depth-shadow)",
+          }}
         >
-          {accion === "apuntado"
-            ? "Hoy ya está apuntado"
-            : accion === "hoy"
-              ? "Registrar hoy"
-              : "Me ha bajado"}
+          Añadir registro
         </button>
-
-        {accion === "hoy" && (
-          <p className="mt-2 text-center text-xs text-faint">
-            Cuando marques «Nada» en el flujo, se acabó.
-          </p>
-        )}
       </section>
-
-      <PeriodSheet
-        open={asking}
-        todayKey={dateKey}
-        onPick={(when) => {
-          void (async () => {
-            await startPeriod(when);
-            // El borrador es de HOY (síntomas/ánimo de "cómo estoy"),
-            // así que se aplica a hoy aunque el inicio elegido sea
-            // otro día — "hace 2 días" no cambia lo que sientes hoy.
-            const patch = draftPatch();
-            if (Object.keys(patch).length) {
-              await upsertDay(dateKey, patch);
-            }
-            resetDraft();
-          })();
-          setCelebrating(true);
-        }}
-        onClose={() => setAsking(false)}
-      />
 
       <PeriodStartFX show={celebrating} onDone={() => setCelebrating(false)} />
 
@@ -354,21 +200,10 @@ export default function Hoy() {
             : null
         }
         onClose={() => setDetailing(false)}
+        onPeriodStart={() => setCelebrating(true)}
       />
     </div>
   );
-}
-
-/* El enlace dice lo que ya hay apuntado, no solo "añadir detalles":
-   asi se ve de un vistazo si el dia esta registrado sin abrir nada. */
-function resumenDetalle(day: DayLog | undefined): string {
-  const n =
-    (day?.symptoms?.length ?? 0) +
-    (day?.mood?.length ?? 0) +
-    (day?.sex === true ? 1 : 0);
-  if (n === 0) return "Añadir síntomas, ánimo, sexo o una nota";
-  const nota = day?.note ? " y una nota" : "";
-  return `${n} ${n === 1 ? "cosa apuntada" : "cosas apuntadas"}${nota} — editar`;
 }
 
 /* ── Titular ─────────────────────────────────────────────────────

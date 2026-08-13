@@ -3,14 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import {
+  DefaultChatTransport,
+  lastAssistantMessageIsCompleteWithToolCalls,
+} from "ai";
 import { useLiveQuery } from "dexie-react-hooks";
 import { motion } from "motion/react";
 import { Lilita } from "@/components/lilita";
 import { buildContext } from "@/lib/ai-context";
 import { computeInsights } from "@/lib/insights";
 import { phaseByDay } from "@/lib/cycle";
-import { db } from "@/lib/db";
+import { addMemory, db, removeMemory } from "@/lib/db";
 import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
 
@@ -36,14 +39,20 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const bottom = useRef<HTMLDivElement>(null);
 
+  const memories = useLiveQuery(() => db.memories.toArray(), [], []);
+
   const context = useMemo(() => {
     const insights = computeInsights(cycles, days ?? [], settings, dateKey, (d, len) =>
       phaseByDay(d, len, settings.avgPeriodLength),
     );
-    return buildContext(state, today, settings.humorLevel, insights);
-  }, [state, today, settings, cycles, days, dateKey]);
+    return buildContext(state, today, settings.humorLevel, insights, {
+      days,
+      memories,
+      chat: settings.chat,
+    });
+  }, [state, today, settings, cycles, days, memories, dateKey]);
 
-  const { messages, sendMessage, status, error } = useChat({
+  const { messages, sendMessage, status, error, addToolOutput } = useChat({
     transport: new DefaultChatTransport({
       api: "/api/chat",
       // El contexto viaja en cada envío, no en el historial: así el
@@ -53,6 +62,40 @@ export default function Chat() {
         body: { messages, context },
       }),
     }),
+
+    // Sin esto, Lilita guarda la memoria y se queda callada: la
+    // conversación se para esperando a que alguien devuelva el
+    // resultado de la herramienta. Esto lo reenvía solo en cuanto
+    // están todos, y ella sigue hablando como si nada.
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+
+    async onToolCall({ toolCall }) {
+      // El guardia de `dynamic` primero: sin él, TypeScript no sabe
+      // estrechar `toolName` a los dos nombres que conocemos.
+      if (toolCall.dynamic) return;
+
+      if (toolCall.toolName === "recordar") {
+        const { dato } = toolCall.input as { dato: string };
+        void addMemory(dato);
+        // Sin await a propósito: la documentación avisa de que
+        // esperar aquí puede bloquear el propio flujo del chat.
+        addToolOutput({
+          tool: "recordar",
+          toolCallId: toolCall.toolCallId,
+          output: "guardado",
+        });
+      }
+
+      if (toolCall.toolName === "olvidar") {
+        const { id } = toolCall.input as { id: string };
+        void removeMemory(id);
+        addToolOutput({
+          tool: "olvidar",
+          toolCallId: toolCall.toolCallId,
+          output: "olvidado",
+        });
+      }
+    },
   });
 
   useEffect(() => {

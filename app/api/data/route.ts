@@ -56,12 +56,44 @@ export async function PUT(req: Request) {
     }
   }
 
+  /* Los ajustes se FUSIONAN, el resto se sobrescribe.
+     ─────────────────────────────────────────────────
+     Un cliente con la versión vieja en caché sube los ajustes que él
+     conoce, y al reemplazarlos enteros se llevaba por delante los
+     campos que no existían cuando se cargó su bundle. Pasó de verdad:
+     borró la configuración del aviso de la pastilla y el cron se
+     apagó solo, sin un error en ningún sitio.
+
+     Fusionar arregla eso sin romper nada: apagar un ajuste sigue
+     funcionando —eso viaja como `false`, no como ausencia—, y lo
+     único que deja de poder hacerse es BORRAR una clave, que no es
+     una operación que la app necesite.
+
+     Los días y los ciclos no se fusionan a propósito: ahí sí hace
+     falta poder borrar, y el móvil es la fuente de verdad. */
+  const existing = await readDoc();
+  const merged =
+    incoming.settings && typeof incoming.settings === "object"
+      ? {
+          ...(existing.settings as Record<string, unknown> | null),
+          ...(incoming.settings as Record<string, unknown>),
+        }
+      : (existing.settings ?? null);
+
   const doc: StoredDoc = {
     version: 1,
     updatedAt: new Date().toISOString(),
     cycles: incoming.cycles,
     days: incoming.days,
-    settings: incoming.settings ?? null,
+    settings: merged,
+    // Un cliente viejo no manda `memories` y no puede saber que
+    // existen: si se guardara su ausencia como una lista vacía, abrir
+    // la app en un móvil sin actualizar borraría del servidor todo lo
+    // que Lilita recuerda. Mismo fallo que ya nos comió una vez la
+    // configuración del aviso.
+    memories: Array.isArray(incoming.memories)
+      ? incoming.memories
+      : (existing.memories ?? []),
   };
 
   await writeDoc(doc);

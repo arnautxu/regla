@@ -99,6 +99,20 @@ export interface PillSettings {
   remind: boolean;
 }
 
+/**
+ * Qué le dejamos ver a Lilita.
+ *
+ * Las dos por separado y las dos apagables. Que se acuerde de lo que
+ * le cuentas y que pueda leer tu diario son permisos distintos: se
+ * puede querer una compañera con memoria sin darle además el cuaderno.
+ */
+export interface ChatSettings {
+  /** Guarda lo que aprende de ella y se lo lleva a la siguiente charla */
+  remembers: boolean;
+  /** Puede leer las notas escritas en el diario */
+  readsNotes: boolean;
+}
+
 export interface Settings {
   id: "singleton";
   name: string;
@@ -111,8 +125,25 @@ export interface Settings {
     hourOfDay: number;
   };
   pill: PillSettings;
+  chat: ChatSettings;
   theme: "auto" | "light" | "dark";
   onboarded: boolean;
+}
+
+/* ── Lo que Lilita recuerda ──────────────────────────────────────
+   Frases sueltas que ella misma va guardando durante el chat: "el
+   ibuprofeno no le hace nada", "en septiembre cambia de trabajo".
+
+   Viven en el móvil como todo lo demás, y se pueden ver y borrar una
+   a una desde Ajustes. Eso no es un extra: una app que guarda
+   inferencias sobre alguien y no le enseña cuáles ha sacado está
+   haciéndose un perfil a su espalda. ─────────────────────────── */
+
+export interface Memory {
+  id: string;
+  /** Una frase, en tercera persona, tal y como la guardó Lilita */
+  text: string;
+  createdAt: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -123,6 +154,7 @@ export const DEFAULT_SETTINGS: Settings = {
   humorLevel: "gamberro",
   notifications: { enabled: false, daysBefore: 2, hourOfDay: 9 },
   pill: { enabled: false, hour: 22, remind: false },
+  chat: { remembers: true, readsNotes: true },
   theme: "light",
   onboarded: false,
 };
@@ -146,6 +178,7 @@ export function withDefaults(stored: Partial<Settings> | null | undefined): Sett
       ...stored?.notifications,
     },
     pill: { ...DEFAULT_SETTINGS.pill, ...stored?.pill },
+    chat: { ...DEFAULT_SETTINGS.chat, ...stored?.chat },
     id: "singleton",
   };
 }
@@ -154,6 +187,7 @@ const db = new Dexie("lilaila") as Dexie & {
   cycles: EntityTable<Cycle, "id">;
   days: EntityTable<DayLog, "date">;
   settings: EntityTable<Settings, "id">;
+  memories: EntityTable<Memory, "id">;
 };
 
 db.version(1).stores({
@@ -252,6 +286,20 @@ db.version(3)
       }
     }
   });
+
+/*
+ * v4: lo que Lilita recuerda.
+ *
+ * Tabla nueva y nada que migrar: hasta ahora no se guardaba ni una
+ * palabra de las conversaciones, así que no hay memorias viejas de
+ * las que tirar.
+ */
+db.version(4).stores({
+  cycles: "id, startDate, endDate, updatedAt",
+  days: "date, updatedAt",
+  settings: "id",
+  memories: "id, createdAt",
+});
 
 export { db };
 
@@ -374,22 +422,6 @@ export async function clearPeriodAround(date: string): Promise<void> {
   touch();
 }
 
-/** Marca o desmarca un dia suelto como dia de regla. */
-export async function setBleeding(
-  date: string,
-  yes: boolean,
-): Promise<void> {
-  const previo = await db.days.get(date);
-  await db.days.put({
-    ...previo,
-    date,
-    flow: yes ? (previo?.flow || FLUJO_POR_DEFECTO) : undefined,
-    updatedAt: now(),
-  });
-  touch();
-}
-
-
 /* ── La pastilla ─────────────────────────────────────────────────
    Una anticonceptiva se toma TODOS los dias, sangre o no. Por eso no
    cuelga del ciclo ni de la racha de regla: es su propia columna del
@@ -455,6 +487,63 @@ export async function setSex(
   touch();
 }
 
+/* ── Memoria ─────────────────────────────────────────────────────
+   Las escribe Lilita desde el chat, llamando a una herramienta. Se
+   guardan aquí y no en el servidor a propósito: el resto del diario
+   vive en este móvil y no había razón para que lo que le cuenta a
+   Lilita fuera la excepción. ─────────────────────────────────── */
+
+/** Tope de memorias. Pasado eso, cae la más vieja. */
+const MAX_MEMORIAS = 60;
+
+export async function getMemories(): Promise<Memory[]> {
+  const all = await db.memories.toArray();
+  return all.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export async function addMemory(text: string): Promise<Memory | null> {
+  const limpio = text.trim();
+  if (!limpio) return null;
+
+  const existentes = await getMemories();
+
+  // Nada de duplicados: el modelo tiende a reguardar lo mismo con
+  // otras palabras cada vez que sale el tema, y en tres charlas la
+  // lista sería la misma frase quince veces.
+  const yaEsta = existentes.some(
+    (m) => m.text.toLowerCase() === limpio.toLowerCase(),
+  );
+  if (yaEsta) return null;
+
+  const memoria: Memory = {
+    id: crypto.randomUUID(),
+    text: limpio.slice(0, 240),
+    createdAt: now(),
+  };
+  await db.memories.put(memoria);
+
+  // El tope se aplica por antigüedad. No es un gran algoritmo, pero
+  // el caso que evita es real: una lista que crece sin fin acaba
+  // comiéndose el prompt entero y dejando sitio para nada más.
+  if (existentes.length + 1 > MAX_MEMORIAS) {
+    const sobran = existentes.slice(0, existentes.length + 1 - MAX_MEMORIAS);
+    await db.memories.bulkDelete(sobran.map((m) => m.id));
+  }
+
+  touch();
+  return memoria;
+}
+
+export async function removeMemory(id: string): Promise<void> {
+  await db.memories.delete(id);
+  touch();
+}
+
+export async function wipeMemories(): Promise<void> {
+  await db.memories.clear();
+  touch();
+}
+
 export async function upsertDay(
   date: string,
   patch: Partial<Omit<DayLog, "date">>,
@@ -473,13 +562,16 @@ export interface Backup {
   cycles: Cycle[];
   days: DayLog[];
   settings: Settings;
+  /** Opcional: las copias hechas antes de que existiera no lo traen */
+  memories?: Memory[];
 }
 
 export async function exportBackup(): Promise<Backup> {
-  const [cycles, days, settings] = await Promise.all([
+  const [cycles, days, settings, memories] = await Promise.all([
     db.cycles.toArray(),
     db.days.toArray(),
     getSettings(),
+    db.memories.toArray(),
   ]);
   return {
     format: "lilaila-backup",
@@ -488,6 +580,7 @@ export async function exportBackup(): Promise<Backup> {
     cycles,
     days,
     settings,
+    memories,
   };
 }
 
@@ -501,18 +594,45 @@ export async function importBackup(backup: unknown): Promise<void> {
   }
   const data = backup as Backup;
 
-  await db.transaction("rw", db.cycles, db.days, db.settings, async () => {
-    await Promise.all([db.cycles.clear(), db.days.clear()]);
-    await db.cycles.bulkPut(data.cycles ?? []);
-    await db.days.bulkPut(data.days ?? []);
-    if (data.settings) {
-      await db.settings.put({ ...data.settings, id: "singleton" });
-    }
-  });
+  await db.transaction(
+    "rw",
+    db.cycles,
+    db.days,
+    db.settings,
+    db.memories,
+    async () => {
+      await Promise.all([
+        db.cycles.clear(),
+        db.days.clear(),
+        db.memories.clear(),
+      ]);
+      await db.cycles.bulkPut(data.cycles ?? []);
+      await db.days.bulkPut(data.days ?? []);
+      await db.memories.bulkPut(data.memories ?? []);
+      if (data.settings) {
+        await db.settings.put({ ...data.settings, id: "singleton" });
+      }
+    },
+  );
 }
 
 export async function wipeEverything(): Promise<void> {
-  await db.transaction("rw", db.cycles, db.days, db.settings, async () => {
-    await Promise.all([db.cycles.clear(), db.days.clear(), db.settings.clear()]);
-  });
+  await db.transaction(
+    "rw",
+    db.cycles,
+    db.days,
+    db.settings,
+    db.memories,
+    async () => {
+      await Promise.all([
+        db.cycles.clear(),
+        db.days.clear(),
+        db.settings.clear(),
+        // Si no, "borrar todos mis datos" dejaba a Lilita acordándose
+        // de todo lo que le habías contado. Es lo último que quieres
+        // que sobreviva a ese botón.
+        db.memories.clear(),
+      ]);
+    },
+  );
 }

@@ -19,6 +19,8 @@ export interface StoredDoc {
   cycles: unknown[];
   days: unknown[];
   settings: unknown;
+  /** Opcional: los documentos escritos antes de que existiera no lo traen */
+  memories?: unknown[];
 }
 
 const EMPTY: StoredDoc = {
@@ -27,6 +29,7 @@ const EMPTY: StoredDoc = {
   cycles: [],
   days: [],
   settings: null,
+  memories: [],
 };
 
 export async function readDoc(): Promise<StoredDoc> {

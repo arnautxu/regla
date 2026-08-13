@@ -2,6 +2,7 @@
 
 import { Lilita } from "@/components/lilita";
 import { BackupPanel } from "@/components/backup-panel";
+import { MemoryPanel } from "@/components/memory-panel";
 import { PillPanel } from "@/components/pill-panel";
 import { updateSettings, type HumorLevel, type Settings } from "@/lib/db";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
@@ -56,6 +57,8 @@ export default function Ajustes() {
           />
         ))}
       </Group>
+
+      <MemoryPanel chat={settings.chat} />
 
       <PillPanel pill={settings.pill} />
 

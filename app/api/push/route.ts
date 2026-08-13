@@ -42,6 +42,7 @@ export async function POST(req: Request) {
   let body: {
     endpoint?: string;
     keys?: { p256dh?: string; auth?: string };
+    hour?: number;
   };
   try {
     body = await req.json();
@@ -60,7 +61,15 @@ export async function POST(req: Request) {
     return Response.json({ error: "Endpoint no válido." }, { status: 400 });
   }
 
-  await addSub({ endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } });
+  // La hora viaja con el alta: es la señal de "avísame, y a esta
+  // hora", y darla de alta es el único momento en que se sabe con
+  // certeza que ha dado permiso a mano en el móvil.
+  const hour =
+    typeof body.hour === "number" && body.hour >= 0 && body.hour <= 23
+      ? Math.floor(body.hour)
+      : undefined;
+
+  await addSub({ endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } }, hour);
   return Response.json({ ok: true });
 }
 

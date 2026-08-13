@@ -1,6 +1,13 @@
 "use client";
 
-import { db, onLocalChange, type Cycle, type DayLog, type Settings } from "./db";
+import {
+  db,
+  onLocalChange,
+  type Cycle,
+  type DayLog,
+  type Memory,
+  type Settings,
+} from "./db";
 
 /* ═══════════════════════════════════════════════════════════════
    COPIA DE SEGURIDAD
@@ -57,12 +64,13 @@ async function collect() {
   // Los ciclos ya no se guardan: se derivan de los dias. Se sigue
   // subiendo la tabla vieja tal cual por si hiciera falta volver
   // atras, pero lo que importa son los dias.
-  const [cycles, days, settings] = await Promise.all([
+  const [cycles, days, settings, memories] = await Promise.all([
     db.cycles.toArray(),
     db.days.toArray(),
     db.settings.get("singleton"),
+    db.memories.toArray(),
   ]);
-  return { cycles, days, settings: settings ?? null };
+  return { cycles, days, settings: settings ?? null, memories };
 }
 
 /** Reintento unico y tardio. Si falla la red, sin esto la copia se
@@ -129,14 +137,23 @@ async function restoreIfEmpty(): Promise<boolean> {
     cycles: Cycle[];
     days: DayLog[];
     settings: Settings | null;
+    memories?: Memory[];
   };
   if (!doc.cycles?.length && !doc.days?.length) return false;
 
-  await db.transaction("rw", db.cycles, db.days, db.settings, async () => {
-    await db.cycles.bulkPut(doc.cycles ?? []);
-    await db.days.bulkPut(doc.days ?? []);
-    if (doc.settings) await db.settings.put(doc.settings);
-  });
+  await db.transaction(
+    "rw",
+    db.cycles,
+    db.days,
+    db.settings,
+    db.memories,
+    async () => {
+      await db.cycles.bulkPut(doc.cycles ?? []);
+      await db.days.bulkPut(doc.days ?? []);
+      await db.memories.bulkPut(doc.memories ?? []);
+      if (doc.settings) await db.settings.put(doc.settings);
+    },
+  );
   return true;
 }
 

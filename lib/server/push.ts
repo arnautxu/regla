@@ -38,6 +38,14 @@ export interface PushDoc {
    * al mismo endpoint sin que suene el móvil dos veces.
    */
   lastPillNudge?: string;
+  /**
+   * Hora local a la que avisar, 0-23. Vive AQUÍ y no en los ajustes
+   * del diario: aquel documento lo reescribe entero cualquier
+   * dispositivo que abra la app, y un móvil con la versión vieja en
+   * caché ya se llevó una vez por delante toda la configuración del
+   * aviso sin que nadie se enterara hasta que no sonó.
+   */
+  reminderHour?: number;
 }
 
 const EMPTY: PushDoc = { version: 1, subs: [] };
@@ -82,12 +90,16 @@ export async function writePushDoc(doc: PushDoc): Promise<void> {
 }
 
 /** Alta idempotente: reinstalar la app no duplica el aviso. */
-export async function addSub(sub: Omit<StoredSub, "createdAt">): Promise<void> {
+export async function addSub(
+  sub: Omit<StoredSub, "createdAt">,
+  hour?: number,
+): Promise<void> {
   const doc = await readPushDoc();
   const otros = doc.subs.filter((s) => s.endpoint !== sub.endpoint);
   await writePushDoc({
     ...doc,
     subs: [...otros, { ...sub, createdAt: new Date().toISOString() }],
+    reminderHour: hour ?? doc.reminderHour,
   });
 }
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { updateSettings, type PillSettings } from "@/lib/db";
 import { disable, enable, installed, status, type PushStatus } from "@/lib/push";
 import { haptic } from "@/lib/use-lilaila";
+import { SwitchRow } from "./switch-row";
 
 /* ═══════════════════════════════════════════════════════════════
    AJUSTES DE LA PASTILLA
@@ -57,7 +58,7 @@ export function PillPanel({ pill }: { pill: PillSettings }) {
         await updateSettings({ pill: { ...pill, remind: false } });
         setAviso("Vale, me callo.");
       } else {
-        const res = await enable();
+        const res = await enable(pill.hour);
         setAviso(res.message);
         if (res.ok) await updateSettings({ pill: { ...pill, remind: true } });
       }
@@ -79,7 +80,7 @@ export function PillPanel({ pill }: { pill: PillSettings }) {
         className="sticker mt-sm divide-y divide-[var(--border)] rounded-2xl px-lg"
         style={{ background: "var(--surface)" }}
       >
-        <Interruptor
+        <SwitchRow
           label="Llevar la cuenta"
           hint="Aparece en Hoy y en cada día del calendario."
           on={pill.enabled}
@@ -99,7 +100,7 @@ export function PillPanel({ pill }: { pill: PillSettings }) {
         />
 
         {pill.enabled && (
-          <Interruptor
+          <SwitchRow
             label={`Avisarme a las ${hora}`}
             hint={
               puedeAvisar
@@ -129,55 +130,5 @@ export function PillPanel({ pill }: { pill: PillSettings }) {
         </p>
       )}
     </section>
-  );
-}
-
-function Interruptor({
-  label,
-  hint,
-  on,
-  disabled,
-  onToggle,
-}: {
-  label: string;
-  hint?: string;
-  on: boolean;
-  disabled?: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      disabled={disabled}
-      onClick={onToggle}
-      className="flex min-h-[56px] w-full items-center justify-between gap-md py-3 text-left transition-opacity duration-150 disabled:opacity-40"
-    >
-      <span>
-        <span
-          className="block text-base"
-          style={{
-            color: on ? "var(--accent)" : "var(--fg)",
-            fontWeight: on ? 600 : 400,
-          }}
-        >
-          {label}
-        </span>
-        {hint && <span className="mt-0.5 block text-xs text-faint">{hint}</span>}
-      </span>
-
-      {/* Mismo lenguaje que el resto de Ajustes: un punto del acento.
-          Un interruptor de iOS aquí sería el único control del sistema
-          en toda la app. */}
-      <span
-        aria-hidden="true"
-        className="size-3 shrink-0 rounded-full transition-transform duration-150 ease-[var(--ease-out-quart)]"
-        style={{
-          background: on ? "var(--accent)" : "var(--border-strong)",
-          transform: on ? "scale(1)" : "scale(0.6)",
-        }}
-      />
-    </button>
   );
 }

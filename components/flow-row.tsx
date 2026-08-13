@@ -1,6 +1,7 @@
 "use client";
 
 import { type FlowLevel } from "@/lib/db";
+import { flowOptions } from "@/lib/labels";
 import { haptic } from "@/lib/use-lilaila";
 
 /* Cinco niveles, un toque. Vive en Hoy mientras sangra (que es el
@@ -14,34 +15,35 @@ import { haptic } from "@/lib/use-lilaila";
    contar el día por sí solo, o "Me ha bajado" deja de significar
    nada. */
 
-const FLOW: { value: FlowLevel; label: string }[] = [
-  { value: 0, label: "Nada" },
-  { value: 1, label: "Poco" },
-  { value: 2, label: "Normal" },
-  { value: 3, label: "Mucho" },
-  { value: 4, label: "Diluvio" },
-];
-
 export function FlowRow({
   value,
   onChange,
   dateKey,
+  /**
+   * El día anterior sangró, así que marcar "nada" aquí termina la
+   * regla. Cambia la palabra del botón, no lo que escribe: en el
+   * modelo las dos cosas son el mismo flujo 0.
+   */
+  endsPeriod = false,
 }: {
   value: FlowLevel | undefined;
   onChange: (value: FlowLevel | undefined) => void;
   dateKey: string;
+  endsPeriod?: boolean;
 }) {
+  const opciones = flowOptions(endsPeriod);
+
   return (
     <section aria-labelledby={`flow-${dateKey}`}>
       <h3
         id={`flow-${dateKey}`}
         className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint"
       >
-        Flujo
+        Sangrado
       </h3>
 
       <div className="mt-2 grid grid-cols-5 gap-1.5">
-        {FLOW.map((opt) => {
+        {opciones.map((opt) => {
           const active = value === opt.value;
           return (
             <button

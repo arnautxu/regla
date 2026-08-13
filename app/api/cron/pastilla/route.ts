@@ -1,6 +1,6 @@
 import { readDoc } from "@/lib/server/store";
 import { readPushDoc, sendToAll, writePushDoc } from "@/lib/server/push";
-import type { DayLog, Settings } from "@/lib/db";
+import type { DayLog } from "@/lib/db";
 
 /* ═══════════════════════════════════════════════════════════════
    EL AVISO DE LAS DIEZ
@@ -75,21 +75,30 @@ export async function GET(request: Request) {
 
   const { date, hour } = localNow(new Date());
 
-  const doc = await readDoc();
-  // Lectura defensiva: este documento lo escribe el móvil y puede ser
-  // de una versión anterior a que existiera la pastilla.
-  const settings = doc.settings as Partial<Settings> | null;
-  const pill = settings?.pill;
+  /* Quién manda aquí: LA SUSCRIPCIÓN, no los ajustes.
+     ────────────────────────────────────────────────
+     Esto leía `settings.pill` del documento de copia, y ese documento
+     lo reescribe ENTERO cualquier dispositivo que abra la app. Bastó
+     con que uno con la versión vieja en caché subiera sus ajustes
+     —sin el campo `pill`, que no conocía— para que la configuración
+     del aviso desapareciera del servidor y el cron se apagara solo.
+     En silencio, y el día que se nota es el día que no suena.
 
-  if (!pill?.enabled || !pill.remind) {
-    return Response.json({ skipped: "avisos apagados", date, hour });
+     La suscripción no tiene ese problema: solo la escriben /api/push
+     y este cron, así que el diario no puede tocarla. Y es mejor señal
+     de intención que un ajuste — una suscripción no existe si no ha
+     dado permiso a mano en el móvil, que es exactamente la pregunta
+     ("¿quiere que le avise?") a la que hay que contestar aquí. */
+  const push = await readPushDoc();
+
+  if (push.subs.length === 0) {
+    return Response.json({ skipped: "sin dispositivos", date, hour });
   }
 
-  if (hour < (pill.hour ?? 22)) {
+  if (hour < (push.reminderHour ?? 22)) {
     return Response.json({ skipped: "todavía no toca", date, hour });
   }
 
-  const push = await readPushDoc();
   if (push.lastPillNudge === date) {
     return Response.json({ skipped: "ya avisado hoy", date, hour });
   }
@@ -98,6 +107,7 @@ export async function GET(request: Request) {
   // sola unos segundos después de tocar el botón, así que a las diez
   // de la noche esto suele estar al día; si no lo estuviera, el peor
   // caso es un aviso de más, no uno de menos.
+  const doc = await readDoc();
   const days = (doc.days ?? []) as DayLog[];
   if (days.find((d) => d.date === date)?.pill === true) {
     // Se marca igualmente el día como avisado: no hay nada más que

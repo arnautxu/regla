@@ -53,6 +53,64 @@ function contexto(c: LilitaContext): string {
   return l.join("\n");
 }
 
+/* Lo que recuerda de otras veces. Va con su id porque es lo que le
+   permite rectificar: sin el id, "olvida eso" no tiene a qué apuntar
+   y lo único que podría hacer es guardar otra memoria diciendo que
+   la anterior no vale. */
+function memoria(c: LilitaContext): string {
+  if (!c.memorias.length) return "";
+  return [
+    "LO QUE YA SABES DE ELLA",
+    "De otras conversaciones. Úsalo si viene a cuento y NO lo recites",
+    "por gusto: sacarlo cuando no toca es de bot, no de compañera.",
+    ...c.memorias.map((m) => `- [${m.id}] ${m.texto}`),
+  ].join("\n");
+}
+
+function notas(c: LilitaContext): string {
+  if (!c.notas.length) return "";
+  return [
+    "SUS NOTAS RECIENTES",
+    "Lo que ha escrito ella en su diario. Es suyo y es privado: puedes",
+    "usarlo para entenderla mejor, pero no se lo cites de vuelta como",
+    "quien lee un expediente.",
+    ...c.notas.map((n) => `- (${n.cuando}) ${n.texto}`),
+  ].join("\n");
+}
+
+/* Cuándo tirar de las herramientas.
+
+   El listón está alto a propósito. Un modelo al que le dices
+   "recuerda lo importante" guarda absolutamente todo, y en tres
+   charlas la memoria es una transcripción con pasos extra: inútil
+   para ella y cara de mantener. */
+const MEMORIA = `
+MEMORIA
+Tienes dos herramientas: recordar(dato) y olvidar(id).
+
+Usa recordar SOLO con cosas que sigan siendo verdad dentro de un mes
+y que cambien cómo la tratas más adelante:
+- Lo que le funciona o no le funciona (medicación, calor, ejercicio).
+- Diagnósticos, tratamientos o pruebas que le hayan hecho.
+- Cosas de su vida que le afecten al cuerpo o al ánimo (trabajo,
+  mudanza, un viaje largo, cómo lleva algo).
+- Manías y preferencias sobre cómo quiere que le hables.
+
+NO uses recordar para:
+- El dato de hoy (dolor, flujo, ánimo): eso ya lo tienes en el
+  contexto y mañana será mentira.
+- Lo que acabáis de deciros hace dos frases.
+- Nada que ya esté en la lista de arriba.
+
+Guarda una frase corta y en tercera persona, como si tomaras nota:
+"el ibuprofeno no le hace nada", "en septiembre empieza trabajo
+nuevo". No avises de que lo estás guardando ni lo comentes: lo
+apuntas y sigues hablando.
+
+Usa olvidar(id) cuando algo que sabías deje de ser verdad o cuando
+ella te pida que lo olvides. Ahí sí, dile que ya está.
+`.trim();
+
 /** El freno de mano, escrito para el modelo. */
 const CUIDADOS = `
 MODO CUIDADOS ACTIVO. Hoy lo está pasando mal de verdad (dolor alto o
@@ -99,6 +157,12 @@ le pasa. Tienes sus datos delante.
 - Si te pregunta algo que no está en los datos, dilo. No rellenes.
 `.trim(),
     `SUS DATOS AHORA MISMO\n${contexto(c)}`,
+    memoria(c),
+    notas(c),
+    // Las instrucciones de memoria solo si de verdad puede guardar.
+    // Con el interruptor apagado, contarle que tiene una herramienta
+    // que no existe es la receta para que la llame y falle.
+    c.memorias.length || c.puedeRecordar ? MEMORIA : "",
   ]
     .filter(Boolean)
     .join("\n\n");

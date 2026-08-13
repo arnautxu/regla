@@ -1,19 +1,20 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   db,
+  fromKey,
   pillStreak,
-  setBleeding,
   setPill,
   setSex,
+  toKey,
   upsertDay,
-  type MoodTag,
-  type SymptomTag,
 } from "@/lib/db";
+import { summarize, type DaySummary } from "@/lib/day-summary";
+import { ANIMOS, SINTOMAS } from "@/lib/labels";
 import { capitalize } from "@/lib/format";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
 import { FlowRow } from "./flow-row";
@@ -34,33 +35,46 @@ export interface SheetDay {
   isFuture: boolean;
 }
 
-/* Las diez etiquetas de síntoma y las siete de ánimo llevaban desde
-   el primer día en el modelo de datos sin aparecer en ninguna
-   pantalla. "Cómo me encuentro" se resumía en un número de dolor del
-   0 al 10, que no distingue entre migraña y estar de mal humor. */
+function Resumen({ resumen }: { resumen: DaySummary }) {
+  if (!resumen.lineas.length && !resumen.nota) {
+    return (
+      <p className="text-sm text-muted">Aquí no hay nada apuntado todavía.</p>
+    );
+  }
 
-const SINTOMAS: { value: SymptomTag; label: string }[] = [
-  { value: "retortijones", label: "Retortijones" },
-  { value: "dolor-lumbar", label: "Lumbares" },
-  { value: "tetas-doloridas", label: "Tetas" },
-  { value: "migrana", label: "Migraña" },
-  { value: "hinchazon", label: "Hinchazón" },
-  { value: "cansancio", label: "Cansancio" },
-  { value: "insomnio", label: "Insomnio" },
-  { value: "antojos", label: "Antojos" },
-  { value: "acne", label: "Acné" },
-  { value: "cagalera", label: "Cagalera" },
-];
+  return (
+    <div className="flex flex-col gap-2">
+      {resumen.lineas.length > 0 && (
+        <ul className="flex flex-col gap-1">
+          {resumen.lineas.map((l) => (
+            <li key={l} className="text-sm leading-relaxed">
+              {l}
+            </li>
+          ))}
+        </ul>
+      )}
 
-const ANIMOS: { value: MoodTag; label: string }[] = [
-  { value: "tranquila", label: "Tranquila" },
-  { value: "feliz", label: "Feliz" },
-  { value: "irritada", label: "Irritada" },
-  { value: "llorona", label: "Llorona" },
-  { value: "apatica", label: "Apática" },
-  { value: "gremlin", label: "Gremlin" },
-  { value: "cachonda", label: "Cachonda" },
-];
+      {/* La nota, como cita y no como dato: la escribió ella, y
+          alinearla con "Pastilla tomada a las 22:04" la convertiría
+          en una fila más de un parte médico. */}
+      {resumen.nota && (
+        <p
+          className="border-l-2 pl-3 text-sm italic leading-relaxed text-muted"
+          style={{ borderColor: "var(--border-strong)" }}
+        >
+          {resumen.nota}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** El día de al lado, en clave 'YYYY-MM-DD'. */
+function vecino(key: string, delta: number): string {
+  const d = fromKey(key);
+  d.setDate(d.getDate() + delta);
+  return toKey(d);
+}
 
 function toggle<T>(list: T[] | undefined, value: T): T[] {
   const current = list ?? [];
@@ -72,12 +86,23 @@ function toggle<T>(list: T[] | undefined, value: T): T[] {
 export function DaySheet({
   day,
   onClose,
+  onPeriodStart,
 }: {
   day: SheetDay | null;
   onClose: () => void;
+  /**
+   * Ha empezado una regla nueva aquí dentro.
+   *
+   * Se avisa al CERRAR y no al marcarlo: el efecto es Lilita cruzando
+   * la pantalla entera, y esta hoja es un <dialog> modal — o sea, la
+   * capa superior del navegador. Lanzarlo con la hoja abierta sería
+   * animar algo por detrás de ella que no se ve.
+   */
+  onPeriodStart?: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  const { settings } = useLilaila();
+  const { settings, cycles } = useLilaila();
+  const empezoRegla = useRef(false);
 
   // <dialog> nativo: da trampa de foco, Escape y scroll bloqueado sin
   // escribirlos a mano, y todos suelen salir mal escritos a mano.
@@ -104,14 +129,59 @@ export function DaySheet({
     [day?.key, settings.pill.enabled],
   );
 
-  // Ya no se pregunta si es "el primer dia": se pregunta si ese dia
-  // sangro. El inicio del ciclo lo deduce la app de la racha.
-  const sangro = log?.flow !== undefined && log.flow > 0;
+  // El detalle empieza plegado SIEMPRE, también en un día que ya
+  // tiene cosas: para verlas está el resumen, y abrirlo de golpe
+  // devolvería la pared de controles que esto viene a quitar.
+  //
+  // Se ajusta DURANTE el render y no en un efecto: es el patrón que
+  // documenta React para "resetear estado cuando cambia una prop", y
+  // el efecto además repintaba una vez de más — se veía el detalle
+  // del día anterior abierto durante un fotograma al saltar de día.
+  const [abierto, setAbierto] = useState(false);
+  const [ultimaClave, setUltimaClave] = useState(day?.key);
+  if (day?.key !== ultimaClave) {
+    setUltimaClave(day?.key);
+    setAbierto(false);
+  }
+
+  const resumen = useMemo(
+    () => summarize(log ?? undefined, day?.key ?? "", cycles),
+    [log, day?.key, cycles],
+  );
+
+  /* ¿Marcar "nada" aquí termina la regla?
+     Solo si el día ANTERIOR sangró y el SIGUIENTE no.
+
+     Lo de mirar el siguiente no es un detalle: el modelo tolera un
+     día de pausa dentro de la misma regla (MAX_GAP), así que en un
+     día con sangre a los dos lados marcar 0 no acaba nada — la racha
+     lo salta y sigue. Sin esa comprobación, el botón prometía un
+     final que no iba a ocurrir cada vez que ella corrigiera un día
+     de en medio. */
+  const vecinos = useLiveQuery(
+    async () =>
+      day
+        ? {
+            ayer: (await db.days.get(vecino(day.key, -1)))?.flow,
+            manyana: (await db.days.get(vecino(day.key, 1)))?.flow,
+          }
+        : null,
+    [day?.key],
+  );
+  const terminaLaRegla = Boolean(
+    vecinos?.ayer && vecinos.ayer > 0 && !(vecinos.manyana && vecinos.manyana > 0),
+  );
 
   return (
     <dialog
       ref={ref}
-      onClose={onClose}
+      onClose={() => {
+        onClose();
+        if (empezoRegla.current) {
+          empezoRegla.current = false;
+          onPeriodStart?.();
+        }
+      }}
       // pointerdown y no click: el clic que ABRE la hoja termina de
       // procesarse cuando showModal() ya la ha puesto en la capa
       // superior, asi que su evento 'click' le llega al backdrop y la
@@ -138,7 +208,11 @@ export function DaySheet({
                   eso se lee como una errata. */}
               {capitalize(format(day.date, "EEEE d 'de' MMMM", { locale: es }))}
             </h2>
-            {day.isToday && <p className="text-xs text-faint">Hoy</p>}
+            <p className="text-xs text-faint">
+              {[day.isToday ? "Hoy" : null, resumen.estado]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
           </header>
 
           {day.isFuture ? (
@@ -147,11 +221,66 @@ export function DaySheet({
             </p>
           ) : (
             <>
+              {/* ── Lo que pasó ese día ─────────────────────────
+                  Primero lo que hay, en frases. Antes esto abría con
+                  seis controles y para saber qué había apuntado
+                  tenías que ir leyendo qué botón estaba encendido en
+                  cada fila: la ficha contestaba "¿qué quieres
+                  cambiar?" cuando la pregunta al tocar un día es
+                  "¿qué pasó aquí?". */}
+              <Resumen resumen={resumen} />
+
+              {/* El sangrado se queda siempre fuera del desplegable.
+                  Es el 90% de lo que se viene a hacer aquí, y
+                  esconderlo tras un "añadir más" sería cobrarle un
+                  toque extra al gesto más frecuente de la app. */}
               <FlowRow
                 value={log?.flow}
-                onChange={(v) => void upsertDay(day.key, { flow: v })}
+                onChange={(v) => {
+                  // Empieza una regla NUEVA: ni ese día sangraba ya ni
+                  // hay ninguna abierta. Es el único caso que merece
+                  // la fanfarria; los días siguientes son continuar.
+                  const yaSangraba = log?.flow !== undefined && log.flow > 0;
+                  const ultima = cycles[cycles.length - 1];
+                  if (v !== undefined && v > 0 && !yaSangraba && !(ultima && !ultima.endDate)) {
+                    empezoRegla.current = true;
+                  }
+                  void upsertDay(day.key, { flow: v });
+                }}
                 dateKey={day.key}
+                endsPeriod={terminaLaRegla}
               />
+
+              <button
+                type="button"
+                onClick={() => {
+                  haptic(8);
+                  setAbierto((v) => !v);
+                }}
+                aria-expanded={abierto}
+                className="-ml-1 flex min-h-[44px] items-center gap-1.5 self-start px-1 text-sm"
+                style={{ color: "var(--fg-muted)" }}
+              >
+                {abierto ? "Ocultar el detalle" : "Añadir o cambiar detalles"}
+                <svg
+                  viewBox="0 0 24 24"
+                  className="size-4 transition-transform duration-150"
+                  style={{ transform: abierto ? "rotate(180deg)" : "none" }}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 9l7 7 7-7" />
+                </svg>
+              </button>
+            </>
+          )}
+
+          {!day.isFuture && abierto && (
+            <>
               <MoodRow
                 value={log ?? undefined}
                 onChange={(patch) => void upsertDay(day.key, patch)}
@@ -223,41 +352,29 @@ export function DaySheet({
                 />
               </section>
 
-              <button
-                type="button"
-                onClick={() => {
-                  haptic([14, 30, 20]);
-                  void setBleeding(day.key, !sangro);
-                }}
-                className="min-h-[52px] w-full rounded-full px-lg font-display text-base font-bold tracking-[-0.01em] transition-[transform,background-color,box-shadow] duration-150 active:scale-[0.98] active:translate-x-[1px] active:translate-y-[1px]"
-                style={
-                  sangro
-                    ? {
-                        background: "transparent",
-                        color: "var(--fg-muted)",
-                        boxShadow: "var(--depth-sm)",
-                      }
-                    : {
-                        background: "var(--accent)",
-                        color: "var(--on-accent)",
-                        boxShadow: "3px 3px 0 0 var(--depth-shadow)",
-                      }
-                }
-              >
-                {/* Mismo vocabulario que el botón de Hoy. Antes una
-                    pantalla decía "me ha bajado" y la otra "primer día
-                    de regla", y "quitar como primer día" es jerga. */}
-                {sangro ? "Este día no sangré" : "Este día sí sangré"}
-              </button>
             </>
           )}
 
+          {/* "Guardar" y no "Cerrar", aunque no guarde nada: cada
+              toque ya escribe al momento, así que al llegar aquí el
+              día está guardado desde hace rato. La etiqueta no miente
+              —al pulsarla, está guardado— y evita la duda de si
+              cerrar se lleva por delante lo que acabas de marcar,
+              que es justo lo que un botón llamado "Cerrar" sugiere.
+
+              La nota es el único campo que escribe al perder el foco,
+              y el blur ocurre antes que el click, así que llega. */}
           <button
             type="button"
             onClick={() => ref.current?.close()}
-            className="min-h-[44px] text-sm text-faint"
+            className="min-h-[52px] w-full rounded-full px-lg font-display text-base font-bold tracking-[-0.01em] transition-[transform,box-shadow] duration-150 active:scale-[0.98] active:translate-x-[1px] active:translate-y-[1px]"
+            style={{
+              background: "var(--accent)",
+              color: "var(--on-accent)",
+              boxShadow: "3px 3px 0 0 var(--depth-shadow)",
+            }}
           >
-            Cerrar
+            Guardar día
           </button>
         </div>
       )}

@@ -77,7 +77,10 @@ export async function status(): Promise<PushStatus> {
  * requestPermission() fuera de un gesto lo rechazan todos los
  * navegadores sin decir nada útil.
  */
-export async function enable(): Promise<{ ok: boolean; message: string }> {
+export async function enable(
+  /** Hora local del aviso. Viaja al servidor con el alta. */
+  hour = 22,
+): Promise<{ ok: boolean; message: string }> {
   if (!supported()) {
     return {
       ok: false,
@@ -117,7 +120,7 @@ export async function enable(): Promise<{ ok: boolean; message: string }> {
   const res = await fetch("/api/push", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(sub.toJSON()),
+    body: JSON.stringify({ ...sub.toJSON(), hour }),
   });
 
   if (!res.ok) {
