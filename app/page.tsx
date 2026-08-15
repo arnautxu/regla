@@ -11,7 +11,6 @@ import { PillRow } from "@/components/pill-row";
 import { PHASE_LABEL, type CycleState } from "@/lib/cycle";
 import { capitalize, dateRange } from "@/lib/format";
 import {
-  clearPeriodAround,
   fromKey,
   setPill,
 } from "@/lib/db";
@@ -43,11 +42,6 @@ export default function Hoy() {
   // "REGLA" al lado, porque nadie había pulsado nada todavía hoy.
   const bleeding = state.bleeding;
   const latest = cycles[cycles.length - 1];
-
-  const reglaAbierta = Boolean(latest && !latest.endDate);
-  // El deshacer vale durante toda la regla en curso: darse cuenta
-  // del dedazo al dia siguiente es lo normal.
-  const canUndo = reglaAbierta || latest?.startDate === dateKey;
 
   return (
     <div className="flex flex-1 flex-col gap-lg px-safe pt-safe pb-lg">
@@ -114,19 +108,6 @@ export default function Hoy() {
             bleeding={bleeding}
             startedOn={latest?.startDate}
           />
-
-          {canUndo && (
-            <button
-              type="button"
-              onClick={() => {
-                haptic(8);
-                void clearPeriodAround(latest.startDate);
-              }}
-              className="-ml-1 mt-1 flex min-h-[44px] items-center px-1 text-xs text-faint underline underline-offset-4"
-            >
-              No, me he equivocado
-            </button>
-          )}
         </section>
       )}
 
