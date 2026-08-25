@@ -5,6 +5,7 @@ import {
   toUIMessageStream,
   type UIMessage,
 } from "ai";
+import type { GoogleLanguageModelOptions } from "@ai-sdk/google";
 import { cookies } from "next/headers";
 import { z } from "zod";
 import { SESSION_COOKIE, requireSession } from "@/lib/server/auth";
@@ -12,6 +13,7 @@ import {
   resolveModel,
   aiConfigured,
   chatInstructions,
+  usingGemini,
 } from "@/lib/server/lilita-prompt";
 import type { LilitaContext } from "@/lib/ai-context";
 
@@ -70,7 +72,22 @@ export async function POST(req: Request) {
     model: resolveModel(),
     instructions: chatInstructions(context),
     messages: await convertToModelMessages(messages),
+    maxOutputTokens: 320,
     temperature: 0.9,
+    // Gemini 3.6 Flash razona en nivel medio por defecto. Para las
+    // respuestas cortas de Lilita ese trabajo oculto solo retrasa el
+    // primer texto; "minimal" mantiene las herramientas y la calidad
+    // conversacional sin hacer una reflexión larga antes de contestar.
+    providerOptions: usingGemini()
+      ? {
+          google: {
+            thinkingConfig: {
+              thinkingLevel: "minimal",
+              includeThoughts: false,
+            },
+          } satisfies GoogleLanguageModelOptions,
+        }
+      : undefined,
     tools,
   });
 

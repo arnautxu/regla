@@ -6,6 +6,7 @@ import { useChat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
   lastAssistantMessageIsCompleteWithToolCalls,
+  type UIMessage,
 } from "ai";
 import { useLiveQuery } from "dexie-react-hooks";
 import { motion } from "motion/react";
@@ -31,6 +32,17 @@ const SUGERENCIAS = [
   "¿Esto que me pasa es normal?",
   "¿Cuándo me toca y cuánto te fías?",
 ];
+
+// Seis turnos completos bastan para mantener el hilo. El resto ya está
+// resumido en el contexto y en las memorias de Lilita; reenviarlo entero
+// hacía crecer el tiempo de respuesta después de cada mensaje.
+const RECENT_MESSAGE_LIMIT = 12;
+
+function recentConversation(messages: UIMessage[]): UIMessage[] {
+  const recent = messages.slice(-RECENT_MESSAGE_LIMIT);
+  const firstUserMessage = recent.findIndex((message) => message.role === "user");
+  return firstUserMessage === -1 ? recent : recent.slice(firstUserMessage);
+}
 
 export default function Chat() {
   const router = useRouter();
@@ -59,9 +71,13 @@ export default function Chat() {
       // modelo ve siempre sus datos de AHORA y no los de cuando
       // empezó la conversación.
       prepareSendMessagesRequest: ({ messages }) => ({
-        body: { messages, context },
+        body: { messages: recentConversation(messages), context },
       }),
     }),
+
+    // La respuesta llega en fragmentos pequeños. Agrupar sus repintados
+    // evita que Safari rehaga toda la conversación por cada token.
+    throttle: 40,
 
     // Sin esto, Lilita guarda la memoria y se queda callada: la
     // conversación se para esperando a que alguien devuelva el
@@ -99,7 +115,10 @@ export default function Chat() {
   });
 
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: "smooth" });
+    bottom.current?.scrollIntoView({
+      behavior: status === "streaming" ? "auto" : "smooth",
+      block: "end",
+    });
   }, [messages, status]);
 
   function send(text: string) {
