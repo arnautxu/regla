@@ -52,7 +52,8 @@ const isStatic = (url) =>
   url.pathname.startsWith("/_next/static/") ||
   url.pathname.startsWith("/icon") ||
   url.pathname === "/apple-touch-icon.png" ||
-  url.pathname === "/manifest.webmanifest";
+  url.pathname === "/manifest.webmanifest" ||
+  url.pathname === "/cookie-monster.webmanifest";
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;

@@ -25,9 +25,13 @@ const PATH = "lilaila/push.json";
 export interface StoredSub {
   endpoint: string;
   keys: { p256dh: string; auth: string };
+  /** Quién debe recibir esta suscripción. Las antiguas eran de Lídia. */
+  audience: PushAudience;
   /** Cuándo se dio de alta, para poder limpiar a ojo si hiciera falta */
   createdAt: string;
 }
+
+export type PushAudience = "lidia" | "cookie-monster";
 
 export interface PushDoc {
   version: 1;
@@ -72,7 +76,16 @@ export async function readPushDoc(): Promise<PushDoc> {
     const result = await get(PATH, { access: "private" });
     if (!result || result.statusCode !== 200) return EMPTY;
     const doc = (await new Response(result.stream).json()) as PushDoc;
-    return { ...EMPTY, ...doc, subs: doc.subs ?? [] };
+    return {
+      ...EMPTY,
+      ...doc,
+      // Antes de Cookie Monster todas las suscripciones eran para Lídia.
+      // Migrarlas al leer evita que un móvil suyo reciba este aviso.
+      subs: (doc.subs ?? []).map((sub) => ({
+        ...sub,
+        audience: sub.audience ?? "lidia",
+      })),
+    };
   } catch {
     // Primera ejecución: el blob todavía no existe.
     return EMPTY;
@@ -93,12 +106,16 @@ export async function writePushDoc(doc: PushDoc): Promise<void> {
 export async function addSub(
   sub: Omit<StoredSub, "createdAt">,
   hour?: number,
+  audience: PushAudience = "lidia",
 ): Promise<void> {
   const doc = await readPushDoc();
   const otros = doc.subs.filter((s) => s.endpoint !== sub.endpoint);
   await writePushDoc({
     ...doc,
-    subs: [...otros, { ...sub, createdAt: new Date().toISOString() }],
+    subs: [
+      ...otros,
+      { ...sub, audience, createdAt: new Date().toISOString() },
+    ],
     reminderHour: hour ?? doc.reminderHour,
   });
 }
@@ -122,7 +139,7 @@ export interface Notice {
 }
 
 /**
- * Manda el aviso a todos los dispositivos dados de alta.
+ * Manda el aviso a los dispositivos de Lídia dados de alta.
  *
  * Las suscripciones muertas se borran solas. El servicio de push
  * contesta 404 o 410 cuando el navegador ya no existe —app
@@ -133,18 +150,27 @@ export interface Notice {
 export async function sendToAll(
   notice: Notice,
 ): Promise<{ sent: number; gone: number }> {
+  return sendToAudience("lidia", notice);
+}
+
+/** Manda un aviso solo a un grupo de dispositivos registrado. */
+export async function sendToAudience(
+  audience: PushAudience,
+  notice: Notice,
+): Promise<{ sent: number; gone: number }> {
   if (!pushConfigured()) return { sent: 0, gone: 0 };
   applyVapid();
 
   const doc = await readPushDoc();
-  if (doc.subs.length === 0) return { sent: 0, gone: 0 };
+  const recipients = doc.subs.filter((sub) => sub.audience === audience);
+  if (recipients.length === 0) return { sent: 0, gone: 0 };
 
   const payload = JSON.stringify(notice);
   const muertas: string[] = [];
   let sent = 0;
 
   await Promise.all(
-    doc.subs.map(async (sub) => {
+    recipients.map(async (sub) => {
       try {
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: sub.keys },

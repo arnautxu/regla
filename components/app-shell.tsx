@@ -8,6 +8,7 @@ import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import { useLilaila } from "@/lib/use-lilaila";
 import { Onboarding } from "./onboarding";
 import { PinGate } from "./pin-gate";
+import { CookieMonsterGate } from "./cookie-monster-gate";
 import { ServiceWorker } from "./service-worker";
 import { TabBar } from "./tab-bar";
 
@@ -20,6 +21,7 @@ import { TabBar } from "./tab-bar";
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { ready, state, settings, cycles } = useLilaila();
   const pathname = usePathname();
+  const cookieMonsterReceiver = pathname === "/cookie-monster";
 
   // El chat ocupa la pantalla entera y trae su propio botón de
   // volver. La barra ahí solo se comería el campo de escribir.
@@ -76,9 +78,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // regla CSS de globals.css cubre las transiciones normales; esta
     // cubre las que mueve JS (páginas, mensajes, Lilita, el mes).
     <MotionConfig reducedMotion="user">
-      <PinGate>
+      {cookieMonsterReceiver ? (
+        <CookieMonsterGate>
+          <div className="mx-auto flex min-h-dvh w-full max-w-[440px] flex-col">
+            {children}
+            <ServiceWorker />
+          </div>
+        </CookieMonsterGate>
+      ) : (
+      <PinGate startBackup={!cookieMonsterReceiver}>
         <div className="mx-auto flex min-h-dvh w-full max-w-[440px] flex-col">
-          {needsOnboarding ? (
+          {cookieMonsterReceiver ? (
+            children
+          ) : needsOnboarding ? (
             <Onboarding />
           ) : (
             <>
@@ -103,6 +115,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <ServiceWorker />
         </div>
       </PinGate>
+      )}
     </MotionConfig>
   );
 }

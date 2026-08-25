@@ -8,6 +8,7 @@ import { Lilita } from "@/components/lilita";
 import { PeriodStartFX } from "@/components/period-start-fx";
 import { DaySheet } from "@/components/day-sheet";
 import { PillRow } from "@/components/pill-row";
+import { CookieMonsterButton } from "@/components/cookie-monster-button";
 import { PHASE_LABEL, type CycleState } from "@/lib/cycle";
 import { capitalize, dateRange } from "@/lib/format";
 import {
@@ -138,6 +139,8 @@ export default function Hoy() {
           )}
         </section>
       )}
+
+      <CookieMonsterButton />
 
       {/* ── Acción principal ──────────────────────────────────────
           En el tercio inferior, siempre, y es lo ÚNICO que registra

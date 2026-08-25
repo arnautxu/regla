@@ -58,7 +58,7 @@ export function PillPanel({ pill }: { pill: PillSettings }) {
         await updateSettings({ pill: { ...pill, remind: false } });
         setAviso("Vale, me callo.");
       } else {
-        const res = await enable(pill.hour);
+        const res = await enable(pill.hour, "lidia");
         setAviso(res.message);
         if (res.ok) await updateSettings({ pill: { ...pill, remind: true } });
       }

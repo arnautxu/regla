@@ -20,6 +20,8 @@ import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
 
 const SESSION_DAYS = 90;
 export const SESSION_COOKIE = "lilaila_session";
+/** Sesión aislada: solo sirve para recibir Cookie Monster, nunca para el diario. */
+export const COOKIE_MONSTER_SESSION_COOKIE = "lilaila_cookie_monster";
 
 export const MIN_SECRET = 16;
 export const MIN_PIN = 4;
@@ -46,12 +48,30 @@ export function configProblem(): string | null {
   return null;
 }
 
+/** Configuración mínima del acceso de Arnau, separada del PIN de Lídia. */
+export function cookieMonsterConfigProblem(): string | null {
+  const s = process.env.LILAILA_SECRET;
+  const p = process.env.COOKIE_MONSTER_PIN;
+
+  if (!s) return "Falta LILAILA_SECRET.";
+  if (s.length < MIN_SECRET)
+    return `LILAILA_SECRET tiene ${s.length} caracteres y necesita al menos ${MIN_SECRET}.`;
+  if (!p) return "Falta COOKIE_MONSTER_PIN.";
+  if (p.length < MIN_PIN)
+    return `COOKIE_MONSTER_PIN tiene ${p.length} caracteres y necesita al menos ${MIN_PIN}.`;
+  return null;
+}
+
 function secret(): string {
   return process.env.LILAILA_SECRET!;
 }
 
 function expectedPin(): string {
   return process.env.LILAILA_PIN!;
+}
+
+function expectedCookieMonsterPin(): string {
+  return process.env.COOKIE_MONSTER_PIN!;
 }
 
 /** Comparación en tiempo constante: una comparación normal filtra
@@ -103,10 +123,21 @@ export async function checkPin(pin: string): Promise<boolean> {
   return safeEqual(pin, expectedPin());
 }
 
+export async function checkCookieMonsterPin(pin: string): Promise<boolean> {
+  await new Promise((r) => setTimeout(r, 250));
+  return safeEqual(pin, expectedCookieMonsterPin());
+}
+
 /* --- Sesión ----------------------------------------------------- */
 
 function sign(payload: string): string {
   return createHmac("sha256", secret()).update(payload).digest("base64url");
+}
+
+function signCookieMonster(payload: string): string {
+  return createHmac("sha256", secret())
+    .update(`cookie-monster:${payload}`)
+    .digest("base64url");
 }
 
 export function createSession(): { token: string; maxAge: number } {
@@ -126,6 +157,29 @@ export function verifySession(token: string | undefined): boolean {
   const [nonce, expires, mac] = parts;
   const payload = `${nonce}.${expires}`;
   if (!safeEqual(mac, sign(payload))) return false;
+
+  const exp = Number(expires);
+  return Number.isFinite(exp) && Date.now() < exp;
+}
+
+export function createCookieMonsterSession(): { token: string; maxAge: number } {
+  const expires = Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000;
+  const payload = `${randomBytes(12).toString("base64url")}.${expires}`;
+  return {
+    token: `${payload}.${signCookieMonster(payload)}`,
+    maxAge: SESSION_DAYS * 24 * 60 * 60,
+  };
+}
+
+/** Esta firma distinta impide usar esta cookie contra /api/data o el chat. */
+export function verifyCookieMonsterSession(token: string | undefined): boolean {
+  if (!token) return false;
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+
+  const [nonce, expires, mac] = parts;
+  const payload = `${nonce}.${expires}`;
+  if (!safeEqual(mac, signCookieMonster(payload))) return false;
 
   const exp = Number(expires);
   return Number.isFinite(exp) && Date.now() < exp;

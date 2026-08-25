@@ -1,0 +1,29 @@
+{
+  "name": "Cookie Monster",
+  "short_name": "Cookies",
+  "description": "Avisos privados de Cookie Monster.",
+  "start_url": "/cookie-monster",
+  "scope": "/cookie-monster",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a1012",
+  "theme_color": "#1a1012",
+  "lang": "es",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    },
+    { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512" },
+    {
+      "src": "/icon-maskable-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ]
+}

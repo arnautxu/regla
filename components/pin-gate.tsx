@@ -11,7 +11,14 @@ type Gate =
   | { state: "pide-pin"; error?: string }
   | { state: "dentro" };
 
-export function PinGate({ children }: { children: React.ReactNode }) {
+export function PinGate({
+  children,
+  startBackup: shouldStartBackup = true,
+}: {
+  children: React.ReactNode;
+  /** El receptor de Cookie Monster no debe descargar el diario de Lídia. */
+  startBackup?: boolean;
+}) {
   const [gate, setGate] = useState<Gate>({ state: "comprobando" });
   const [pin, setPin] = useState("");
   const [sending, setSending] = useState(false);
@@ -37,8 +44,8 @@ export function PinGate({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (gate.state === "dentro") void startBackup();
-  }, [gate.state]);
+    if (gate.state === "dentro" && shouldStartBackup) void startBackup();
+  }, [gate.state, shouldStartBackup]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

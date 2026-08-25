@@ -28,6 +28,8 @@ export type PushStatus =
   /** El servidor no tiene claves: no hay nada que activar */
   | "sin-servidor";
 
+export type PushAudience = "lidia" | "cookie-monster";
+
 const PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 
 /** El estándar quiere bytes; VAPID viaja en base64url. */
@@ -80,6 +82,8 @@ export async function status(): Promise<PushStatus> {
 export async function enable(
   /** Hora local del aviso. Viaja al servidor con el alta. */
   hour = 22,
+  /** El receptor de Cookie Monster nunca entra en los avisos de Lídia. */
+  audience: PushAudience = "lidia",
 ): Promise<{ ok: boolean; message: string }> {
   if (!supported()) {
     return {
@@ -120,7 +124,7 @@ export async function enable(
   const res = await fetch("/api/push", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...sub.toJSON(), hour }),
+    body: JSON.stringify({ ...sub.toJSON(), hour, audience }),
   });
 
   if (!res.ok) {

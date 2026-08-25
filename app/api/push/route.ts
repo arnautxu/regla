@@ -1,10 +1,16 @@
 import { cookies } from "next/headers";
-import { SESSION_COOKIE, verifySession } from "@/lib/server/auth";
+import {
+  COOKIE_MONSTER_SESSION_COOKIE,
+  SESSION_COOKIE,
+  verifyCookieMonsterSession,
+  verifySession,
+} from "@/lib/server/auth";
 import {
   addSub,
   pushConfigured,
   readPushDoc,
   removeSub,
+  type PushAudience,
 } from "@/lib/server/push";
 
 /* Alta y baja del aviso de la pastilla.
@@ -16,6 +22,11 @@ import {
 async function guard(): Promise<boolean> {
   const jar = await cookies();
   return verifySession(jar.get(SESSION_COOKIE)?.value);
+}
+
+async function cookieMonsterGuard(): Promise<boolean> {
+  const jar = await cookies();
+  return verifyCookieMonsterSession(jar.get(COOKIE_MONSTER_SESSION_COOKIE)?.value);
 }
 
 const DENIED = Response.json({ error: "No autorizado." }, { status: 401 });
@@ -31,23 +42,26 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  if (!(await guard())) return DENIED;
+  let raw: unknown;
+  try {
+    raw = await req.json();
+  } catch {
+    return Response.json({ error: "JSON inválido." }, { status: 400 });
+  }
+
+  const body = raw as {
+    endpoint?: string;
+    keys?: { p256dh?: string; auth?: string };
+    hour?: number;
+    audience?: PushAudience;
+  };
+  const isCookieMonster = body.audience === "cookie-monster";
+  if (isCookieMonster ? !(await cookieMonsterGuard()) : !(await guard())) return DENIED;
   if (!pushConfigured()) {
     return Response.json(
       { error: "El servidor no tiene claves de aviso configuradas." },
       { status: 501 },
     );
-  }
-
-  let body: {
-    endpoint?: string;
-    keys?: { p256dh?: string; auth?: string };
-    hour?: number;
-  };
-  try {
-    body = await req.json();
-  } catch {
-    return Response.json({ error: "JSON inválido." }, { status: 400 });
   }
 
   // Se valida antes de guardar: una suscripción a medias se acepta sin
@@ -69,7 +83,14 @@ export async function POST(req: Request) {
       ? Math.floor(body.hour)
       : undefined;
 
-  await addSub({ endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } }, hour);
+  const audience: PushAudience =
+    body.audience === "cookie-monster" ? "cookie-monster" : "lidia";
+
+  await addSub(
+    { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth }, audience },
+    hour,
+    audience,
+  );
   return Response.json({ ok: true });
 }
 
