@@ -63,6 +63,10 @@ export default function Historial() {
           label="Días de mierda"
           value={s.badDays > 0 ? String(s.badDays) : "Ninguno"}
         />
+        <Fact
+          label="PAS · Llantos"
+          value={s.cryEvents > 0 ? String(s.cryEvents) : "Ninguno"}
+        />
         {s.notes.length > 0 && (
           <div className="col-span-2">
             <dt className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">

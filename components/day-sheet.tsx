@@ -8,13 +8,14 @@ import {
   db,
   fromKey,
   pillStreak,
+  removeCryEvent,
   setPill,
   setSex,
   toKey,
   upsertDay,
 } from "@/lib/db";
 import { summarize, type DaySummary } from "@/lib/day-summary";
-import { ANIMOS, SINTOMAS } from "@/lib/labels";
+import { ANIMOS, CRY_INTENSITIES, CRY_REASONS, SINTOMAS, labelOf } from "@/lib/labels";
 import { capitalize } from "@/lib/format";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
 import { FlowRow } from "./flow-row";
@@ -138,10 +139,12 @@ export function DaySheet({
   // el efecto además repintaba una vez de más — se veía el detalle
   // del día anterior abierto durante un fotograma al saltar de día.
   const [abierto, setAbierto] = useState(false);
+  const [cryError, setCryError] = useState("");
   const [ultimaClave, setUltimaClave] = useState(day?.key);
   if (day?.key !== ultimaClave) {
     setUltimaClave(day?.key);
     setAbierto(false);
+    setCryError("");
   }
 
   const resumen = useMemo(
@@ -229,6 +232,46 @@ export function DaySheet({
                   cambiar?" cuando la pregunta al tocar un día es
                   "¿qué pasó aquí?". */}
               <Resumen resumen={resumen} />
+
+              {!!log?.cryEvents?.length && (
+                <section aria-label="Episodios PAS" className="flex flex-col gap-2">
+                  {log.cryEvents.map((event) => (
+                    <div key={event.id} className="rounded-xl px-3 py-2.5 text-sm" style={{ background: "var(--bg)" }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-semibold">
+                          💧 {labelOf(CRY_REASONS, event.reason) ?? "PAS"}
+                          <span className="ml-2 font-normal text-faint">
+                            {new Date(event.at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </p>
+                        <button
+                          type="button"
+                          className="shrink-0 text-xs underline underline-offset-2"
+                          style={{ color: "var(--fg-muted)" }}
+                          aria-label="Eliminar este episodio PAS"
+                          onClick={() => {
+                            if (!window.confirm("¿Eliminar este episodio PAS?")) return;
+                            haptic(8);
+                            setCryError("");
+                            void removeCryEvent(day.key, event.id).catch(() =>
+                              setCryError("No se ha podido eliminar este PAS."),
+                            );
+                          }}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                      {event.intensity && (
+                        <p className="mt-1 text-xs text-muted">
+                          Intensidad: {CRY_INTENSITIES.find((option) => option.value === event.intensity)?.label.toLowerCase()}
+                        </p>
+                      )}
+                      {event.note && <p className="mt-1 whitespace-pre-wrap text-muted">{event.note}</p>}
+                    </div>
+                  ))}
+                  {cryError && <p className="text-xs" style={{ color: "var(--accent)" }} role="alert">{cryError}</p>}
+                </section>
+              )}
 
               {/* El sangrado se queda siempre fuera del desplegable.
                   Es el 90% de lo que se viene a hacer aquí, y

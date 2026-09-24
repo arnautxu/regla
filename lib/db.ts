@@ -32,6 +32,25 @@ export type SymptomTag =
 /** 0 = nada, 4 = escena de Tarantino */
 export type FlowLevel = 0 | 1 | 2 | 3 | 4;
 
+export type CryReason =
+  | "estres"
+  | "discusion"
+  | "dolor"
+  | "tristeza"
+  | "alegria"
+  | "no-se"
+  | "otro";
+
+export interface CryEvent {
+  id: string;
+  /** Instante del episodio; la fecha del DayLog sigue siendo local. */
+  at: string;
+  reason: CryReason;
+  /** 1 = suave, 2 = medio, 3 = intenso. Ausente si no se indicó. */
+  intensity?: 1 | 2 | 3;
+  note?: string;
+}
+
 /* Sexo. Se guarda en campos planos y no en un objeto anidado porque
    todo se escribe con upsertDay(fecha, parche) y un objeto obligaria
    a leer-fusionar-escribir a mano en cada toque de un chip. */
@@ -68,6 +87,8 @@ export interface DayLog {
   /** 0-10 */
   painLevel?: number;
   note?: string;
+  /** Puede haber varios episodios PAS en un mismo día. */
+  cryEvents?: CryEvent[];
   /** Hubo sexo ese dia. Lo de abajo solo tiene sentido si es true. */
   sex?: boolean;
   sexActivities?: SexActivity[];
@@ -550,6 +571,34 @@ export async function upsertDay(
 ): Promise<void> {
   const existing = await db.days.get(date);
   await db.days.put({ ...existing, ...patch, date, updatedAt: now() });
+  touch();
+}
+
+/** El append se hace dentro de una transacción para no perder otro PAS del día. */
+export async function addCryEvent(event: CryEvent): Promise<void> {
+  const date = toKey(new Date(event.at));
+  await db.transaction("rw", db.days, async () => {
+    const existing = await db.days.get(date);
+    await db.days.put({
+      ...existing,
+      date,
+      cryEvents: [...(existing?.cryEvents ?? []), event],
+      updatedAt: now(),
+    });
+  });
+  touch();
+}
+
+export async function removeCryEvent(date: string, id: string): Promise<void> {
+  await db.transaction("rw", db.days, async () => {
+    const existing = await db.days.get(date);
+    if (!existing) return;
+    await db.days.put({
+      ...existing,
+      cryEvents: existing.cryEvents?.filter((event) => event.id !== id),
+      updatedAt: now(),
+    });
+  });
   touch();
 }
 

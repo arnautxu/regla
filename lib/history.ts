@@ -12,6 +12,7 @@ export interface CycleSummary {
   ongoing: boolean;
   maxPain?: number;
   badDays: number;
+  cryEvents: number;
   loggedDays: number;
   notes: string[];
 }
@@ -45,11 +46,12 @@ export function summarizeCycles(
           ) + 1
         : undefined;
 
-      // Días que caen dentro de este ciclo: desde su inicio hasta el
-      // día antes del siguiente (o hasta hoy si es el que corre).
-      const until = next ? next.startDate : today;
+      // El ciclo cerrado acaba antes del siguiente; el que sigue
+      // abierto incluye hoy, donde puede haberse anotado un PAS.
       const inside = days.filter(
-        (d) => d.date >= cycle.startDate && d.date < until,
+        (d) =>
+          d.date >= cycle.startDate &&
+          (next ? d.date < next.startDate : d.date <= today),
       );
 
       const pains = inside
@@ -64,6 +66,7 @@ export function summarizeCycles(
         ongoing,
         maxPain: pains.length ? Math.max(...pains) : undefined,
         badDays: inside.filter((d) => d.badDay).length,
+        cryEvents: inside.reduce((count, day) => count + (day.cryEvents?.length ?? 0), 0),
         loggedDays: inside.length,
         notes: inside.map((d) => d.note).filter((n): n is string => !!n),
       };

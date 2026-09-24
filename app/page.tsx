@@ -9,6 +9,7 @@ import { PeriodStartFX } from "@/components/period-start-fx";
 import { DaySheet } from "@/components/day-sheet";
 import { PillRow } from "@/components/pill-row";
 import { CookieMonsterButton } from "@/components/cookie-monster-button";
+import { PasButton } from "@/components/pas-button";
 import { PHASE_LABEL, type CycleState } from "@/lib/cycle";
 import { capitalize, dateRange } from "@/lib/format";
 import {
@@ -113,8 +114,7 @@ export default function Hoy() {
       )}
 
       {/* ── La pastilla ───────────────────────────────────────────
-          La única excepción a "aquí no se registra nada": es lo único
-          que hay que contestar TODOS los días
+          Es lo único que hay que contestar TODOS los días
           —el ciclo va a su ritmo, la anticonceptiva no— y es adonde
           lleva el aviso de las diez de la noche.
 
@@ -140,11 +140,11 @@ export default function Hoy() {
         </section>
       )}
 
+      <PasButton />
       <CookieMonsterButton />
 
       {/* ── Acción principal ──────────────────────────────────────
-          En el tercio inferior, siempre, y es lo ÚNICO que registra
-          desde esta pantalla.
+          En el tercio inferior, siempre, abre el registro completo.
 
           Aquí había una tarjeta de "registro rápido" con el flujo y el
           ánimo sueltos. Sobraba desde que existe la ficha: los mismos

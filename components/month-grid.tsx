@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { Droplet } from "lucide-react";
 import { WEEKDAY_LABELS, type Band, type DayCell } from "@/lib/calendar";
 import { haptic } from "@/lib/use-lilaila";
 
@@ -167,6 +168,12 @@ function DayButton({
         />
       )}
 
+      {cell.cryCount > 0 && (
+        <span aria-hidden="true" className="absolute left-0.5 top-0.5 flex size-4 items-center justify-center rounded-full" style={{ background: "var(--surface)" }}>
+          <Droplet className="size-3" fill="var(--accent)" strokeWidth={0} />
+        </span>
+      )}
+
       {/* Pastilla olvidada: anillo hueco abajo a la
           izquierda. Hueco y no relleno a propósito — es la
           forma de "falta algo", y se distingue del punto de
@@ -317,6 +324,7 @@ function ariaLabel(cell: DayCell): string {
     flow,
     cell.mostLikely ? ", el día más probable" : "",
     cell.pillSkipped ? ", sin pastilla" : "",
+    cell.cryCount ? `, PAS: ${cell.cryCount} ${cell.cryCount === 1 ? "episodio" : "episodios"} de llanto` : "",
   ].join("");
 }
 

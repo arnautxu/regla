@@ -75,6 +75,7 @@ export interface DayCell {
    * sería acusarla de algo que no ha dicho.
    */
   pillSkipped: boolean;
+  cryCount: number;
 }
 
 const WEEK_OPTS = { weekStartsOn: 1 } as const; // lunes, que esto es España
@@ -242,10 +243,12 @@ function paint(cycles: Cycle[], days: DayLog[], settings: Settings, today: strin
           (log.painLevel !== undefined ||
             log.flow !== undefined ||
             !!log.note ||
+            !!log.cryEvents?.length ||
             !!log.mood?.length ||
             !!log.symptoms?.length ||
             log.sex === true),
         pillSkipped: log?.pill === false,
+        cryCount: log?.cryEvents?.length ?? 0,
       };
     });
 

@@ -110,6 +110,9 @@ export function summarize(
   const animos = labelsOf(ANIMOS, day?.mood);
   if (animos.length) lineas.push(animos.join(", "));
 
+  const cries = day?.cryEvents?.length ?? 0;
+  if (cries) lineas.push(`PAS · ${cries === 1 ? "1 episodio de llanto" : `${cries} episodios de llanto`}`);
+
   return {
     estado: n !== undefined ? `Día ${n} de regla` : undefined,
     lineas,

@@ -1,10 +1,27 @@
 import type {
+  CryReason,
   FlowLevel,
   MoodTag,
   SexActivity,
   SexProtection,
   SymptomTag,
 } from "./db";
+
+export const CRY_REASONS: Opcion<CryReason>[] = [
+  { value: "estres", label: "Estrés" },
+  { value: "discusion", label: "Una discusión" },
+  { value: "dolor", label: "Dolor" },
+  { value: "tristeza", label: "Tristeza" },
+  { value: "alegria", label: "Alegría" },
+  { value: "no-se", label: "No lo sé" },
+  { value: "otro", label: "Otra cosa" },
+];
+
+export const CRY_INTENSITIES = [
+  { value: 1, label: "Un poco" },
+  { value: 2, label: "Bastante" },
+  { value: 3, label: "Mucho" },
+] as const;
 
 /* ═══════════════════════════════════════════════════════════════
    LAS PALABRAS, EN UN SOLO SITIO
