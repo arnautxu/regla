@@ -20,7 +20,7 @@
    abrirla, el aviso serviría para acordarse pero no para registrar.
    ═══════════════════════════════════════════════════════════════ */
 
-const VERSION = "v2";
+const VERSION = "v3";
 const PAGES = `lilaila-pages-${VERSION}`;
 const ASSETS = `lilaila-assets-${VERSION}`;
 const KEEP = [PAGES, ASSETS];
@@ -66,8 +66,10 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(PAGES).then((c) => c.put(request, copy));
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(PAGES).then((c) => c.put(request, copy));
+          }
           return res;
         })
         .catch(async () => {
@@ -90,8 +92,10 @@ self.addEventListener("fetch", (event) => {
         (hit) =>
           hit ??
           fetch(request).then((res) => {
-            const copy = res.clone();
-            caches.open(ASSETS).then((c) => c.put(request, copy));
+            if (res.ok) {
+              const copy = res.clone();
+              caches.open(ASSETS).then((c) => c.put(request, copy));
+            }
             return res;
           }),
       ),
