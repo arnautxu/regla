@@ -16,6 +16,13 @@ export function PasButton() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  // La confirmación vive en el propio botón y se va sola.
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(() => setMessage(""), 3500);
+    return () => clearTimeout(t);
+  }, [message]);
+
   useEffect(() => {
     const el = dialog.current;
     if (!el) return;
@@ -59,18 +66,18 @@ export function PasButton() {
 
   return (
     <>
-      <section className="sticker rounded-2xl px-lg py-md" style={{ background: "var(--surface)" }}>
-        <p className="text-sm text-muted">¿Has llorado? Puedes apuntar qué pasó.</p>
-        <button
-          type="button"
-          onClick={open}
-          className="mt-3 w-full rounded-full px-lg py-3.5 font-display text-base font-bold transition-transform duration-150 active:scale-[0.975]"
-          style={{ background: "var(--accent-soft)", color: "var(--accent)", boxShadow: "3px 3px 0 0 var(--depth-shadow)" }}
-        >
-          💧 PAS · He llorado
-        </button>
-        {message && <p className="mt-2 text-xs text-faint" role="status">{message}</p>}
-      </section>
+      {/* Un atajo, no una tarjeta: llorar no es lo primero que se viene
+          a hacer a Hoy, y con su pregunta encima ocupaba lo mismo que el
+          ciclo. Ahora es medio botón; la confirmación sale en él mismo. */}
+      <button
+        type="button"
+        onClick={open}
+        className="flat flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-2xl px-3 text-sm font-semibold"
+        style={{ background: "var(--surface)", color: message ? "var(--ok)" : "var(--fg)" }}
+      >
+        <span aria-hidden="true">{message ? "✓" : "💧"}</span>
+        <span role="status">{message ? "PAS guardado" : "He llorado"}</span>
+      </button>
 
       <dialog
         ref={dialog}

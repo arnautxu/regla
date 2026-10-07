@@ -3,6 +3,7 @@
 import { type FlowLevel } from "@/lib/db";
 import { flowOptions } from "@/lib/labels";
 import { haptic } from "@/lib/use-lilaila";
+import { CHOICE_CLASS, choiceStyle } from "@/lib/choice";
 
 /* Cinco niveles, un toque. Vive en Hoy mientras sangra (que es el
    registro más probable de esos días) y en la hoja del calendario
@@ -54,20 +55,35 @@ export function FlowRow({
                 haptic(active ? 6 : 14);
                 onChange(active ? undefined : opt.value);
               }}
-              className="min-h-[46px] rounded-lg px-1 text-2xs font-medium leading-[1.15] transition-[transform,box-shadow,color] duration-150 active:scale-[0.96] active:translate-x-[1px] active:translate-y-[1px]"
-              style={{
-                background: active ? "var(--accent-soft)" : "var(--surface)",
-                boxShadow: active
-                  ? "inset 0 0 0 1.5px var(--accent), 2px 2px 0 0 var(--depth-shadow)"
-                  : "var(--depth-sm)",
-                color: active ? "var(--accent)" : "var(--fg-muted)",
-              }}
+              className={`flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-xl px-1 text-2xs leading-[1.15] ${CHOICE_CLASS}`}
+              style={choiceStyle(active)}
             >
+              <Drops n={opt.value} active={active} />
               {opt.label}
             </button>
           );
         })}
       </div>
     </section>
+  );
+}
+
+/* Cuánto, sin leer: de una gota vacía (nada) a cuatro llenas. */
+function Drops({ n, active }: { n: number; active: boolean }) {
+  const color = active ? "var(--accent)" : "var(--ph-menstrual)";
+  const count = Math.max(n, 1);
+  return (
+    <span aria-hidden="true" className="flex h-4 items-center gap-px">
+      {Array.from({ length: count }, (_, i) => (
+        <svg key={i} viewBox="0 0 24 30" width={n === 0 ? 11 : 8} height={n === 0 ? 14 : 11}>
+          <path
+            d="M12 2c0 0 9 11 9 16a9 9 0 1 1-18 0C3 13 12 2 12 2z"
+            fill={n === 0 ? "none" : color}
+            stroke={color}
+            strokeWidth="2.6"
+          />
+        </svg>
+      ))}
+    </span>
   );
 }

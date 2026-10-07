@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { haptic } from "@/lib/use-lilaila";
+import { Lilita } from "./lilita";
 
 /* Iconos dibujados a mano, con el mismo grosor de trazo que Lilita.
    Nada de librería: un set genérico delata la plantilla al instante. */
@@ -43,8 +44,39 @@ export function TabBar() {
       aria-label="Secciones"
       className="sticky bottom-0 z-40 border-t border-line bg-bg pb-safe"
     >
-      <ul className="grid grid-cols-4">
-        {TABS.map((tab) => {
+      {/* Cinco huecos: las cuatro secciones y, en medio, Lilita. El
+          chat estaba escondido detrás de la tarjeta de Hoy; ahora se
+          llega a ella desde cualquier pantalla con el pulgar. */}
+      <ul className="grid grid-cols-5">
+        {[...TABS.slice(0, 2), null, ...TABS.slice(2)].map((tab) => {
+          if (!tab) {
+            return (
+              <li key="lilita" className="flex justify-center">
+                <Link
+                  href="/chat"
+                  onClick={() => haptic(10)}
+                  aria-label="Hablar con Lilita"
+                  className="-mt-5 flex flex-col items-center gap-1"
+                >
+                  <span
+                    className="sticker-sm flex size-[52px] items-end justify-center overflow-hidden rounded-full"
+                    style={{
+                      background: "var(--accent-soft)",
+                      boxShadow:
+                        "inset 0 0 0 1.5px var(--accent), 2px 2px 0 0 var(--depth-shadow)",
+                    }}
+                  >
+                    <span className="translate-y-[12px]">
+                      <Lilita mood="neutral" size={32} />
+                    </span>
+                  </span>
+                  <span className="text-2xs font-semibold tracking-wide" style={{ color: "var(--accent)" }}>
+                    Lilita
+                  </span>
+                </Link>
+              </li>
+            );
+          }
           const active =
             tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
           return (

@@ -1,6 +1,7 @@
 "use client";
 
 import { haptic } from "@/lib/use-lilaila";
+import { CHOICE_CLASS, choiceStyle } from "@/lib/choice";
 
 /* ═══════════════════════════════════════════════════════════════
    LA PASTILLA
@@ -69,14 +70,8 @@ export function PillRow({
                 haptic(active ? 6 : opt.taken ? 14 : 8);
                 onChange(active ? undefined : opt.taken);
               }}
-              className="min-h-[46px] rounded-lg px-1 text-sm font-medium leading-[1.15] transition-[transform,box-shadow,color] duration-150 active:scale-[0.96] active:translate-x-[1px] active:translate-y-[1px]"
-              style={{
-                background: active ? "var(--accent-soft)" : "var(--surface)",
-                boxShadow: active
-                  ? "inset 0 0 0 1.5px var(--accent), 2px 2px 0 0 var(--depth-shadow)"
-                  : "var(--depth-sm)",
-                color: active ? "var(--accent)" : "var(--fg-muted)",
-              }}
+              className={`min-h-[44px] rounded-xl px-1 text-sm font-medium leading-[1.15] ${CHOICE_CLASS}`}
+              style={choiceStyle(active)}
             >
               {opt.label}
             </button>
