@@ -593,6 +593,25 @@ dialog.sheet::backdrop {
    3. texto    → todo lo demás, sin caja.
    Antes todo era nivel 1 y nada destacaba. */
 
+/* Los botones de un toque de Hoy (pastilla, PAS, Cookie Monster):
+   tres iguales en fila, icono arriba y palabra debajo. */
+@utility quick-btn {
+  display: flex;
+  min-height: 60px;
+  min-width: 0;
+  flex: 1 1 0%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 1rem;
+  padding: 6px 4px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+}
+
 @utility flat {
   box-shadow: inset 0 0 0 1.5px var(--border);
   transition:

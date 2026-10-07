@@ -87,10 +87,10 @@ export function PasButton() {
       <button
         type="button"
         onClick={() => void cry()}
-        className="flat flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-2xl px-3 text-sm font-semibold"
+        className="flat quick-btn"
         style={{ background: "var(--surface)", color: flash ? "var(--ok)" : error ? "var(--accent)" : "var(--fg)" }}
       >
-        <span aria-hidden="true">{flash ? "✓" : "💧"}</span>
+        <span aria-hidden="true" className="text-lg leading-none">{flash ? "✓" : "💧"}</span>
         <span role="status">{flash ? "PAS guardado" : error ? "No ha salido" : "He llorado"}</span>
       </button>
 
