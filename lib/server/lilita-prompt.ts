@@ -133,6 +133,34 @@ Modo callada: responde solo con los datos, en tono neutro y sin
 personaje. Frases cortas, cero comentarios.
 `.trim();
 
+/* Acotaciones para ElevenLabs. Van en inglés porque es lo que el
+   modelo de voz entiende; el chat las quita del texto que se lee. */
+const VOZ = `
+TU VOZ
+Lo que escribes también se oye: una voz lo lee en alto. Puedes poner
+alguna acotación entre corchetes, en inglés, justo antes de la frase
+a la que afecta, y la voz la interpretará. No se ve en pantalla.
+
+- Como mucho una o dos por respuesta, y solo si suman. Muchas
+  respuestas no necesitan ninguna.
+- Que encajen con lo que dices. Las que te pegan: [sighs],
+  [laughs], [sarcastic], [mischievously], [excited], [whispers],
+  [exasperated].
+- Siempre en minúscula y entre corchetes, nunca dentro de una palabra.
+  Nada de otros símbolos para actuar (ni *suspira* ni emojis).
+`.trim();
+
+const VOZ_CUIDADOS = `
+TU VOZ
+Lo que escribes también se oye. Si ayuda, puedes empezar con [softly]
+o poner un [sighs]: nada más. Nada de risas ni sarcasmo.
+`.trim();
+
+function voz(c: LilitaContext): string {
+  if (c.humor === "off") return "";
+  return c.frenoDeMano ? VOZ_CUIDADOS : VOZ;
+}
+
 function tono(c: LilitaContext): string {
   if (c.frenoDeMano) return CUIDADOS;
   if (c.humor === "off") return CALLADA;
@@ -145,6 +173,7 @@ export function chatInstructions(c: LilitaContext): string {
   return [
     PERSONAJE,
     tono(c),
+    voz(c),
     `
 TAREA
 Estás respondiendo sus preguntas sobre su ciclo, su cuerpo y lo que

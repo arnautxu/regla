@@ -10,6 +10,7 @@ import {
 } from "ai";
 import { useLiveQuery } from "dexie-react-hooks";
 import { motion } from "motion/react";
+import { stripVoiceTags } from "@/lib/voice-tags";
 import { Lilita } from "@/components/lilita";
 import { buildContext } from "@/lib/ai-context";
 import { computeInsights } from "@/lib/insights";
@@ -133,8 +134,7 @@ export default function Chat() {
     if (!voiceOn || status !== "ready" || was === "ready") return;
     const last = messages.at(-1);
     if (last?.role !== "assistant") return;
-    const text = textOf(last);
-    if (text) void voice.speak(last.id, text);
+    if (textOf(last)) void voice.speak(last.id, rawOf(last));
   }, [status, messages, voiceOn, voice]);
 
   function send(text: string) {
@@ -268,7 +268,7 @@ export default function Chat() {
                     if (sounding) voice.stop();
                     else {
                       voice.unlock();
-                      void voice.speak(m.id, text);
+                      void voice.speak(m.id, rawOf(m));
                     }
                   }}
                   className="flex min-h-[32px] items-center gap-1.5 px-1 text-xs font-semibold"
@@ -341,8 +341,14 @@ export default function Chat() {
   );
 }
 
-function textOf(m: UIMessage): string {
+/** Lo que dice, tal cual: con las acotaciones para la voz. */
+function rawOf(m: UIMessage): string {
   return m.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
+}
+
+/** Lo que se lee en pantalla: sin acotaciones. */
+function textOf(m: UIMessage): string {
+  return stripVoiceTags(rawOf(m));
 }
 
 function SpeakerIcon({ on }: { on: boolean }) {
