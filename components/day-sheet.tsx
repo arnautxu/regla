@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -14,14 +14,26 @@ import {
   setSex,
   toKey,
   upsertDay,
+  type DayLog,
 } from "@/lib/db";
 import { summarize } from "@/lib/day-summary";
-import { ANGER_LEVELS, ANIMOS, CRY_INTENSITIES, CRY_REASONS, SINTOMAS, labelOf } from "@/lib/labels";
+import {
+  ANGER_LEVELS,
+  ANIMOS,
+  CRY_INTENSITIES,
+  CRY_REASONS,
+  SEX_ACTIVIDADES,
+  SEX_PROTECCION,
+  SINTOMAS,
+  flowOptions,
+  labelOf,
+  labelsOf,
+} from "@/lib/labels";
 import { formatMinutes } from "@/lib/episodes";
 import { capitalize } from "@/lib/format";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
 import { FlowRow } from "./flow-row";
-import { MoodRow } from "./mood-row";
+import { MoodRow, moodLabel } from "./mood-row";
 import { PillRow } from "./pill-row";
 import { SexRow } from "./sex-row";
 import { TagPicker } from "./tag-picker";
@@ -160,12 +172,110 @@ function useSwipeToClose(
   }, [panel, abierta]);
 }
 
+
+/* ═══════════════════════════════════════════════════════════════
+   UNA PREGUNTA CADA VEZ
+
+   La hoja era el formulario entero abierto de golpe: siete bloques,
+   cuarenta botones y una nota, todos a la vez y todos con el mismo
+   peso. Para apuntar "poco, regular" había que encontrar dos filas
+   entre todo eso, y para saber qué quedaba por contestar había que
+   leer cuál de los cuarenta estaba encendido.
+
+   Ahora va por pasos. Cada paso es una pregunta en grande, con sus
+   botones grandes. Las de una sola respuesta avanzan solas al tocar;
+   las de varias tienen "Seguir" (o "Nada", si no marcas ninguna). Al
+   final, el día en una lista: cada fila dice lo apuntado y se toca
+   para cambiarla, y desde ahí se vuelve directo a la lista.
+
+   Un día que ya tiene sangrado y "cómo va" abre directamente en la
+   lista: volver a pasar por todas las preguntas para cambiar una
+   sería castigar a quien ya lo había hecho.
+   ═══════════════════════════════════════════════════════════════ */
+
+export type Paso = "flow" | "dia" | "duele" | "animo" | "pastilla" | "sexo" | "resumen";
+
+/** Lo que tarda en pasar a la siguiente pregunta tras un toque: lo
+    justo para ver el botón encenderse y saber qué ha quedado. */
+const AVANCE_MS = 320;
+
+const NOMBRE: Record<Paso, string> = {
+  flow: "Sangrado",
+  dia: "Cómo va el día",
+  duele: "Qué te duele",
+  animo: "Ánimo",
+  pastilla: "Pastilla",
+  sexo: "Sexo",
+  resumen: "El día entero",
+};
+
+function pregunta(paso: Paso, hoy: boolean, acabaRegla: boolean): { titulo: string; ayuda?: string } {
+  switch (paso) {
+    case "flow":
+      return {
+        titulo: hoy ? "¿Cuánto sangras hoy?" : "¿Cuánto sangraste?",
+        ayuda: acabaRegla ? "Si ya no, «Se acabó» cierra la regla." : undefined,
+      };
+    case "dia":
+      return { titulo: hoy ? "¿Cómo va el día?" : "¿Qué tal fue el día?" };
+    case "duele":
+      return { titulo: hoy ? "¿Te duele algo?" : "¿Te dolió algo?", ayuda: "Marca todo lo que toque." };
+    case "animo":
+      return { titulo: "¿Y de ánimo?", ayuda: "Puede ser más de una." };
+    case "pastilla":
+      return { titulo: hoy ? "¿Te has tomado la pastilla?" : "¿Te tomaste la pastilla?" };
+    case "sexo":
+      return { titulo: hoy ? "¿Ha habido sexo?" : "¿Hubo sexo?" };
+    case "resumen":
+      return { titulo: "Así queda el día" };
+  }
+}
+
+/** ¿Está contestado este paso? Lo que pinta la barra de progreso. */
+function contestadoEn(paso: Paso, log: DayLog | null | undefined): boolean {
+  if (!log) return false;
+  switch (paso) {
+    case "flow":
+      return log.flow !== undefined;
+    case "dia":
+      return log.painLevel !== undefined;
+    case "duele":
+      return !!log.symptoms?.length;
+    case "animo":
+      return !!log.mood?.length;
+    case "pastilla":
+      return log.pill !== undefined;
+    case "sexo":
+      return log.sex !== undefined;
+    case "resumen":
+      return false;
+  }
+}
+
+/** Dónde se abre: en la primera de las dos preguntas de cada día que
+    falte, o en la lista si ya están las dos. */
+function pasoInicial(log: DayLog | null): Paso {
+  if (log?.flow === undefined) return "flow";
+  if (log.painLevel === undefined) return "dia";
+  return "resumen";
+}
+
+function hora(iso: string | undefined): string | undefined {
+  return iso
+    ? new Date(iso).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
+    : undefined;
+}
+
 export function DaySheet({
   day: base,
+  startAt,
   onClose,
   onPeriodStart,
 }: {
   day: SheetDay | null;
+  /** Abrir directamente en esta pregunta (las casillas de Hoy). Sin
+      él, la hoja decide según lo que ya haya apuntado. */
+  startAt?: Paso;
   onClose: () => void;
   /**
    * Ha empezado una regla nueva aquí dentro.
@@ -181,6 +291,7 @@ export function DaySheet({
   const panel = useRef<HTMLDivElement>(null);
   const { settings, cycles, dateKey: hoyKey } = useLilaila();
   const empezoRegla = useRef(false);
+  const avance = useRef<number | undefined>(undefined);
 
   // <dialog> nativo: da trampa de foco, Escape y scroll bloqueado sin
   // escribirlos a mano, y todos suelen salir mal escritos a mano.
@@ -196,6 +307,8 @@ export function DaySheet({
     if (!base && el.open) el.close();
   }, [base]);
 
+  useEffect(() => () => window.clearTimeout(avance.current), []);
+
   const abierta = Boolean(base);
   useSwipeToClose(panel, abierta, () => ref.current?.close());
 
@@ -207,11 +320,19 @@ export function DaySheet({
   // Las flechas ‹ › mueven la hoja por días sin volver al calendario.
   // El desplazamiento vuelve a 0 cada vez que se abre en otro día.
   const [offset, setOffset] = useState(0);
+  // null = todavía sin decidir: se decide en cuanto llega el día de
+  // la base de datos (ver pasoInicial).
+  const [paso, setPaso] = useState<Paso | null>(startAt ?? null);
+  // Se ha entrado a una pregunta desde la lista: al contestarla se
+  // vuelve a la lista, no a la pregunta siguiente.
+  const [volver, setVolver] = useState(false);
   const [ultimaClave, setUltimaClave] = useState(base?.key);
   if (base?.key !== ultimaClave) {
     setUltimaClave(base?.key);
     setOffset(0);
     setCryError("");
+    setPaso(startAt ?? null);
+    setVolver(false);
   }
 
   const day: SheetDay | null = useMemo(() => {
@@ -221,10 +342,18 @@ export function DaySheet({
     return { key, date: fromKey(key), isToday: key === hoyKey, isFuture: key > hoyKey };
   }, [base, offset, hoyKey]);
 
-  const log = useLiveQuery(
-    async () => (day ? ((await db.days.get(day.key)) ?? null) : null),
+  // Con la clave dentro: al saltar de día, useLiveQuery sigue
+  // devolviendo el día anterior hasta que llega el nuevo, y el paso
+  // inicial se decidiría con lo que no es.
+  const leido = useLiveQuery(
+    async () => (day ? { key: day.key, log: (await db.days.get(day.key)) ?? null } : null),
     [day?.key],
   );
+  const log = leido && day && leido.key === day.key ? leido.log : undefined;
+
+  if (paso === null && day && log !== undefined) {
+    setPaso(day.isFuture ? "resumen" : pasoInicial(log));
+  }
 
   // La racha necesita todos los días, así que solo se calcula con la
   // hoja abierta y la pastilla encendida. Sin esas dos guardas, cada
@@ -265,13 +394,71 @@ export function DaySheet({
     vecinos?.ayer && vecinos.ayer > 0 && !(vecinos.manyana && vecinos.manyana > 0),
   );
 
+  const pasos: Paso[] = useMemo(
+    () => [
+      "flow",
+      "dia",
+      "duele",
+      "animo",
+      ...(settings.pill.enabled ? (["pastilla"] as const) : []),
+      "sexo",
+      "resumen",
+    ],
+    [settings.pill.enabled],
+  );
+  const actual = paso ?? null;
+  const indice = actual ? pasos.indexOf(actual) : -1;
+
+  function irA(p: Paso) {
+    window.clearTimeout(avance.current);
+    setPaso(p);
+  }
+
+  function siguiente() {
+    if (volver) {
+      setVolver(false);
+      irA("resumen");
+      return;
+    }
+    irA(pasos[Math.min(indice + 1, pasos.length - 1)]);
+  }
+
+  function atras() {
+    if (volver) {
+      setVolver(false);
+      irA("resumen");
+      return;
+    }
+    if (indice > 0) irA(pasos[indice - 1]);
+  }
+
+  /** Tras una pregunta de una sola respuesta: si se ha marcado algo,
+      a la siguiente. Si se ha desmarcado, se queda: está corrigiendo. */
+  function contestada(marcada: boolean) {
+    window.clearTimeout(avance.current);
+    if (marcada) avance.current = window.setTimeout(siguiente, AVANCE_MS);
+  }
+
+  function cambiarDia(delta: number) {
+    haptic(6);
+    window.clearTimeout(avance.current);
+    setOffset((o) => o + delta);
+    setPaso(null);
+    setVolver(false);
+  }
+
+  const q = actual ? pregunta(actual, day?.isToday ?? false, terminaLaRegla) : null;
+
   return (
     <dialog
       ref={ref}
       onClose={() => {
         // Al volver a abrirla, siempre en el día que se tocó, no en el
         // último al que se llegó con las flechas.
+        window.clearTimeout(avance.current);
         setOffset(0);
+        setPaso(null);
+        setVolver(false);
         onClose();
         if (empezoRegla.current) {
           empezoRegla.current = false;
@@ -293,285 +480,498 @@ export function DaySheet({
       {day && (
         <div ref={panel} tabIndex={-1} className="sheet-panel flex flex-col outline-none">
           {/* Cabecera, cuerpo y pie como tres piezas: solo el cuerpo se
-              desplaza, si hace falta. Antes la hoja entera era el
-              contenedor con scroll y el pie "pegado" con sticky; en
-              iPhone el pie se quedaba a media hoja y la Nota asomaba
-              por debajo de él. */}
+              desplaza, si hace falta. */}
           <div className="flex shrink-0 flex-col gap-xs px-lg pt-sm">
-          <div
-            aria-hidden="true"
-            className="mx-auto h-1 w-10 rounded-full"
-            style={{ background: "var(--border-strong)" }}
-          />
+            <div
+              aria-hidden="true"
+              className="mx-auto h-1 w-10 rounded-full"
+              style={{ background: "var(--border-strong)" }}
+            />
 
-          <header className="flex items-start justify-between gap-md">
-            <div>
-              <h2 className="font-display text-lg font-bold tracking-[-0.02em]">
-                {/* date-fns da los días en minúscula en es; en un título
-                    eso se lee como una errata. */}
-                {day.isToday
-                  ? `Hoy, ${format(day.date, "EEEE d", { locale: es })}`
-                  : capitalize(format(day.date, "EEEE d 'de' MMMM", { locale: es }))}
-              </h2>
-              <p className="text-xs text-faint">{resumen.estado}</p>
-            </div>
-            <div className="-mr-2 flex shrink-0">
-              {[
-                { delta: -1, label: "Día anterior", d: "M14.5 5 L8 12 L14.5 19", off: false },
-                { delta: 1, label: "Día siguiente", d: "M9.5 5 L16 12 L9.5 19", off: day.key >= hoyKey },
-              ].map((b) => (
-                <button
-                  key={b.delta}
-                  type="button"
-                  aria-label={b.label}
-                  disabled={b.off}
-                  onClick={() => {
-                    haptic(6);
-                    setOffset((o) => o + b.delta);
-                  }}
-                  className="flex size-10 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:opacity-25"
-                  style={{ color: "var(--fg-muted)" }}
-                >
-                  <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d={b.d} />
-                  </svg>
-                </button>
-              ))}
-            </div>
-          </header>
+            <header className="flex items-start justify-between gap-md">
+              <div>
+                <h2 className="font-display text-lg font-bold tracking-[-0.02em]">
+                  {/* date-fns da los días en minúscula en es; en un título
+                      eso se lee como una errata. */}
+                  {day.isToday
+                    ? `Hoy, ${format(day.date, "EEEE d", { locale: es })}`
+                    : capitalize(format(day.date, "EEEE d 'de' MMMM", { locale: es }))}
+                </h2>
+                <p className="text-xs text-faint">{resumen.estado}</p>
+              </div>
+              <div className="-mr-2 flex shrink-0">
+                {[
+                  { delta: -1, label: "Día anterior", d: "M14.5 5 L8 12 L14.5 19", off: false },
+                  { delta: 1, label: "Día siguiente", d: "M9.5 5 L16 12 L9.5 19", off: day.key >= hoyKey },
+                ].map((b) => (
+                  <button
+                    key={b.delta}
+                    type="button"
+                    aria-label={b.label}
+                    disabled={b.off}
+                    onClick={() => cambiarDia(b.delta)}
+                    className="flex size-10 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:opacity-25"
+                    style={{ color: "var(--fg-muted)" }}
+                  >
+                    <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d={b.d} />
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            </header>
+
+            {/* Por dónde vas: un tramo por pregunta, cuadrados y con
+                huecos finos como el anillo de Hoy. Relleno = ya
+                contestada. Cada tramo se toca para saltar ahí. */}
+            {!day.isFuture && actual && (
+              <nav aria-label="Preguntas del día" className="-mx-1 flex">
+                {pasos.map((p) => {
+                  const hecho = p === "resumen" ? false : contestadoEn(p, log);
+                  const aqui = p === actual;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      aria-label={NOMBRE[p]}
+                      aria-current={aqui ? "step" : undefined}
+                      onClick={() => {
+                        haptic(6);
+                        setVolver(false);
+                        irA(p);
+                      }}
+                      className="flex flex-1 items-center px-px py-2"
+                    >
+                      <span
+                        className="h-1.5 w-full transition-colors duration-200"
+                        style={{
+                          background: aqui
+                            ? "var(--fg)"
+                            : hecho
+                              ? "var(--accent)"
+                              : "var(--border)",
+                        }}
+                      />
+                    </button>
+                  );
+                })}
+              </nav>
+            )}
           </div>
 
-          <div data-sheet-body className="flex min-h-0 flex-1 flex-col gap-sm overflow-y-auto overscroll-contain px-lg pt-2xs pb-md">
-          {day.isFuture ? (
-            <p className="text-sm leading-relaxed text-muted">
-              Este día todavía no ha pasado. Cuando llegue me cuentas.
-            </p>
-          ) : (
-            <>
-              {/* Todo a la vista y en el orden en que se piensa: cuánto
-                  sangras, cómo va el día, qué duele, cómo estás. Antes
-                  la mitad vivía detrás de "Añadir o cambiar detalles" y
-                  un resumen en frases repetía lo que ya dicen los
-                  botones encendidos. */}
+          <div data-sheet-body className="flex min-h-[340px] flex-1 flex-col gap-md overflow-y-auto overscroll-contain px-lg pt-xs pb-md">
+            {day.isFuture ? (
+              <p className="text-sm leading-relaxed text-muted">
+                Este día todavía no ha pasado. Cuando llegue me cuentas.
+              </p>
+            ) : actual && q ? (
+              <div key={`${day.key}-${actual}`} className="paso-in flex flex-col gap-md">
+                <div>
+                  {/* La lista no es una pregunta: título pequeño, que
+                      quepan las filas y la nota sin desplazar. */}
+                  <h3
+                    className={`text-balance font-display font-bold leading-[1.1] tracking-[-0.02em] ${
+                      actual === "resumen" ? "sr-only" : "text-2xl"
+                    }`}
+                  >
+                    {q.titulo}
+                  </h3>
+                  {q.ayuda && <p className="mt-1 text-sm text-muted">{q.ayuda}</p>}
+                </div>
 
-              {!!log?.cryEvents?.length && (
-                <section aria-label="Episodios PAS" className="flex flex-col gap-2">
-                  {log.cryEvents.map((event) => (
-                    <div key={event.id} className="rounded-xl px-3 py-2.5 text-sm" style={{ background: "var(--bg)" }}>
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="font-semibold">
-                          💧 {labelOf(CRY_REASONS, event.reason) ?? "PAS"}
-                          <span className="ml-2 font-normal text-faint">
-                            {new Date(event.at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                        </p>
-                        <button
-                          type="button"
-                          className="shrink-0 text-xs underline underline-offset-2"
-                          style={{ color: "var(--fg-muted)" }}
-                          aria-label="Eliminar este episodio PAS"
-                          onClick={() => {
-                            if (!window.confirm("¿Eliminar este episodio PAS?")) return;
-                            haptic(8);
-                            setCryError("");
-                            void removeCryEvent(day.key, event.id).catch(() =>
-                              setCryError("No se ha podido eliminar este PAS."),
-                            );
-                          }}
-                        >
-                          Eliminar
-                        </button>
-                      </div>
-                      {event.intensity && (
-                        <p className="mt-1 text-xs text-muted">
-                          Intensidad: {CRY_INTENSITIES.find((option) => option.value === event.intensity)?.label.toLowerCase()}
-                        </p>
-                      )}
-                      {event.note && <p className="mt-1 whitespace-pre-wrap text-muted">{event.note}</p>}
-                    </div>
-                  ))}
-                  {cryError && <p className="text-xs" style={{ color: "var(--accent)" }} role="alert">{cryError}</p>}
-                </section>
-              )}
+                {actual === "flow" && (
+                  <FlowRow
+                    bare
+                    value={log?.flow}
+                    onChange={(v) => {
+                      // Empieza una regla NUEVA: ni ese día sangraba ya ni
+                      // hay ninguna abierta. Es el único caso que merece
+                      // la fanfarria; los días siguientes son continuar.
+                      const yaSangraba = log?.flow !== undefined && log.flow > 0;
+                      const ultima = cycles[cycles.length - 1];
+                      if (v !== undefined && v > 0 && !yaSangraba && !(ultima && !ultima.endDate)) {
+                        empezoRegla.current = true;
+                      }
+                      void upsertDay(day.key, { flow: v });
+                      contestada(v !== undefined);
+                    }}
+                    dateKey={day.key}
+                    endsPeriod={terminaLaRegla}
+                  />
+                )}
 
-              {!!log?.angerEvents?.length && (
-                <section aria-label="Cookie Monster" className="flex flex-col gap-2">
-                  {log.angerEvents.map((event) => (
-                    <div key={event.id} className="rounded-xl px-3 py-2.5 text-sm" style={{ background: "var(--cookie-bg)" }}>
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="font-semibold" style={{ color: "var(--cookie)" }}>
-                          🍪 {labelOf(ANGER_LEVELS, event.level) ?? "Cookie Monster"}
-                          <span className="ml-2 font-normal text-faint">
-                            {new Date(event.at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                        </p>
-                        <button
-                          type="button"
-                          className="shrink-0 text-xs underline underline-offset-2"
-                          style={{ color: "var(--fg-muted)" }}
-                          aria-label="Eliminar este enfado"
-                          onClick={() => {
-                            if (!window.confirm("¿Eliminar este enfado?")) return;
-                            haptic(8);
-                            setCryError("");
-                            void removeAngerEvent(day.key, event.id).catch(() =>
-                              setCryError("No se ha podido eliminar este enfado."),
-                            );
-                          }}
-                        >
-                          Eliminar
-                        </button>
-                      </div>
-                      <p className="mt-1 text-xs text-muted">
-                        {event.endedAt
-                          ? `Se pasó en ${formatMinutes(Math.max(1, (new Date(event.endedAt).getTime() - new Date(event.at).getTime()) / 60000))}`
-                          : "Sin cerrar con «se me ha pasado»"}
-                      </p>
-                    </div>
-                  ))}
-                </section>
-              )}
-
-              {/* El sangrado se queda siempre fuera del desplegable.
-                  Es el 90% de lo que se viene a hacer aquí, y
-                  esconderlo tras un "añadir más" sería cobrarle un
-                  toque extra al gesto más frecuente de la app. */}
-              <FlowRow
-                value={log?.flow}
-                onChange={(v) => {
-                  // Empieza una regla NUEVA: ni ese día sangraba ya ni
-                  // hay ninguna abierta. Es el único caso que merece
-                  // la fanfarria; los días siguientes son continuar.
-                  const yaSangraba = log?.flow !== undefined && log.flow > 0;
-                  const ultima = cycles[cycles.length - 1];
-                  if (v !== undefined && v > 0 && !yaSangraba && !(ultima && !ultima.endDate)) {
-                    empezoRegla.current = true;
-                  }
-                  void upsertDay(day.key, { flow: v });
-                }}
-                dateKey={day.key}
-                endsPeriod={terminaLaRegla}
-              />
-
-            </>
-          )}
-
-          {!day.isFuture && (
-            <>
-              <MoodRow
-                value={log ?? undefined}
-                onChange={(patch) => void upsertDay(day.key, patch)}
-                dateKey={day.key}
-              />
-
-              <TagPicker
-                label="Qué te duele"
-                options={SINTOMAS}
-                selected={log?.symptoms ?? []}
-                onToggle={(v) =>
-                  void upsertDay(day.key, {
-                    symptoms: toggle(log?.symptoms, v),
-                  })
-                }
-              />
-
-              <TagPicker
-                label="Ánimo"
-                options={ANIMOS}
-                selected={log?.mood ?? []}
-                onToggle={(v) =>
-                  void upsertDay(day.key, { mood: toggle(log?.mood, v) })
-                }
-              />
-
-              {/* Lo de cada día, uno al lado del otro: dos preguntas de
-                  sí o no no merecen dos filas a lo ancho. */}
-              <div
-                className="grid gap-3"
-                style={{ gridTemplateColumns: settings.pill.enabled ? "1fr 1fr" : "1fr" }}
-              >
-                {settings.pill.enabled && (
-                  <PillRow
-                    value={log?.pill}
-                    takenAt={log?.pillAt}
-                    streak={streak}
-                    onChange={(v) =>
-                      void setPill(day.key, v, day.isToday ? new Date() : undefined)
-                    }
+                {actual === "dia" && (
+                  <MoodRow
+                    bare
+                    value={log ?? undefined}
+                    onChange={(patch) => {
+                      void upsertDay(day.key, patch);
+                      contestada(patch.painLevel !== undefined);
+                    }}
                     dateKey={day.key}
                   />
                 )}
-                <SexRow
-                  only="answer"
-                  log={log ?? undefined}
-                  onSet={(v) => void setSex(day.key, v)}
-                  onPatch={(patch) => void upsertDay(day.key, patch)}
-                  dateKey={day.key}
-                />
+
+                {actual === "duele" && (
+                  <TagPicker
+                    bare
+                    label="Qué te duele"
+                    options={SINTOMAS}
+                    selected={log?.symptoms ?? []}
+                    onToggle={(v) =>
+                      void upsertDay(day.key, { symptoms: toggle(log?.symptoms, v) })
+                    }
+                  />
+                )}
+
+                {actual === "animo" && (
+                  <TagPicker
+                    bare
+                    label="Ánimo"
+                    options={ANIMOS}
+                    selected={log?.mood ?? []}
+                    onToggle={(v) => void upsertDay(day.key, { mood: toggle(log?.mood, v) })}
+                  />
+                )}
+
+                {actual === "pastilla" && (
+                  <PillRow
+                    bare
+                    value={log?.pill}
+                    takenAt={log?.pillAt}
+                    streak={streak}
+                    onChange={(v) => {
+                      void setPill(day.key, v, day.isToday ? new Date() : undefined);
+                      contestada(v !== undefined);
+                    }}
+                    dateKey={day.key}
+                  />
+                )}
+
+                {actual === "sexo" && (
+                  <>
+                    <SexRow
+                      bare
+                      only="answer"
+                      log={log ?? undefined}
+                      onSet={(v) => {
+                        void setSex(day.key, v);
+                        // Con un sí se queda: viene el detalle debajo.
+                        contestada(v === false);
+                      }}
+                      onPatch={(patch) => void upsertDay(day.key, patch)}
+                      dateKey={day.key}
+                    />
+                    <SexRow
+                      only="detail"
+                      log={log ?? undefined}
+                      onSet={(v) => void setSex(day.key, v)}
+                      onPatch={(patch) => void upsertDay(day.key, patch)}
+                      dateKey={day.key}
+                    />
+                  </>
+                )}
+
+                {actual === "resumen" && (
+                  <Resumen
+                    log={log ?? undefined}
+                    pasos={pasos}
+                    acabaRegla={terminaLaRegla}
+                    onEditar={(p) => {
+                      haptic(8);
+                      setVolver(true);
+                      irA(p);
+                    }}
+                  />
+                )}
+
+                {actual === "resumen" && !!log?.cryEvents?.length && (
+                  <section aria-label="Episodios PAS" className="flex flex-col gap-2">
+                    {log.cryEvents.map((event) => (
+                      <div key={event.id} className="rounded-xl px-3 py-2.5 text-sm" style={{ background: "var(--bg)" }}>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-semibold">
+                            💧 {labelOf(CRY_REASONS, event.reason) ?? "PAS"}
+                            <span className="ml-2 font-normal text-faint">{hora(event.at)}</span>
+                          </p>
+                          <button
+                            type="button"
+                            className="shrink-0 text-xs underline underline-offset-2"
+                            style={{ color: "var(--fg-muted)" }}
+                            aria-label="Eliminar este episodio PAS"
+                            onClick={() => {
+                              if (!window.confirm("¿Eliminar este episodio PAS?")) return;
+                              haptic(8);
+                              setCryError("");
+                              void removeCryEvent(day.key, event.id).catch(() =>
+                                setCryError("No se ha podido eliminar este PAS."),
+                              );
+                            }}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                        {event.intensity && (
+                          <p className="mt-1 text-xs text-muted">
+                            Intensidad: {CRY_INTENSITIES.find((option) => option.value === event.intensity)?.label.toLowerCase()}
+                          </p>
+                        )}
+                        {event.note && <p className="mt-1 whitespace-pre-wrap text-muted">{event.note}</p>}
+                      </div>
+                    ))}
+                    {cryError && <p className="text-xs" style={{ color: "var(--accent)" }} role="alert">{cryError}</p>}
+                  </section>
+                )}
+
+                {actual === "resumen" && !!log?.angerEvents?.length && (
+                  <section aria-label="Cookie Monster" className="flex flex-col gap-2">
+                    {log.angerEvents.map((event) => (
+                      <div key={event.id} className="rounded-xl px-3 py-2.5 text-sm" style={{ background: "var(--cookie-bg)" }}>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-semibold" style={{ color: "var(--cookie)" }}>
+                            🍪 {labelOf(ANGER_LEVELS, event.level) ?? "Cookie Monster"}
+                            <span className="ml-2 font-normal text-faint">{hora(event.at)}</span>
+                          </p>
+                          <button
+                            type="button"
+                            className="shrink-0 text-xs underline underline-offset-2"
+                            style={{ color: "var(--fg-muted)" }}
+                            aria-label="Eliminar este enfado"
+                            onClick={() => {
+                              if (!window.confirm("¿Eliminar este enfado?")) return;
+                              haptic(8);
+                              setCryError("");
+                              void removeAngerEvent(day.key, event.id).catch(() =>
+                                setCryError("No se ha podido eliminar este enfado."),
+                              );
+                            }}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                        <p className="mt-1 text-xs text-muted">
+                          {event.endedAt
+                            ? `Se pasó en ${formatMinutes(Math.max(1, (new Date(event.endedAt).getTime() - new Date(event.at).getTime()) / 60000))}`
+                            : "Sin cerrar con «se me ha pasado»"}
+                        </p>
+                      </div>
+                    ))}
+                  </section>
+                )}
+
+                {actual === "resumen" && (
+                  <section>
+                    <label
+                      htmlFor={`nota-${day.key}`}
+                      className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint"
+                    >
+                      Nota
+                    </label>
+                    <textarea
+                      key={day.key}
+                      id={`nota-${day.key}`}
+                      defaultValue={log?.note ?? ""}
+                      onBlur={(e) =>
+                        void upsertDay(day.key, {
+                          note: e.target.value.trim() || undefined,
+                        })
+                      }
+                      rows={1}
+                      placeholder="Lo que quieras acordarte"
+                      className="mt-1.5 w-full resize-none rounded-xl px-3 py-2 text-sm outline-none field-sizing-content"
+                      style={{ background: "var(--surface)", boxShadow: "inset 0 0 0 1.5px var(--border)" }}
+                    />
+                  </section>
+                )}
               </div>
-              <SexRow
-                only="detail"
-                log={log ?? undefined}
-                onSet={(v) => void setSex(day.key, v)}
-                onPatch={(patch) => void upsertDay(day.key, patch)}
-                dateKey={day.key}
-              />
-
-              <section>
-                <label
-                  htmlFor={`nota-${day.key}`}
-                  className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint"
-                >
-                  Nota
-                </label>
-                <textarea
-                  key={day.key}
-                  id={`nota-${day.key}`}
-                  defaultValue={log?.note ?? ""}
-                  onBlur={(e) =>
-                    void upsertDay(day.key, {
-                      note: e.target.value.trim() || undefined,
-                    })
-                  }
-                  rows={1}
-                  placeholder="Lo que quieras acordarte"
-                  className="mt-1.5 w-full resize-none rounded-xl px-3 py-2 text-sm outline-none field-sizing-content"
-                  style={{ background: "var(--surface)", boxShadow: "inset 0 0 0 1.5px var(--border)" }}
-                />
-              </section>
-
-            </>
-          )}
+            ) : null}
           </div>
 
-          {/* Cada toque escribe al momento, y ahora la hoja lo dice
-              junto al botón: antes "Guardar día" sugería que sin
-              pulsarlo se perdía lo marcado. La nota es lo único que
-              escribe al perder el foco, y el blur ocurre antes que el
-              click, así que llega. Pegado abajo para que "Listo" esté
-              siempre a mano aunque la hoja sea larga. */}
+          {/* El pie cambia con el paso. En las preguntas: volver atrás
+              y seguir (o saltar). En la lista: "Listo". Cada toque
+              escribe al momento, así que saltar o cerrar a medias no
+              pierde nada de lo ya marcado. */}
           <div
             className="flex shrink-0 items-center gap-md border-t border-line px-lg pt-sm"
             style={{ paddingBottom: "calc(var(--spacing-sm) + env(safe-area-inset-bottom))" }}
           >
-            <p className="flex-1 text-xs font-semibold" style={{ color: "var(--ok)" }}>
-              {day.isFuture ? "" : "✓ Se guarda al momento"}
-            </p>
-            <button
-              type="button"
-              onClick={() => ref.current?.close()}
-              className="min-h-[46px] rounded-full px-xl font-display text-base font-bold tracking-[-0.01em] transition-[transform,box-shadow] duration-150 active:scale-[0.98] active:translate-x-[1px] active:translate-y-[1px]"
-              style={{
-                background: "var(--accent)",
-                color: "var(--on-accent)",
-                boxShadow: "3px 3px 0 0 var(--depth-shadow)",
-              }}
-            >
-              Listo
-            </button>
+            {day.isFuture || actual === "resumen" || !actual ? (
+              <>
+                <p className="flex-1 text-xs font-semibold" style={{ color: "var(--ok)" }}>
+                  {day.isFuture ? "" : "✓ Se guarda al momento"}
+                </p>
+                <PieBoton fuerte onClick={() => ref.current?.close()}>
+                  Listo
+                </PieBoton>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic(6);
+                    atras();
+                  }}
+                  disabled={indice <= 0 && !volver}
+                  className="flex min-h-[46px] items-center gap-1 pr-2 text-sm font-semibold disabled:opacity-0"
+                  style={{ color: "var(--fg-muted)" }}
+                >
+                  <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M14.5 5 L8 12 L14.5 19" />
+                  </svg>
+                  {volver ? "Lista" : "Atrás"}
+                </button>
+                <span className="flex-1" />
+                {(() => {
+                  const hecho = contestadoEn(actual, log);
+                  const multiple = actual === "duele" || actual === "animo";
+                  const texto = volver
+                    ? "Hecho"
+                    : hecho
+                      ? "Seguir"
+                      : multiple
+                        ? "Nada"
+                        : "Saltar";
+                  return (
+                    <PieBoton
+                      fuerte={hecho || volver}
+                      onClick={() => {
+                        haptic(8);
+                        siguiente();
+                      }}
+                    >
+                      {texto}
+                    </PieBoton>
+                  );
+                })()}
+              </>
+            )}
           </div>
         </div>
       )}
     </dialog>
+  );
+}
+
+function PieBoton({
+  fuerte,
+  onClick,
+  children,
+}: {
+  fuerte?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="min-h-[46px] min-w-[120px] rounded-full px-xl font-display text-base font-bold tracking-[-0.01em] transition-[transform,box-shadow,background-color] duration-150 active:scale-[0.98] active:translate-x-[1px] active:translate-y-[1px]"
+      style={
+        fuerte
+          ? {
+              background: "var(--accent)",
+              color: "var(--on-accent)",
+              boxShadow: "3px 3px 0 0 var(--depth-shadow)",
+            }
+          : {
+              background: "var(--surface)",
+              color: "var(--fg)",
+              boxShadow: "inset 0 0 0 1.5px var(--border-strong)",
+            }
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
+/* ── La lista del final ─────────────────────────────────────────
+   Una fila por pregunta, con lo apuntado en palabras. Lo que falta
+   se dice ("Sin contestar") en vez de esconderse: así se ve de un
+   vistazo qué queda, y tocarlo lleva directo a esa pregunta. */
+
+function Resumen({
+  log,
+  pasos,
+  acabaRegla,
+  onEditar,
+}: {
+  log: DayLog | undefined;
+  pasos: Paso[];
+  acabaRegla: boolean;
+  onEditar: (paso: Paso) => void;
+}) {
+  function valor(p: Paso): string | undefined {
+    if (!log) return undefined;
+    switch (p) {
+      case "flow":
+        return labelOf(flowOptions(acabaRegla), log.flow);
+      case "dia":
+        return moodLabel(log);
+      case "duele":
+        return labelsOf(SINTOMAS, log.symptoms).join(", ") || undefined;
+      case "animo":
+        return labelsOf(ANIMOS, log.mood).join(", ") || undefined;
+      case "pastilla": {
+        if (log.pill === false) return "Hoy no";
+        if (log.pill !== true) return undefined;
+        const h = hora(log.pillAt);
+        return h ? `Tomada a las ${h}` : "Tomada";
+      }
+      case "sexo": {
+        if (log.sex === false) return "No";
+        if (log.sex !== true) return undefined;
+        return [
+          "Sí",
+          ...labelsOf(SEX_ACTIVIDADES, log.sexActivities).map((s) => s.toLowerCase()),
+          ...labelsOf(SEX_PROTECCION, log.sexProtection).map((s) => s.toLowerCase()),
+          ...(log.sexOrgasm ? ["me corrí"] : []),
+        ].join(" · ");
+      }
+      case "resumen":
+        return undefined;
+    }
+  }
+
+  return (
+    <ul className="-mt-2 flex flex-col">
+      {pasos
+        .filter((p) => p !== "resumen")
+        .map((p) => {
+          const v = valor(p);
+          return (
+            <li key={p} className="border-b border-line last:border-b-0">
+              <button
+                type="button"
+                onClick={() => onEditar(p)}
+                className="flex w-full items-center gap-md py-2.5 text-left"
+              >
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-faint">
+                    {NOMBRE[p]}
+                  </span>
+                  <span
+                    className="truncate text-[15px] leading-snug"
+                    style={{
+                      color: v ? "var(--fg)" : "var(--fg-faint)",
+                      fontWeight: v ? 600 : 450,
+                    }}
+                  >
+                    {v ?? "Sin contestar"}
+                  </span>
+                </span>
+                <span
+                  aria-hidden="true"
+                  className="shrink-0 text-xs font-semibold"
+                  style={{ color: v ? "var(--fg-faint)" : "var(--accent)" }}
+                >
+                  {v ? "Cambiar ›" : "Contestar ›"}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+    </ul>
   );
 }

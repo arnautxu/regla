@@ -30,27 +30,38 @@ function activeKey(value: MoodValue | undefined) {
   return "bien";
 }
 
+/** "Bien", "Regular"... en palabras, igual que lo marca la fila. */
+export function moodLabel(value: MoodValue | undefined): string | undefined {
+  const key = activeKey(value);
+  return OPTIONS.find((o) => o.key === key)?.label;
+}
+
 export function MoodRow({
   value,
   onChange,
   dateKey,
+  bare = false,
 }: {
   value: MoodValue | undefined;
   onChange: (patch: { painLevel: number | undefined; badDay: boolean }) => void;
   dateKey: string;
+  /** Sin título y con botones grandes, para la hoja por pasos */
+  bare?: boolean;
 }) {
   const current = activeKey(value);
 
   return (
-    <section aria-labelledby={`mood-${dateKey}`}>
-      <h3
-        id={`mood-${dateKey}`}
-        className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint"
-      >
-        Cómo va el día
-      </h3>
+    <section aria-labelledby={bare ? undefined : `mood-${dateKey}`} aria-label={bare ? "Cómo va el día" : undefined}>
+      {!bare && (
+        <h3
+          id={`mood-${dateKey}`}
+          className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint"
+        >
+          Cómo va el día
+        </h3>
+      )}
 
-      <div className="mt-1.5 grid grid-cols-4 gap-1.5">
+      <div className={bare ? "grid grid-cols-2 gap-2" : "mt-1.5 grid grid-cols-4 gap-1.5"}>
         {OPTIONS.map((opt) => {
           const active = current === opt.key;
           return (
@@ -65,7 +76,7 @@ export function MoodRow({
                   badDay: active ? false : opt.bad,
                 });
               }}
-              className={`min-h-[40px] rounded-xl px-1 text-xs font-medium leading-[1.15] ${CHOICE_CLASS}`}
+              className={`${bare ? "min-h-[64px] text-base" : "min-h-[40px] text-xs"} rounded-xl px-1 font-medium leading-[1.15] ${CHOICE_CLASS}`}
               style={choiceStyle(active)}
             >
               {opt.label}

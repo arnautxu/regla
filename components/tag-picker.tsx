@@ -16,19 +16,24 @@ export function TagPicker<T extends string>({
   options,
   selected,
   onToggle,
+  bare = false,
 }: {
   label: string;
   options: { value: T; label: string }[];
   selected: T[];
   onToggle: (value: T) => void;
+  /** Sin título visible y chips más grandes, para la hoja por pasos */
+  bare?: boolean;
 }) {
   return (
-    <section>
-      <h3 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
-        {label}
-      </h3>
+    <section aria-label={bare ? label : undefined}>
+      {!bare && (
+        <h3 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
+          {label}
+        </h3>
+      )}
 
-      <ul className="mt-1.5 flex flex-wrap gap-1.5">
+      <ul className={bare ? "flex flex-wrap gap-2" : "mt-1.5 flex flex-wrap gap-1.5"}>
         {options.map((opt) => {
           const active = selected.includes(opt.value);
           return (
@@ -40,7 +45,7 @@ export function TagPicker<T extends string>({
                   haptic(active ? 6 : 12);
                   onToggle(opt.value);
                 }}
-                className={`min-h-[34px] rounded-full px-3 text-sm ${CHOICE_CLASS}`}
+                className={`${bare ? "min-h-[44px] px-4 text-base" : "min-h-[34px] px-3 text-sm"} rounded-full ${CHOICE_CLASS}`}
                 style={choiceStyle(active)}
               >
                 {opt.label}
