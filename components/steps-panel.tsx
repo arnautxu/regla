@@ -18,8 +18,9 @@ import { haptic } from "@/lib/use-lilaila";
    "sexo", que no se lo pregunte cada noche; si lo primero que quiere
    apuntar es el ánimo, que vaya primero.
 
-   El sangrado no sale en la lista: va siempre el primero y no se
-   puede esconder, porque de él sale el ciclo entero.
+   El sangrado no sale en la lista: no se puede esconder, porque de él
+   sale el ciclo entero. Con la regla va el primero; si no, detrás de
+   cómo estás.
 
    Flechas para mover y no arrastrar: arrastrar en una lista dentro
    de una página que también se desplaza es una pelea con el dedo
@@ -64,7 +65,7 @@ export function StepsPanel({ settings }: { settings: Settings }) {
       >
         <li className="flex min-h-[52px] items-center gap-md py-2">
           <span className="flex-1 text-base">Sangrado</span>
-          <span className="text-xs text-faint">Siempre primero</span>
+          <span className="text-xs text-faint">Primero con la regla</span>
         </li>
         {lista.map((p, i) => {
           const visible = !hidden.includes(p);

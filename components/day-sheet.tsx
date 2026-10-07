@@ -15,6 +15,7 @@ import {
   toKey,
   upsertDay,
   DEFAULT_STEP_ORDER,
+  type Cycle,
   type DayLog,
   addCustomTag,
   type CustomTag,
@@ -228,9 +229,23 @@ const NOMBRE: Record<Paso, string> = {
   resumen: "El día entero",
 };
 
-function pregunta(paso: Paso, hoy: boolean, acabaRegla: boolean): { titulo: string; ayuda?: string } {
+function pregunta(
+  paso: Paso,
+  hoy: boolean,
+  acabaRegla: boolean,
+  conRegla: boolean,
+): { titulo: string; ayuda?: string } {
   switch (paso) {
     case "flow":
+      // Con la regla, cuánto. Sin ella no se pregunta "¿te ha bajado?"
+      // como si fuera un examen: se pregunta si ha habido algo, y si lo
+      // hay, la regla empieza sola.
+      if (!conRegla) {
+        return {
+          titulo: hoy ? "¿Has manchado algo?" : "¿Manchaste algo?",
+          ayuda: "Si no, «Nada» y seguimos.",
+        };
+      }
       return {
         titulo: hoy ? "¿Cuánto sangras hoy?" : "¿Cuánto sangraste?",
         ayuda: acabaRegla ? "Si ya no, «Se acabó» cierra la regla." : undefined,
@@ -276,30 +291,44 @@ function contestadoEn(paso: Paso, log: DayLog | null | undefined): boolean {
 }
 
 /* ── Qué preguntas y en qué orden ───────────────────────────────
-   Las elige ella en Ajustes. El sangrado va siempre primero y no se
-   puede esconder: de él sale el ciclo. La pastilla solo si lleva la
-   cuenta, y "lo tuyo" solo si se ha inventado alguna etiqueta. */
-export function pasosDe(settings: Settings): Paso[] {
+   Las elige ella en Ajustes. El sangrado no se puede esconder, porque
+   de él sale el ciclo: con la regla va el primero, y el resto de días
+   detrás del ánimo. La pastilla solo si lleva la cuenta, y "lo tuyo"
+   solo si se ha inventado alguna etiqueta. */
+export function pasosDe(settings: Settings, sangradoPrimero: boolean): Paso[] {
   const { order, hidden } = settings.steps;
   const completo = [...order, ...DEFAULT_STEP_ORDER.filter((p) => !order.includes(p))];
-  return [
-    "flow",
-    ...completo.filter((p) => {
-      if (hidden.includes(p)) return false;
-      if (p === "pastilla") return settings.pill.enabled;
-      if (p === "propias") return settings.customTags.length > 0;
-      return true;
-    }),
-    "resumen",
-  ];
+  const resto: Paso[] = completo.filter((p) => {
+    if (hidden.includes(p)) return false;
+    if (p === "pastilla") return settings.pill.enabled;
+    if (p === "propias") return settings.customTags.length > 0;
+    return true;
+  });
+  if (sangradoPrimero) return ["flow", ...resto, "resumen"];
+  // Detrás de la última de las tres preguntas de cómo estás.
+  const tras = Math.max(
+    ...(["dia", "duele", "animo"] as Paso[]).map((p) => resto.indexOf(p)),
+  );
+  resto.splice(tras + 1, 0, "flow");
+  return [...resto, "resumen"];
 }
 
-/** Dónde se abre: en la primera de las dos preguntas de cada día que
-    falte, o en la lista si ya están las dos. */
-function pasoInicial(log: DayLog | null, pasos: Paso[]): Paso {
-  if (log?.flow === undefined) return "flow";
-  if (log.painLevel === undefined && pasos.includes("dia")) return "dia";
+/** Dónde se abre: en la primera de las preguntas de cada día que
+    falte, o en la lista si ya están. El sangrado solo cuenta como
+    pregunta de cada día con la regla; el resto de días lo primero es
+    cómo va el día, y el sangrado queda más abajo. */
+function pasoInicial(log: DayLog | null, pasos: Paso[], sangradoPrimero: boolean): Paso {
+  const conDia = pasos.includes("dia");
+  if ((sangradoPrimero || !conDia) && log?.flow === undefined) return "flow";
+  if (conDia && log?.painLevel === undefined) return "dia";
   return "resumen";
+}
+
+/** ¿Cae este día dentro de una regla? Con la regla abierta, cualquier
+    día desde que empezó. */
+function enRegla(key: string, cycles: Cycle[], log: DayLog | null): boolean {
+  if (log?.flow !== undefined && log.flow > 0) return true;
+  return cycles.some((c) => key >= c.startDate && (!c.endDate || key <= c.endDate));
 }
 
 function hora(iso: string | undefined): string | undefined {
@@ -351,8 +380,6 @@ export function DaySheet({
 
   useEffect(() => () => window.clearTimeout(avance.current), []);
 
-  const abierta = Boolean(base);
-  useSwipeToClose(panel, abierta, () => ref.current?.close());
 
   // Se ajusta DURANTE el render y no en un efecto: es el patrón que
   // documenta React para "resetear estado cuando cambia una prop", y
@@ -373,7 +400,12 @@ export function DaySheet({
   const [reaccion, setReaccion] = useState<Reaccion | null>(null);
   // Hacia dónde entra la pregunta nueva: adelante desde la derecha,
   // atrás desde la izquierda. Que el gesto y la animación coincidan.
-  const [sentido, setSentido] = useState<1 | -1>(1);
+  // 0 = sin animación: la primera pregunta al abrir ya llega subiendo
+  // con la hoja, y deslizarla además de lado era doble movimiento.
+  const [sentido, setSentido] = useState<0 | 1 | -1>(0);
+  // El orden de las preguntas se decide al abrir y no se mueve: si
+  // marcar sangrado lo cambiara a mitad, la siguiente saltaría.
+  const [sangradoPrimero, setSangradoPrimero] = useState<boolean | null>(null);
   // Se ha llegado a la lista contestando de corrido: Lilita lo celebra.
   const [terminado, setTerminado] = useState(false);
   const toque = useRef<{ x: number; y: number } | null>(null);
@@ -386,6 +418,8 @@ export function DaySheet({
     setVolver(false);
     setReaccion(null);
     setTerminado(false);
+    setSentido(0);
+    setSangradoPrimero(null);
   }
 
   const day: SheetDay | null = useMemo(() => {
@@ -404,10 +438,11 @@ export function DaySheet({
   );
   const log = leido && day && leido.key === day.key ? leido.log : undefined;
 
-  const pasos: Paso[] = useMemo(() => pasosDe(settings), [settings]);
-
-  if (paso === null && day && log !== undefined) {
-    setPaso(day.isFuture ? "resumen" : pasoInicial(log, pasos));
+  if (sangradoPrimero === null && day && log !== undefined) {
+    const primero = enRegla(day.key, cycles, log);
+    setSangradoPrimero(primero);
+    if (paso === null)
+      setPaso(day.isFuture ? "resumen" : pasoInicial(log, pasosDe(settings, primero), primero));
   }
 
   // La racha necesita todos los días, así que solo se calcula con la
@@ -449,7 +484,15 @@ export function DaySheet({
     vecinos?.ayer && vecinos.ayer > 0 && !(vecinos.manyana && vecinos.manyana > 0),
   );
 
+  const pasos: Paso[] = useMemo(
+    () => pasosDe(settings, !!sangradoPrimero),
+    [settings, sangradoPrimero],
+  );
   const actual = paso ?? null;
+  // El panel solo existe cuando ya se sabe la pregunta (ver abajo), y
+  // el arrastre para cerrar necesita el panel montado para engancharse.
+  const abierta = Boolean(day && (day.isFuture || actual));
+  useSwipeToClose(panel, abierta, () => ref.current?.close());
   const indice = actual ? pasos.indexOf(actual) : -1;
 
   function irA(p: Paso, hacia: 1 | -1 = 1) {
@@ -495,9 +538,11 @@ export function DaySheet({
     setOffset((o) => o + delta);
     setPaso(null);
     setVolver(false);
+    setSentido(0);
+    setSangradoPrimero(null);
   }
 
-  const q = actual ? pregunta(actual, day?.isToday ?? false, terminaLaRegla) : null;
+  const q = actual ? pregunta(actual, day?.isToday ?? false, terminaLaRegla, sangradoPrimero ?? false) : null;
 
   return (
     <dialog
@@ -509,6 +554,8 @@ export function DaySheet({
         setOffset(0);
         setPaso(null);
         setVolver(false);
+        setSentido(0);
+        setSangradoPrimero(null);
         onClose();
         if (empezoRegla.current) {
           empezoRegla.current = false;
@@ -527,7 +574,11 @@ export function DaySheet({
       className="sheet"
       aria-label={day ? format(day.date, "d 'de' MMMM", { locale: es }) : ""}
     >
-      {day && (
+      {/* La hoja no se pinta hasta saber en qué pregunta abre. Antes
+          subía vacía (solo «Listo»), a los pocos milisegundos crecía
+          de golpe y la pregunta entraba además de lado: tres
+          movimientos donde tenía que haber uno. */}
+      {day && (day.isFuture || actual) && (
         <div ref={panel} tabIndex={-1} className="sheet-panel flex flex-col outline-none">
           {/* Cabecera, cuerpo y pie como tres piezas: solo el cuerpo se
               desplaza, si hace falta. */}
@@ -639,7 +690,7 @@ export function DaySheet({
             ) : actual && q ? (
               <div
                 key={`${day.key}-${actual}`}
-                className={`${sentido === 1 ? "paso-in" : "paso-in-atras"} flex flex-col gap-md`}
+                className={`${sentido === 1 ? "paso-in" : sentido === -1 ? "paso-in-atras" : ""} flex flex-col gap-md`}
               >
                 {actual === "resumen" ? (
                   <>
