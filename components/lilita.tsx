@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   AnimatePresence,
   animate,
@@ -41,6 +41,8 @@ type Props = {
   saluda?: boolean;
   /** Provisional, solo para comparar propuestas. */
   manos?: "rojas" | "guantes";
+  /** Provisional, solo para comparar propuestas. */
+  estilo?: "actual" | "pulida" | "full";
 };
 
 const BODY = "M60 8 C60 8 98 56 98 88 A38 38 0 1 1 22 88 C22 56 60 8 60 8 Z";
@@ -68,7 +70,11 @@ export function Lilita({
   speaking = false,
   saluda = false,
   manos = "rojas",
+  estilo = "actual",
 }: Props) {
+  const pulida = estilo !== "actual";
+  const full = estilo === "full";
+  const clipId = `li-clip-${useId().replace(/:/g, "")}`;
   const reduced = useReducedMotion() ?? false;
   const lively = !reduced && size >= LIVELY_MIN_SIZE;
 
@@ -227,7 +233,7 @@ export function Lilita({
   }, [waving, wave]);
   const arms: [Arm, Arm] = waving ? [f.arms[0], ARM_WAVE] : f.arms;
 
-  const hand = manos === "guantes" ? HAND_GLOVE : HAND_RED;
+  const hand = manos === "guantes" || pulida ? HAND_GLOVE : HAND_RED;
   const armLayer = (front: boolean) =>
     arms.map((a, i) =>
       !!a.front === front ? (
@@ -276,6 +282,10 @@ export function Lilita({
         style={{ overflow: "visible", WebkitTapHighlightColor: "transparent" }}
         onPointerDown={lively ? onTap : undefined}
       >
+      {/* Sombra en el suelo: no bota con ella, se encoge cuando sube. */}
+      {pulida && shown !== "volando" && (
+        <ellipse className="lilita-shadow" cx="60" cy="155" rx="30" ry="4.5" fill="var(--li-line)" opacity={0.14} />
+      )}
       <g className="lilita-idle" style={{ transformOrigin: "60px 140px" }}>
         <motion.g style={{ scaleX: squashX, scaleY: squashY, originX: 0.5, originY: 1 }}>
         <g
@@ -309,15 +319,47 @@ export function Lilita({
           {armLayer(false)}
 
           {/* --- Cuerpo -------------------------------------------- */}
-          <path
-            d={BODY}
-            fill="var(--li-body)"
-            stroke="var(--li-line)"
-            strokeWidth="4"
-          />
-          {/* Brillo: un solo destello, arriba a la izquierda, como en
-              una gota de verdad. Sin degradados. */}
-          <ellipse cx="44" cy="52" rx="7" ry="12" fill="var(--li-shine)" transform="rotate(-18 44 52)" />
+          {pulida ? (
+            <>
+              {/* Volumen sin degradados: una media luna de sombra abajo
+                  a la derecha, recortada por la silueta. */}
+              <clipPath id={clipId}>
+                <path d={BODY} />
+              </clipPath>
+              <g clipPath={`url(#${clipId})`}>
+                <path d={BODY} fill="var(--li-shade)" />
+                <ellipse cx="50" cy="64" rx="38" ry="56" fill="var(--li-body)" />
+              </g>
+              <path d={BODY} fill="none" stroke="var(--li-line)" strokeWidth="4" />
+              <ellipse cx="42" cy="50" rx="6.5" ry="13" fill="var(--li-shine)" transform="rotate(-24 42 50)" />
+              <circle cx="49" cy="34" r="2.6" fill="var(--li-shine)" />
+              {/* Mejillas */}
+              <ellipse cx="31" cy="99" rx="6.5" ry="3.8" fill="var(--li-blush)" />
+              <ellipse cx="89" cy="99" rx="6.5" ry="3.8" fill="var(--li-blush)" />
+            </>
+          ) : (
+            <>
+              <path
+                d={BODY}
+                fill="var(--li-body)"
+                stroke="var(--li-line)"
+                strokeWidth="4"
+              />
+              {/* Brillo: un solo destello, arriba a la izquierda, como en
+                  una gota de verdad. Sin degradados. */}
+              <ellipse cx="44" cy="52" rx="7" ry="12" fill="var(--li-shine)" transform="rotate(-18 44 52)" />
+            </>
+          )}
+          {/* Rizo en la punta: el único pelo que tiene, y lo sabe. */}
+          {full && (
+            <path
+              d="M60 9 C58 1 66 -4 71 0 C75 3 72 9 67 7"
+              fill="none"
+              stroke="var(--li-line)"
+              strokeWidth="3.5"
+              strokeLinecap="round"
+            />
+          )}
 
           {/* --- Ojos ---------------------------------------------- */}
           <motion.g style={{ scaleY: blink, originX: 0.5, originY: 0.5 }}>
@@ -325,12 +367,33 @@ export function Lilita({
             <ellipse cx="75" cy="78" rx="15.5" ry="16.5" fill="var(--li-sclera)" stroke="var(--li-line)" strokeWidth="3.5" />
             <motion.g style={{ x: lookX, y: lookY }} fill="var(--li-line)">
               {[45, 75].map((cx) => (
-                <motion.circle
-                  key={cx}
-                  initial={false}
-                  animate={{ cx: cx + f.pupil.dx, cy: 78 + f.pupil.dy, r: f.pupil.r }}
-                  transition={morph}
-                />
+                <g key={cx}>
+                  {full && (
+                    <motion.circle
+                      initial={false}
+                      animate={{ cx: cx + f.pupil.dx, cy: 78 + f.pupil.dy, r: f.pupil.r ? f.pupil.r + 3 : 0 }}
+                      transition={morph}
+                      fill="var(--li-iris)"
+                    />
+                  )}
+                  <motion.circle
+                    initial={false}
+                    animate={{ cx: cx + f.pupil.dx, cy: 78 + f.pupil.dy, r: f.pupil.r }}
+                    transition={morph}
+                  />
+                  {pulida && (
+                    <motion.circle
+                      initial={false}
+                      animate={{
+                        cx: cx + f.pupil.dx - f.pupil.r * 0.4,
+                        cy: 78 + f.pupil.dy - f.pupil.r * 0.45,
+                        r: f.pupil.r ? Math.max(1.4, f.pupil.r * 0.34) : 0,
+                      }}
+                      transition={morph}
+                      fill="var(--li-sclera)"
+                    />
+                  )}
+                </g>
               ))}
             </motion.g>
             {/* Párpados: se dibujan encima para cerrar el ojo por arriba.
@@ -353,6 +416,12 @@ export function Lilita({
                   ),
               )}
             </AnimatePresence>
+            {full && (
+              <g stroke="var(--li-line)" strokeWidth="3" strokeLinecap="round">
+                <path d="M31.5 70 L25 66.5 M34 65.5 L29 60.5" />
+                <path d="M88.5 70 L95 66.5 M86 65.5 L91 60.5" />
+              </g>
+            )}
           </motion.g>
 
           {/* --- Cejas: donde ocurre la actuación ------------------- */}
@@ -400,12 +469,20 @@ export function Lilita({
         .lilita-idle {
           animation: li-bob 3.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
         }
+        .lilita-shadow {
+          transform-origin: 60px 155px;
+          animation: li-shadow 3.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+        }
+        @keyframes li-shadow {
+          0%, 100% { transform: scaleX(1) }
+          50% { transform: scaleX(0.86) }
+        }
         @keyframes li-bob {
           0%, 100% { transform: translateY(0) }
           50% { transform: translateY(-5px) }
         }
         @media (prefers-reduced-motion: reduce) {
-          .lilita-idle { animation: none }
+          .lilita-idle, .lilita-shadow { animation: none }
         }
       `}</style>
       </svg>

@@ -260,12 +260,16 @@
   --li-shine: oklch(72% 0.15 25);
   --li-shoe: oklch(97% 0.008 60);
   --li-sweat: oklch(80% 0.08 225);
+  --li-shade: oklch(47% 0.19 22);
+  --li-blush: oklch(72% 0.13 10 / 0.75);
+  --li-iris: oklch(42% 0.13 30);
 }
 
 [data-theme="dark"] {
   --li-body: oklch(62% 0.2 25);
   --li-sclera: oklch(97% 0.012 60);
   --li-shoe: oklch(95% 0.014 60);
+  --li-shade: oklch(52% 0.19 22);
 }
 
 /* ═══ Calendario ════════════════════════════════════════════════
