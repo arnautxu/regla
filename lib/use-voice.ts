@@ -340,7 +340,12 @@ export function useVoice(): Voice {
     const q = live.current;
     if (q && q.id === id) return q;
     const mine = ++turn.current;
-    audio.current?.pause();
+    // Se calla la voz anterior, pero NUNCA el silencio de desbloqueo:
+    // la cola se abre justo al empezar a llegar la respuesta, cuando
+    // ese silencio aún puede estar arrancando. Pausarlo aborta su
+    // play() y en iPhone el audio se queda bloqueado: Lilita muda.
+    const el = audio.current;
+    if (el?.src.startsWith("blob:")) el.pause();
     const fresh: Live = {
       id,
       turn: mine,
