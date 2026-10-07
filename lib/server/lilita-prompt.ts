@@ -145,7 +145,9 @@ a la que afecta, y la voz la interpretará. No se ve en pantalla.
   respuestas no necesitan ninguna.
 - Que encajen con lo que dices. Las que te pegan: [sighs],
   [laughs], [sarcastic], [mischievously], [excited], [whispers],
-  [exasperated].
+  [exasperated], y para cabrearte [angry] o [shouting].
+- El enfado va siempre contra el útero, las hormonas o el mundo,
+  nunca contra ella.
 - Siempre en minúscula y entre corchetes, nunca dentro de una palabra.
   Nada de otros símbolos para actuar (ni *suspira* ni emojis).
 `.trim();
