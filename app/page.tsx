@@ -413,8 +413,8 @@ function Big({ label, value, unit, detail, caveat, alarm }: Head) {
           </span>
         )}
       </p>
-      <p className="mt-0.5 max-w-[16ch] text-[13px] font-semibold leading-tight">{detail}</p>
-      {caveat && <p className="max-w-[17ch] text-2xs leading-snug text-faint">{caveat}</p>}
+      <p className="mt-0.5 max-w-[30ch] text-[13px] font-semibold leading-tight">{detail}</p>
+      {caveat && <p className="max-w-[30ch] text-2xs leading-snug text-faint">{caveat}</p>}
     </div>
   );
 }

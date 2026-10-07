@@ -354,21 +354,6 @@ const REPLY_WORD: Record<MonsterReplyKind, string> = {
   mensaje: "un mensaje",
 };
 
-/** PAS y enfados el mismo día. */
-export function crossInsight(days: DayLog[]): Insight | null {
-  const pasDays = days.filter((d) => d.cryEvents?.length);
-  if (pasDays.length < 5) return null;
-  const both = pasDays.filter((d) => d.angerEvents?.length).length;
-  if (both / pasDays.length < 0.5) return null;
-  return {
-    id: "pas-monstruo",
-    kind: "patron",
-    title: "Llorar y enfadarse van juntos",
-    detail: `${both} de los ${pasDays.length} días con PAS también hubo Cookie Monster.`,
-    basis: pasDays.length,
-  };
-}
-
 /** ¿Cae este día del ciclo dentro de la ventana? */
 export function inWindow(w: EpisodeWindow | undefined, cycleDay: number | undefined): boolean {
   return !!w && cycleDay !== undefined && cycleDay >= w.from && cycleDay <= w.to;

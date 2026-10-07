@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { addDays, format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Lilita } from "@/components/lilita";
+import { LilitaFace, type FaceMood } from "@/components/lilita-face";
 import { PHASE_LABEL, phaseByDay, type Phase } from "@/lib/cycle";
 import { fromKey, toKey, type DayLog } from "@/lib/db";
 import { FLOW, labelOf } from "@/lib/labels";
@@ -17,7 +17,12 @@ import { haptic } from "@/lib/use-lilaila";
    El ciclo entero como un reloj: una cuenta por día, teñida con su
    fase, empezando arriba en el día 1 y girando como las agujas. Lo
    vivido va en tinta plena y con su sombra de pegatina; lo que
-   queda, en tenue. Lilita vive en el centro.
+   queda, en tenue. Las cuentas son cuadradas y van separadas por una
+   raya fina, como en el primer anillo.
+
+   El centro es la cara de Lilita: el aro es el borde de su cara.
+   Pone la cara de la fase del día elegido, llora si ese día hubo PAS,
+   se enfada si hubo Cookie Monster y mira hacia la chapa.
 
    Se toca: arrastrar por el anillo mueve la chapa día a día (con un
    toque háptico en cada uno) y el centro cuenta ese día. Hacia atrás,
@@ -64,7 +69,7 @@ export function CycleRing({
   monster,
   mood,
   onOpenDay,
-  size = 252,
+  size = 244,
   children,
 }: {
   /** Día del ciclo de hoy, 1 = primer día de regla */
@@ -88,13 +93,13 @@ export function CycleRing({
   /** Abre la ficha de un día ya vivido */
   onOpenDay?: (key: string) => void;
   size?: number;
-  /** Lo que se cuenta en el centro cuando la chapa está en hoy */
+  /** Lo que se cuenta debajo cuando la chapa está en hoy */
   children?: React.ReactNode;
 }) {
   const total = Math.max(length, day);
   const c = size / 2;
   const r = c - 24;
-  const gap = 4.5 / r; // aire entre cuentas, en radianes
+  const gap = 1.1 / r; // media raya entre cuentas, en radianes
 
   /* La chapa gira con CSS. Se guarda el ángulo SIN envolver para
      que al cruzar el día 1 dé el paso corto y no la vuelta entera. */
@@ -207,7 +212,23 @@ export function CycleRing({
   const offset = sel - day;
   const [tx, ty] = [c, c - r];
 
+  // La cara del día elegido. Hoy manda el humor de Lilita; un día
+  // pasado, lo que pasó; uno futuro todavía no tiene cara.
+  const selSeg = segments[sel - 1];
+  const face: FaceMood =
+    sel === day
+      ? mood
+      : offset > 0
+        ? "neutral"
+        : selSeg?.pas
+          ? "llorando"
+          : selSeg?.anger
+            ? "enfadada"
+            : PHASE_MOOD[selPhase];
+  const faceSize = Math.round((r - 13) * 2);
+
   return (
+    <div className="flex flex-col items-center">
     <div
       ref={box}
       role="slider"
@@ -261,8 +282,7 @@ export function CycleRing({
               transform="translate(2 2)"
               fill="none"
               stroke="var(--depth-shadow)"
-              strokeWidth={d === day ? 20 : 14}
-              strokeLinecap="round"
+              strokeWidth={d === day ? 18 : 13}
               className="ring-in"
               style={{ animationDelay: `${d * 16}ms` }}
             />
@@ -277,9 +297,8 @@ export function CycleRing({
               d={arc(angle(d - 1) + gap, angle(d) - gap)}
               fill="none"
               stroke={PHASE_VAR[phase]}
-              strokeWidth={d === day ? 20 : focus ? 18 : 14}
-              strokeLinecap="round"
-              opacity={d <= day ? 1 : focus ? 0.7 : 0.24}
+              strokeWidth={d === day ? 18 : focus ? 17 : 13}
+              opacity={d <= day ? 1 : focus ? 0.75 : 0.26}
               className="ring-in transition-[stroke-width,opacity] duration-150"
               style={{ animationDelay: `${Math.min(d, day + 3) * 16}ms` }}
             />
@@ -383,37 +402,42 @@ export function CycleRing({
         </g>
       </svg>
 
-      {/* El centro: Lilita, y debajo lo que toque contar */}
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-        <div className="pointer-events-auto">
-          <Lilita mood={sel === day ? mood : PHASE_MOOD[selPhase]} size={58} />
-        </div>
-        {sel === day ? (
-          children
-        ) : (
-          <div className="mt-0.5 flex flex-col items-center" aria-live="polite">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-faint">
-              {offset < 0
-                ? `Hace ${-offset} ${offset === -1 ? "día" : "días"}`
-                : `Dentro de ${offset} ${offset === 1 ? "día" : "días"}`}
-            </p>
-            <p className="tnum font-display text-[34px] font-extrabold leading-none tracking-[-0.04em]">
-              Día {sel}
-            </p>
-            <p className="mt-0.5 text-[12.5px] font-semibold" style={{ color: PHASE_VAR[selPhase] }}>
-              {PHASE_LABEL[selPhase]} · {format(selDate, "d MMM", { locale: es }).replace(".", "")}
-            </p>
-            <DayFacts
-              log={offset <= 0 ? byKey.get(selKey) : undefined}
-              future={offset > 0}
-              predicted={sel >= predictedFrom && sel <= predictedTo}
-              sensitive={!!sensitive && sel >= sensitive.from && sel <= sensitive.to}
-              monster={!!monster && sel >= monster.from && sel <= monster.to}
-              onOpen={offset < 0 && onOpenDay ? () => onOpenDay(selKey) : undefined}
-            />
-          </div>
-        )}
+      {/* El centro: la cara de Lilita, mirando hacia la chapa */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <LilitaFace mood={face} look={angle(sel - 0.5)} size={faceSize} />
       </div>
+    </div>
+
+    {/* Debajo, lo que toque contar del día elegido */}
+    <div className="flex min-h-[78px] flex-col items-center text-center">
+      {sel === day ? (
+        children
+      ) : (
+        <div className="flex flex-col items-center" aria-live="polite">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-faint">
+            {offset < 0
+              ? `Hace ${-offset} ${offset === -1 ? "día" : "días"}`
+              : `Dentro de ${offset} ${offset === 1 ? "día" : "días"}`}
+          </p>
+          <p className="tnum font-display text-[34px] font-extrabold leading-none tracking-[-0.04em]">
+            Día {sel}
+          </p>
+          <p className="mt-0.5 text-[12.5px] font-semibold">
+            <span style={{ color: PHASE_VAR[selPhase] }}>
+              {PHASE_LABEL[selPhase]} · {format(selDate, "d MMM", { locale: es }).replace(".", "")}
+            </span>
+          </p>
+          <DayFacts
+            log={offset <= 0 ? byKey.get(selKey) : undefined}
+            future={offset > 0}
+            predicted={sel >= predictedFrom && sel <= predictedTo}
+            sensitive={!!sensitive && sel >= sensitive.from && sel <= sensitive.to}
+            monster={!!monster && sel >= monster.from && sel <= monster.to}
+            onOpen={offset < 0 && onOpenDay ? () => onOpenDay(selKey) : undefined}
+          />
+        </div>
+      )}
+    </div>
     </div>
   );
 }
@@ -447,7 +471,7 @@ function DayFacts({
   }
   const text = facts.length ? facts.join(" · ") : future ? "Nada previsto" : "Nada apuntado";
   if (!onOpen) {
-    return <p className="mt-0.5 max-w-[18ch] text-[11.5px] leading-tight text-muted">{text}</p>;
+    return <p className="mt-0.5 max-w-[30ch] text-[12px] leading-tight text-muted">{text}</p>;
   }
   // Tocar el resumen abre la ficha de ese día.
   return (
@@ -455,7 +479,7 @@ function DayFacts({
       type="button"
       onPointerDown={(e) => e.stopPropagation()}
       onClick={onOpen}
-      className="pointer-events-auto mt-0.5 max-w-[17ch] py-0.5 text-[11.5px] leading-tight text-muted"
+      className="pointer-events-auto mt-0.5 max-w-[30ch] py-0.5 text-[12px] leading-tight text-muted"
     >
       {facts.length > 0 && <>{facts.join(" · ")} · </>}
       <span className="font-semibold" style={{ color: "var(--accent)" }}>

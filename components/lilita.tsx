@@ -363,7 +363,7 @@ export function Lilita({ mood = "neutral", size = 200, className, speaking = fal
 
 /* --- Definición de cada estado de ánimo -------------------------- */
 
-type Face = {
+export type Face = {
   tilt: number;
   brows: [string, string];
   pupil: { dx: number; dy: number; r: number };
@@ -386,7 +386,7 @@ const ARMS_UP: [string, string] = ["M24 92 C12 84 8 72 10 60", "M96 92 C108 84 1
 const ARMS_OUT: [string, string] = ["M24 94 C10 92 4 100 2 108", "M96 94 C110 92 116 100 118 108"];
 const ARMS_HUG: [string, string] = ["M26 100 C36 112 52 116 60 114", "M94 100 C84 112 68 116 60 114"];
 
-const FACES: Record<Mood, Face> = {
+export const FACES: Record<Mood, Face> = {
   /* Sarcástica de serie: una ceja arriba y media sonrisa. */
   neutral: {
     tilt: 0,
