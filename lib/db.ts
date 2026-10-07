@@ -68,11 +68,35 @@ export interface CryEvent {
 /** 1 = un mordisquito, 2 = bastante, 3 = monstruo total */
 export type AngerLevel = 1 | 2 | 3;
 
+/** Qué lo ha encendido, contado desde ella. */
+export type AngerReason =
+  | "algo-dicho"
+  | "algo-hecho"
+  | "no-has-hecho"
+  | "no-me-escuchas"
+  | "cansada"
+  | "hambre"
+  | "no-se";
+
+/** Qué le haría falta a Arnau para arreglarlo. */
+export type AngerNeed =
+  | "abrazo"
+  | "espacio"
+  | "perdon"
+  | "hablar"
+  | "comida"
+  | "nada";
+
 export interface AngerEvent {
   id: string;
   /** Cuándo pulsó el botón, ISO */
   at: string;
   level?: AngerLevel;
+  /* Lo que se pregunta después, todo opcional: un enfado sin motivo
+     sigue siendo un enfado. */
+  reason?: AngerReason;
+  need?: AngerNeed;
+  note?: string;
   /** «Ya se me ha pasado», ISO. Sin él, el enfado sigue abierto. */
   endedAt?: string;
 }
