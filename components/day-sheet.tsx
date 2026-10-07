@@ -37,6 +37,16 @@ import { MoodRow, moodLabel } from "./mood-row";
 import { PillRow } from "./pill-row";
 import { SexRow } from "./sex-row";
 import { TagPicker } from "./tag-picker";
+import { LilitaFace } from "./lilita-face";
+import {
+  REACCION_ANIMO,
+  REACCION_SINTOMA,
+  reaccionDia,
+  reaccionFlujo,
+  reaccionPastilla,
+  reaccionSexo,
+  type Reaccion,
+} from "@/lib/lilita/reacciones";
 
 /**
  * Lo mínimo que necesita la hoja. DayCell del calendario encaja aquí
@@ -196,8 +206,11 @@ function useSwipeToClose(
 export type Paso = "flow" | "dia" | "duele" | "animo" | "pastilla" | "sexo" | "resumen";
 
 /** Lo que tarda en pasar a la siguiente pregunta tras un toque: lo
-    justo para ver el botón encenderse y saber qué ha quedado. */
-const AVANCE_MS = 320;
+    justo para ver el botón encenderse y leer lo que contesta Lilita. */
+const AVANCE_MS = 750;
+
+/** Lo que tiene que recorrer el dedo de lado para cambiar de pregunta. */
+const DESLIZA_PX = 60;
 
 const NOMBRE: Record<Paso, string> = {
   flow: "Sangrado",
@@ -326,6 +339,15 @@ export function DaySheet({
   // Se ha entrado a una pregunta desde la lista: al contestarla se
   // vuelve a la lista, no a la pregunta siguiente.
   const [volver, setVolver] = useState(false);
+  // Lo que acaba de contestar Lilita a la última respuesta. Se borra
+  // al cambiar de pregunta: cada pregunta empieza con su cara neutra.
+  const [reaccion, setReaccion] = useState<Reaccion | null>(null);
+  // Hacia dónde entra la pregunta nueva: adelante desde la derecha,
+  // atrás desde la izquierda. Que el gesto y la animación coincidan.
+  const [sentido, setSentido] = useState<1 | -1>(1);
+  // Se ha llegado a la lista contestando de corrido: Lilita lo celebra.
+  const [terminado, setTerminado] = useState(false);
+  const toque = useRef<{ x: number; y: number } | null>(null);
   const [ultimaClave, setUltimaClave] = useState(base?.key);
   if (base?.key !== ultimaClave) {
     setUltimaClave(base?.key);
@@ -333,6 +355,8 @@ export function DaySheet({
     setCryError("");
     setPaso(startAt ?? null);
     setVolver(false);
+    setReaccion(null);
+    setTerminado(false);
   }
 
   const day: SheetDay | null = useMemo(() => {
@@ -409,8 +433,11 @@ export function DaySheet({
   const actual = paso ?? null;
   const indice = actual ? pasos.indexOf(actual) : -1;
 
-  function irA(p: Paso) {
+  function irA(p: Paso, hacia: 1 | -1 = 1) {
     window.clearTimeout(avance.current);
+    setSentido(hacia);
+    setReaccion(null);
+    setTerminado(false);
     setPaso(p);
   }
 
@@ -420,23 +447,27 @@ export function DaySheet({
       irA("resumen");
       return;
     }
-    irA(pasos[Math.min(indice + 1, pasos.length - 1)]);
+    const p = pasos[Math.min(indice + 1, pasos.length - 1)];
+    irA(p);
+    if (p === "resumen") setTerminado(true);
   }
 
   function atras() {
     if (volver) {
       setVolver(false);
-      irA("resumen");
+      irA("resumen", -1);
       return;
     }
-    if (indice > 0) irA(pasos[indice - 1]);
+    if (indice > 0) irA(pasos[indice - 1], -1);
   }
 
-  /** Tras una pregunta de una sola respuesta: si se ha marcado algo,
-      a la siguiente. Si se ha desmarcado, se queda: está corrigiendo. */
-  function contestada(marcada: boolean) {
+  /** Tras una pregunta de una sola respuesta: Lilita contesta y, si se
+      ha marcado algo, a la siguiente. Si se ha desmarcado, se queda:
+      está corrigiendo. */
+  function contestada(r: Reaccion | null) {
     window.clearTimeout(avance.current);
-    if (marcada) avance.current = window.setTimeout(siguiente, AVANCE_MS);
+    setReaccion(r);
+    if (r) avance.current = window.setTimeout(siguiente, AVANCE_MS);
   }
 
   function cambiarDia(delta: number) {
@@ -538,7 +569,7 @@ export function DaySheet({
                       onClick={() => {
                         haptic(6);
                         setVolver(false);
-                        irA(p);
+                        irA(p, pasos.indexOf(p) < indice ? -1 : 1);
                       }}
                       className="flex flex-1 items-center px-px py-2"
                     >
@@ -559,25 +590,77 @@ export function DaySheet({
             )}
           </div>
 
-          <div data-sheet-body className="flex min-h-[340px] flex-1 flex-col gap-md overflow-y-auto overscroll-contain px-lg pt-xs pb-md">
+          <div
+            data-sheet-body
+            // Deslizar de lado cambia de pregunta: hacia la izquierda la
+            // siguiente, hacia la derecha la anterior. Solo si el gesto
+            // es claramente horizontal; el vertical es del scroll y de
+            // cerrar la hoja.
+            onTouchStart={(e) => {
+              const t = e.touches[0];
+              toque.current = e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null;
+            }}
+            onTouchEnd={(e) => {
+              const ini = toque.current;
+              toque.current = null;
+              if (!ini || !actual || actual === "resumen" || day.isFuture) return;
+              const t = e.changedTouches[0];
+              const dx = t.clientX - ini.x;
+              const dy = t.clientY - ini.y;
+              if (Math.abs(dx) < DESLIZA_PX || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+              haptic(6);
+              if (dx < 0) siguiente();
+              else atras();
+            }}
+            className="flex min-h-[340px] flex-1 flex-col gap-md overflow-y-auto overscroll-contain px-lg pt-xs pb-md">
             {day.isFuture ? (
               <p className="text-sm leading-relaxed text-muted">
                 Este día todavía no ha pasado. Cuando llegue me cuentas.
               </p>
             ) : actual && q ? (
-              <div key={`${day.key}-${actual}`} className="paso-in flex flex-col gap-md">
-                <div>
-                  {/* La lista no es una pregunta: título pequeño, que
-                      quepan las filas y la nota sin desplazar. */}
-                  <h3
-                    className={`text-balance font-display font-bold leading-[1.1] tracking-[-0.02em] ${
-                      actual === "resumen" ? "sr-only" : "text-2xl"
-                    }`}
-                  >
-                    {q.titulo}
-                  </h3>
-                  {q.ayuda && <p className="mt-1 text-sm text-muted">{q.ayuda}</p>}
-                </div>
+              <div
+                key={`${day.key}-${actual}`}
+                className={`${sentido === 1 ? "paso-in" : "paso-in-atras"} flex flex-col gap-md`}
+              >
+                {actual === "resumen" ? (
+                  <>
+                    {/* La lista no es una pregunta: título oculto, que
+                        quepan las filas y la nota sin desplazar. Si se
+                        acaba de contestar todo de corrido, Lilita lo
+                        celebra en una línea. */}
+                    <h3 className="sr-only">{q.titulo}</h3>
+                    {terminado && (
+                      <div className="flex items-center gap-3">
+                        <LilitaFace mood="energica" size={44} />
+                        <p className="reaccion-in font-display text-base font-bold leading-tight">
+                          ¡Día apuntado! Aquí lo tienes todo.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  /* Lilita hace la pregunta, y contesta a lo que
+                     marcas: la cara cambia y la frase de ayuda deja
+                     paso a la suya. */
+                  <div className="flex items-start gap-3">
+                    <div className="shrink-0 pt-0.5">
+                      <LilitaFace mood={reaccion?.cara ?? "neutral"} size={52} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-balance font-display text-2xl font-bold leading-[1.1] tracking-[-0.02em]">
+                        {q.titulo}
+                      </h3>
+                      <p
+                        key={reaccion?.texto ?? "ayuda"}
+                        aria-live="polite"
+                        className={`mt-1 min-h-[1.25rem] text-sm ${reaccion ? "reaccion-in font-semibold" : "text-muted"}`}
+                        style={reaccion ? { color: "var(--accent)" } : undefined}
+                      >
+                        {reaccion?.texto ?? q.ayuda ?? ""}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {actual === "flow" && (
                   <FlowRow
@@ -593,7 +676,7 @@ export function DaySheet({
                         empezoRegla.current = true;
                       }
                       void upsertDay(day.key, { flow: v });
-                      contestada(v !== undefined);
+                      contestada(v === undefined ? null : reaccionFlujo(v, terminaLaRegla));
                     }}
                     dateKey={day.key}
                     endsPeriod={terminaLaRegla}
@@ -606,7 +689,11 @@ export function DaySheet({
                     value={log ?? undefined}
                     onChange={(patch) => {
                       void upsertDay(day.key, patch);
-                      contestada(patch.painLevel !== undefined);
+                      contestada(
+                        patch.painLevel === undefined
+                          ? null
+                          : reaccionDia(patch.painLevel, patch.badDay),
+                      );
                     }}
                     dateKey={day.key}
                   />
@@ -618,9 +705,10 @@ export function DaySheet({
                     label="Qué te duele"
                     options={SINTOMAS}
                     selected={log?.symptoms ?? []}
-                    onToggle={(v) =>
-                      void upsertDay(day.key, { symptoms: toggle(log?.symptoms, v) })
-                    }
+                    onToggle={(v) => {
+                      if (!log?.symptoms?.includes(v)) setReaccion(REACCION_SINTOMA[v]);
+                      void upsertDay(day.key, { symptoms: toggle(log?.symptoms, v) });
+                    }}
                   />
                 )}
 
@@ -630,7 +718,10 @@ export function DaySheet({
                     label="Ánimo"
                     options={ANIMOS}
                     selected={log?.mood ?? []}
-                    onToggle={(v) => void upsertDay(day.key, { mood: toggle(log?.mood, v) })}
+                    onToggle={(v) => {
+                      if (!log?.mood?.includes(v)) setReaccion(REACCION_ANIMO[v]);
+                      void upsertDay(day.key, { mood: toggle(log?.mood, v) });
+                    }}
                   />
                 )}
 
@@ -642,7 +733,7 @@ export function DaySheet({
                     streak={streak}
                     onChange={(v) => {
                       void setPill(day.key, v, day.isToday ? new Date() : undefined);
-                      contestada(v !== undefined);
+                      contestada(v === undefined ? null : reaccionPastilla(v));
                     }}
                     dateKey={day.key}
                   />
@@ -657,7 +748,8 @@ export function DaySheet({
                       onSet={(v) => {
                         void setSex(day.key, v);
                         // Con un sí se queda: viene el detalle debajo.
-                        contestada(v === false);
+                        if (v === true) setReaccion(reaccionSexo(true));
+                        else contestada(v === false ? reaccionSexo(false) : null);
                       }}
                       onPatch={(patch) => void upsertDay(day.key, patch)}
                       dateKey={day.key}

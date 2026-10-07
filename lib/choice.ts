@@ -22,4 +22,4 @@ export function choiceStyle(active: boolean): CSSProperties {
 }
 
 export const CHOICE_CLASS =
-  "transition-[transform,box-shadow,color] duration-150 active:scale-[0.96]";
+  "choice-pop transition-[transform,box-shadow,color] duration-150 active:scale-[0.96]";

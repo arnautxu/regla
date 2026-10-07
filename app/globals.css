@@ -466,6 +466,56 @@ dialog.sheet::backdrop {
   }
 }
 
+.paso-in-atras {
+  animation: paso-in-atras 220ms var(--ease-out-quart);
+}
+
+@keyframes paso-in-atras {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Lo que contesta Lilita: sube un poco, como un bocadillo. */
+.reaccion-in {
+  animation: reaccion-in 240ms var(--ease-out-quart);
+}
+
+@keyframes reaccion-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Al elegir algo, el botón da un saltito. La animación arranca en
+   cuanto aria-pressed pasa a true, y también al aparecer una pregunta
+   con algo ya marcado: así se ve de un golpe qué había. */
+.choice-pop[aria-pressed="true"] {
+  animation: choice-pop 260ms var(--ease-out-quart);
+}
+
+@keyframes choice-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.07);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 @keyframes sheet-fade {
   from {
     opacity: 0;
