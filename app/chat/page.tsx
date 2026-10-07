@@ -205,7 +205,7 @@ export default function Chat() {
             className="flex flex-col items-center gap-md pt-lg"
           >
             <motion.div variants={ITEM}>
-              <Lilita mood={line.mood} size={116} />
+              <Lilita mood={line.mood} size={116} saluda />
             </motion.div>
             <motion.p
               variants={ITEM}

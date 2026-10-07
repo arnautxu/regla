@@ -262,7 +262,7 @@
   --li-sweat: oklch(80% 0.08 225);
   --li-shade: oklch(47% 0.19 22);
   --li-blush: oklch(72% 0.13 10 / 0.75);
-  --li-iris: oklch(42% 0.13 30);
+  --li-curl: var(--li-line);
 }
 
 [data-theme="dark"] {
@@ -270,6 +270,8 @@
   --li-sclera: oklch(97% 0.012 60);
   --li-shoe: oklch(95% 0.014 60);
   --li-shade: oklch(52% 0.19 22);
+  /* El rizo es una línea suelta: en oscuro el granate se pierde. */
+  --li-curl: var(--li-body);
 }
 
 /* ═══ Calendario ════════════════════════════════════════════════
