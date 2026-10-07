@@ -112,12 +112,18 @@ function DayButton({
   tabIndex,
   phase,
   selected,
+  dim = false,
+  hit = false,
 }: {
   cell: DayCell;
   onSelect: (cell: DayCell) => void;
   tabIndex: number;
   phase?: Phase;
   selected: boolean;
+  /** Con un filtro encendido: este día no tiene lo que se busca */
+  dim?: boolean;
+  /** Con un filtro encendido: este día sí */
+  hit?: boolean;
 }) {
   return (
     <button
@@ -132,7 +138,8 @@ function DayButton({
       aria-label={ariaLabel(cell)}
       aria-current={cell.isToday ? "date" : undefined}
       aria-selected={selected}
-      className="relative flex h-12 items-center justify-center outline-none focus-visible:z-10"
+      className="relative flex h-12 items-center justify-center outline-none transition-opacity duration-150 focus-visible:z-10"
+      style={dim ? { opacity: 0.28 } : undefined}
     >
       {phase && cell.inMonth && (
         <span
@@ -154,6 +161,16 @@ function DayButton({
           aria-hidden="true"
           className="absolute size-8 rounded-full"
           style={{ boxShadow: "inset 0 0 0 2px var(--fg)" }}
+        />
+      )}
+
+      {/* Filtro: un aro grueso de tinta sobre los días que lo tienen.
+          Tinta y no acento, para no confundirse con el día elegido. */}
+      {hit && cell.inMonth && (
+        <span
+          aria-hidden="true"
+          className="absolute size-9 rounded-full"
+          style={{ boxShadow: "inset 0 0 0 3px var(--fg)" }}
         />
       )}
 
@@ -283,11 +300,14 @@ export function MonthGrid({
   onSelect,
   phases,
   selectedKey,
+  highlight,
 }: {
   weeks: DayCell[][];
   onSelect: (cell: DayCell) => void;
   phases?: Map<string, Phase>;
   selectedKey?: string;
+  /** Filtro encendido: solo estos días resaltan, el resto se apaga */
+  highlight?: ReadonlySet<string> | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const cells = weeks.flat();
@@ -342,6 +362,8 @@ export function MonthGrid({
                   tabIndex={cell.key === foco ? 0 : -1}
                   phase={phases?.get(cell.key)}
                   selected={cell.key === selectedKey}
+                  dim={!!highlight && !highlight.has(cell.key)}
+                  hit={!!highlight && highlight.has(cell.key)}
                 />
               ))}
             </div>

@@ -6,6 +6,7 @@ import { motion, MotionConfig } from "motion/react";
 import { updateSettings } from "@/lib/db";
 import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import { useLilaila } from "@/lib/use-lilaila";
+import { useForecastSync } from "@/lib/alerts";
 import { Onboarding } from "./onboarding";
 import { PinGate } from "./pin-gate";
 import { CookieMonsterGate } from "./cookie-monster-gate";
@@ -19,13 +20,20 @@ import { TabBar } from "./tab-bar";
  * la barra de estado de iOS.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { ready, state, settings, cycles } = useLilaila();
+  const lilaila = useLilaila();
+  const { ready, state, settings, cycles } = lilaila;
   const pathname = usePathname();
   const cookieMonsterReceiver = pathname === "/cookie-monster";
 
+  // La ficha del ciclo para los avisos y para Arnau. Nunca desde el
+  // móvil de Arnau: allí no hay diario y subiría una ficha vacía.
+  useForecastSync(lilaila, !cookieMonsterReceiver);
+
   // El chat ocupa la pantalla entera y trae su propio botón de
   // volver. La barra ahí solo se comería el campo de escribir.
-  const fullscreen = pathname === "/chat";
+  // El resumen para la ginecóloga tampoco: se imprime, y una barra
+  // de pestañas en el PDF es lo último que tiene que salir.
+  const fullscreen = pathname === "/chat" || pathname === "/resumen";
 
   // "onboarded" existía en el esquema desde antes de que hubiera
   // onboarding: quien ya tiene ciclos registrados nunca lo puso a

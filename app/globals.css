@@ -644,3 +644,16 @@ dialog.sheet::backdrop {
   outline-offset: 6px;
   border-radius: 50%;
 }
+
+/* ═══ El resumen para la ginecóloga, en papel ════════════════════
+   Tinta negra sobre blanco aunque la app esté en modo oscuro: una
+   hoja impresa con texto crema sobre nada es una hoja en blanco. */
+@media print {
+  body {
+    background: #fff !important;
+  }
+  .resumen,
+  .resumen * {
+    color: #000 !important;
+  }
+}

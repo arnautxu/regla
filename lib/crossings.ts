@@ -43,6 +43,7 @@ export const INSIGHT_FILTER: Record<string, Filter> = {
   "dolor-severo": "dolor",
   "peor-fase": "animo",
   "sintoma-top": "animo",
+  "etiqueta-top": "animo",
 };
 
 /** Un cruce dice de qué filtros sale, para poder titularlo. */

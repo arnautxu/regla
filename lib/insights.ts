@@ -312,6 +312,51 @@ function topSymptom(
   };
 }
 
+/* ── 7b. Sus etiquetas ─────────────────────────────────────────
+   La que más se repite de las que se ha inventado ella, y si se
+   agrupa en una fase. Mismo listón que los síntomas. */
+
+function topCustomTag(
+  days: DayLog[],
+  cycles: Cycle[],
+  settings: Settings,
+  phaseOf: (day: number, len: number) => Phase,
+): Insight | null {
+  const tags = settings.customTags ?? [];
+  if (!tags.length) return null;
+  const model = buildModel(cycles, settings);
+  const conTags = withCycleDay(days, cycles).filter((d) => d.log.tags?.length);
+
+  let mejor: { label: string; veces: number; fase: Phase; enFase: number } | null = null;
+  for (const t of tags) {
+    const fases = new Map<Phase, number>();
+    let veces = 0;
+    for (const d of conTags) {
+      if (!d.log.tags!.includes(t.id)) continue;
+      veces++;
+      const f = phaseOf(d.cycleDay, model.length);
+      fases.set(f, (fases.get(f) ?? 0) + 1);
+    }
+    if (veces < 4) continue;
+    const [fase, enFase] = [...fases.entries()].reduce((a, b) => (b[1] > a[1] ? b : a));
+    if (!mejor || veces > mejor.veces) mejor = { label: t.label, veces, fase, enFase };
+  }
+  if (!mejor) return null;
+
+  const concentrado = mejor.enFase / mejor.veces >= 0.6;
+  return {
+    id: "etiqueta-top",
+    kind: "patron",
+    title: concentrado
+      ? `«${mejor.label}» cae en la fase ${PHASE_WORD[mejor.fase]}`
+      : `«${mejor.label}» va por libre`,
+    detail: concentrado
+      ? `${mejor.veces} veces, y ${mejor.enFase} de ellas en esa fase.`
+      : `${mejor.veces} veces, repartidas por todo el ciclo. No sigue a tus hormonas.`,
+    basis: mejor.veces,
+  };
+}
+
 /* ── 8. Ciclos descartados por atípicos ──────────────────────── */
 
 function outlierNote(cycles: Cycle[], settings: Settings): Insight | null {
@@ -368,6 +413,7 @@ export function computeInsights(
     painPeak(days, cycles),
     worstPhase(days, cycles, settings, phaseOf),
     topSymptom(days, cycles, settings, phaseOf),
+    topCustomTag(days, cycles, settings, phaseOf),
     trend(cycles, settings),
     outlierNote(cycles, settings),
     consistency(days, todayKey),

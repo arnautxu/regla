@@ -21,6 +21,7 @@ import { phaseByDay, PHASE_LABEL, type Phase } from "@/lib/cycle";
 import { summarize as summarizeDay } from "@/lib/day-summary";
 import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
+import { signals } from "@/lib/signals";
 
 /** Cuánto hay que arrastrar para que cuente como cambio de mes. */
 const SWIPE = 56;
@@ -77,6 +78,23 @@ export default function Calendario() {
       ),
     [weeks, cycles, state.avgLength, state.model.periodLength],
   );
+
+  /* Ver solo los días con una cosa: migraña, PAS, sexo, una
+     etiqueta suya. Solo salen las que alguna vez ha apuntado: un
+     filtro que no puede encontrar nada es un botón de adorno. */
+  const [filtro, setFiltro] = useState<string | null>(null);
+  const opciones = useMemo(
+    () => signals(settings.customTags).filter((sg) => (days ?? []).some(sg.match)),
+    [settings.customTags, days],
+  );
+  const activo = opciones.find((o) => o.id === filtro) ?? null;
+  const highlight = useMemo(() => {
+    if (!activo) return null;
+    return new Set((days ?? []).filter(activo.match).map((d) => d.date));
+  }, [activo, days]);
+  const enEsteMes = highlight
+    ? weeks.flat().filter((c) => c.inMonth && highlight.has(c.key)).length
+    : 0;
 
   const previewLog = useMemo(
     () => (preview ? days?.find((d) => d.date === preview.key) : undefined),
@@ -183,11 +201,24 @@ export default function Calendario() {
                 onSelect={pick}
                 phases={phases}
                 selectedKey={preview?.key}
+                highlight={highlight}
               />
             </motion.div>
           </motion.div>
 
-          <PhaseLegend />
+          {opciones.length > 0 && (
+            <DayFilter
+              opciones={opciones}
+              activo={activo?.id ?? null}
+              onPick={(id) => {
+                haptic(6);
+                setFiltro((f) => (f === id ? null : id));
+              }}
+              enEsteMes={enEsteMes}
+            />
+          )}
+
+          {!activo && <PhaseLegend />}
 
           {preview && (
             <DayPreview
@@ -274,6 +305,56 @@ function phaseMap(
     out.set(key, phaseByDay(day, length, periodLength));
   }
   return out;
+}
+
+/* Una fila de botones que se desliza de lado. Uno encendido como
+   mucho: con dos a la vez ya no se sabe qué aro significa qué. */
+function DayFilter({
+  opciones,
+  activo,
+  onPick,
+  enEsteMes,
+}: {
+  opciones: { id: string; label: string }[];
+  activo: string | null;
+  onPick: (id: string) => void;
+  enEsteMes: number;
+}) {
+  return (
+    <section aria-label="Ver solo los días con…" className="-mt-sm flex flex-col gap-1.5">
+      <div className="-mx-lg flex gap-1.5 overflow-x-auto px-lg pb-1 [scrollbar-width:none]">
+        {opciones.map((o) => {
+          const on = o.id === activo;
+          return (
+            <button
+              key={o.id}
+              type="button"
+              aria-pressed={on}
+              onClick={() => onPick(o.id)}
+              className="min-h-[34px] shrink-0 rounded-full px-3 text-[13px] font-semibold"
+              style={{
+                background: on ? "var(--fg)" : "var(--surface)",
+                color: on ? "var(--bg)" : "var(--fg-muted)",
+                boxShadow: on ? undefined : "inset 0 0 0 1.5px var(--border-strong)",
+              }}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+      {activo && (
+        <p className="text-xs text-muted" aria-live="polite">
+          {enEsteMes === 0
+            ? "Este mes, ningún día."
+            : `Este mes, ${enEsteMes} ${enEsteMes === 1 ? "día" : "días"}.`}{" "}
+          <button type="button" onClick={() => onPick(activo)} className="font-semibold underline underline-offset-2">
+            Quitar filtro
+          </button>
+        </p>
+      )}
+    </section>
+  );
 }
 
 function PhaseLegend() {

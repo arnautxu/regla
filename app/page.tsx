@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { addDays, format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -15,6 +15,7 @@ import { PHASE_LABEL, type CycleState } from "@/lib/cycle";
 import { FLOW, labelOf } from "@/lib/labels";
 import { fromKey, setPill, type DayLog } from "@/lib/db";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
+import { lookAhead } from "@/lib/ahead";
 
 export default function Hoy() {
   // La frase de hoy sale siempre del banco local escrito a mano
@@ -35,6 +36,12 @@ export default function Hoy() {
   // al sangrado, la de "Cómo va" a cómo va. Sin nada, decide la ficha.
   const [startAt, setStartAt] = useState<Paso | undefined>(undefined);
 
+  // Lo que suele tocar en los próximos días, si hay patrón de verdad.
+  const ahead = useMemo(
+    () => (ready ? lookAhead(days, cycles, settings, state.dayOfCycle) : null),
+    [ready, days, cycles, settings, state.dayOfCycle],
+  );
+
 
 
   // Antes de que IndexedDB conteste no pintamos números: un "día 1"
@@ -50,6 +57,8 @@ export default function Hoy() {
   const latest = cycles[cycles.length - 1];
 
   const head = headline(state, bleeding, latest?.startDate);
+  // Si ha escondido "cómo va el día" del registro, tampoco sale aquí.
+  const diaVisible = !settings.steps.hidden.includes("dia");
   const cta = mainAction(state, today?.flow);
 
   return (
@@ -125,8 +134,20 @@ export default function Hoy() {
         <p className="text-balance font-display text-[15.5px] font-semibold leading-[1.25] tracking-[-0.01em]">
           {line.text}
         </p>
-        <p className="mt-1 text-xs font-semibold" style={{ color: "var(--phase)" }}>
-          Contestar a Lilita ›
+        {/* Abajo, lo que suele tocar en los próximos días: los
+            patrones de Historial mirando hacia delante. Va en la misma
+            línea que "Contestar" para no robarle altura a la pantalla,
+            que tiene que caber entera sin desplazar. */}
+        <p className="mt-1 flex items-baseline justify-between gap-2 text-xs font-semibold">
+          <span style={{ color: "var(--phase)" }}>Contestar a Lilita ›</span>
+          {ahead && (
+            <span
+              className="min-w-0 truncate text-muted"
+              aria-label={`${ahead.text}. Pasó en ${ahead.hits} de ${ahead.of} ciclos.`}
+            >
+              🔮 {ahead.short}
+            </span>
+          )}
         </p>
       </Link>
 
@@ -140,7 +161,9 @@ export default function Hoy() {
         </h2>
         <div
           className="mt-2 grid gap-2"
-          style={{ gridTemplateColumns: `repeat(${settings.pill.enabled ? 3 : 2}, minmax(0, 1fr))` }}
+          style={{
+            gridTemplateColumns: `repeat(${1 + (settings.pill.enabled ? 1 : 0) + (diaVisible ? 1 : 0)}, minmax(0, 1fr))`,
+          }}
         >
           {settings.pill.enabled && (
             <Tile
@@ -176,13 +199,15 @@ export default function Hoy() {
             done={today?.flow !== undefined}
             onClick={() => openSheet("flow")}
           />
-          <Tile
-            label="Cómo va"
-            value={dayFeeling(today) ?? "—"}
-            hint={dayFeeling(today) ? "✓ apuntado" : "sin contestar"}
-            done={dayFeeling(today) !== undefined}
-            onClick={() => openSheet("dia")}
-          />
+          {diaVisible && (
+            <Tile
+              label="Cómo va"
+              value={dayFeeling(today) ?? "—"}
+              hint={dayFeeling(today) ? "✓ apuntado" : "sin contestar"}
+              done={dayFeeling(today) !== undefined}
+              onClick={() => openSheet("dia")}
+            />
+          )}
         </div>
       </section>
 

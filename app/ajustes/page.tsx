@@ -4,6 +4,8 @@ import { Lilita } from "@/components/lilita";
 import { BackupPanel } from "@/components/backup-panel";
 import { MemoryPanel } from "@/components/memory-panel";
 import { PillPanel } from "@/components/pill-panel";
+import { AlertsPanel } from "@/components/alerts-panel";
+import { StepsPanel } from "@/components/steps-panel";
 import { updateSettings, type HumorLevel, type Settings } from "@/lib/db";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
 
@@ -28,7 +30,7 @@ const TEMAS: { value: Settings["theme"]; label: string }[] = [
 ];
 
 export default function Ajustes() {
-  const { ready, settings } = useLilaila();
+  const { ready, settings, windows } = useLilaila();
   if (!ready) return null;
 
   return (
@@ -58,9 +60,17 @@ export default function Ajustes() {
         ))}
       </Group>
 
+      <StepsPanel settings={settings} />
+
       <MemoryPanel chat={settings.chat} />
 
-      <PillPanel pill={settings.pill} />
+      <PillPanel settings={settings} />
+
+      <AlertsPanel
+        settings={settings}
+        hasSensitive={!!windows.sensitive}
+        hasMonster={!!windows.monster}
+      />
 
       <Group title="Aspecto">
         {TEMAS.map((opt) => (
