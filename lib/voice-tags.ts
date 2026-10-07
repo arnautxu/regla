@@ -1,10 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════
    ETIQUETAS DE VOZ
 
-   Lilita escribe acotaciones como [sighs] o [laughs] para que
-   ElevenLabs las interprete. Son para la voz, no para leer: el chat
-   las quita del texto y, si el modelo de voz no las entiende, la ruta
-   también, para que nunca se pronuncien en alto.
+   En las llamadas Lilita dice acotaciones como [sighs] o [laughs]
+   para que ElevenLabs las interprete. Son para la voz, no para leer:
+   la pantalla de la llamada y el chat (por si alguna se cuela) las
+   quitan del texto.
 
    Solo cuenta como etiqueta una palabra o dos en minúsculas entre
    corchetes, sin "(" detrás: así un enlace markdown no se confunde.
@@ -23,7 +23,3 @@ export function stripVoiceTags(text: string): string {
     .trim();
 }
 
-/** Los modelos de ElevenLabs que entienden etiquetas (v3 en adelante). */
-export function modelSupportsTags(model: string): boolean {
-  return /^eleven_v\d+/.test(model) && !/^eleven_v[12]\b/.test(model);
-}
