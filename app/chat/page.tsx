@@ -372,6 +372,9 @@ export default function Chat() {
         {error && (
           <p role="alert" className="text-sm" style={{ color: "var(--accent)" }}>
             Me he quedado sin palabras. Prueba otra vez en un momento.
+            {whyFailed(error) && (
+              <span className="mt-1 block text-xs text-muted">{whyFailed(error)}</span>
+            )}
           </p>
         )}
         <div ref={bottom} />
@@ -418,6 +421,18 @@ function rawOf(m: UIMessage): string {
 }
 
 /** Lo que se lee en pantalla: sin acotaciones. */
+/** El porqué del fallo, si vale la pena enseñarlo. */
+function whyFailed(error: Error): string {
+  const raw = error.message ?? "";
+  try {
+    const body = JSON.parse(raw) as { error?: string };
+    if (body.error) return body.error;
+  } catch {}
+  if (!raw || raw === "An error occurred.") return "";
+  if (/failed to fetch|load failed|network/i.test(raw)) return "Sin conexión.";
+  return raw.slice(0, 200);
+}
+
 function textOf(m: UIMessage): string {
   return stripVoiceTags(rawOf(m));
 }
