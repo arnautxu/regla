@@ -1,5 +1,7 @@
 import type {
   AngerLevel,
+  AngerNeed,
+  AngerReason,
   CryReason,
   FlowLevel,
   MoodTag,
@@ -23,6 +25,25 @@ export const ANGER_LEVELS: Opcion<AngerLevel>[] = [
   { value: 1, label: "Un mordisquito" },
   { value: 2, label: "Bastante" },
   { value: 3, label: "Monstruo total" },
+];
+
+export const ANGER_REASONS: Opcion<AngerReason>[] = [
+  { value: "algo-dicho", label: "Algo que has dicho" },
+  { value: "algo-hecho", label: "Algo que has hecho" },
+  { value: "no-has-hecho", label: "Algo que NO has hecho" },
+  { value: "no-me-escuchas", label: "No me escuchas" },
+  { value: "cansada", label: "Estoy cansada" },
+  { value: "hambre", label: "Tengo hambre" },
+  { value: "no-se", label: "Ni idea, pero sí" },
+];
+
+export const ANGER_NEEDS: Opcion<AngerNeed>[] = [
+  { value: "abrazo", label: "Un abrazo" },
+  { value: "espacio", label: "Espacio" },
+  { value: "perdon", label: "Que me pidas perdón" },
+  { value: "hablar", label: "Hablarlo" },
+  { value: "comida", label: "Comida, ya" },
+  { value: "nada", label: "Nada, ya se pasará" },
 ];
 
 export const CRY_INTENSITIES = [
@@ -119,6 +140,6 @@ export function labelsOf<T>(opciones: Opcion<T>[], values: T[] | undefined): str
   return opciones.filter((o) => values.includes(o.value)).map((o) => o.label);
 }
 
-export function labelOf<T>(opciones: Opcion<T>[], value: T | undefined): string | undefined {
+export function labelOf<T>(opciones: readonly Opcion<T>[], value: T | undefined): string | undefined {
   return opciones.find((o) => o.value === value)?.label;
 }

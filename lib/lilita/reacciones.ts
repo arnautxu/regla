@@ -1,5 +1,5 @@
 import type { FaceMood } from "@/components/lilita-face";
-import type { FlowLevel, MoodTag, SymptomTag } from "../db";
+import type { AngerLevel, AngerNeed, AngerReason, CryReason, FlowLevel, MoodTag, SymptomTag } from "../db";
 
 /* ═══════════════════════════════════════════════════════════════
    LILITA CONTESTA A CADA RESPUESTA
@@ -75,3 +75,50 @@ export function reaccionSexo(si: boolean): Reaccion {
     ? { texto: "Cuéntame… o no.", cara: "flirty" }
     : { texto: "Apuntado.", cara: "neutral" };
 }
+
+/* ── PAS ──────────────────────────────────────────────────────────
+   Llorando, nada de gracias: Lilita acompaña y ya. */
+
+export const REACCION_PAS_INTENSIDAD: Record<1 | 2 | 3, Reaccion> = {
+  1: { texto: "Un poquito. Aquí estoy.", cara: "cuidando" },
+  2: { texto: "Vale. Respira conmigo.", cara: "cuidando" },
+  3: { texto: "Uf. Ven aquí.", cara: "llorando" },
+};
+
+export const REACCION_PAS_MOTIVO: Record<CryReason, Reaccion> = {
+  estres: { texto: "Demasiadas cosas a la vez.", cara: "cuidando" },
+  discusion: { texto: "Las discusiones dejan tocada.", cara: "cuidando" },
+  dolor: { texto: "Doler cansa. Mímate.", cara: "cuidando" },
+  tristeza: { texto: "Llorar también limpia.", cara: "llorando" },
+  alegria: { texto: "¡De las buenas! Me encanta.", cara: "energica" },
+  "no-se": { texto: "A veces sale y ya. Válido.", cara: "neutral" },
+  otro: { texto: "Apuntado.", cara: "neutral" },
+};
+
+/* ── Cookie Monster ───────────────────────────────────────────────
+   Aquí sí puede ser gamberra: el enfado es con Arnau, no con ella. */
+
+export const REACCION_ENFADO_NIVEL: Record<AngerLevel, Reaccion> = {
+  1: { texto: "Un mordisquito. Arnau sobrevivirá.", cara: "gremlin" },
+  2: { texto: "Bastante. Que se vaya preparando.", cara: "enfadada" },
+  3: { texto: "MONSTRUO TOTAL. Arnau, corre.", cara: "enfadada" },
+};
+
+export const REACCION_ENFADO_MOTIVO: Record<AngerReason, Reaccion> = {
+  "algo-dicho": { texto: "Esa boquita, Arnau…", cara: "enfadada" },
+  "algo-hecho": { texto: "Apuntado. Lo va a pagar.", cara: "enfadada" },
+  "no-has-hecho": { texto: "Clásico. Muy de Arnau.", cara: "gremlin" },
+  "no-me-escuchas": { texto: "¿Hola? ¿Arnau? ¿Hay alguien?", cara: "enfadada" },
+  cansada: { texto: "Cansada y con Arnau cerca. Mala mezcla.", cara: "exhausta" },
+  hambre: { texto: "Enfadambre. Lo más peligroso.", cara: "gremlin" },
+  "no-se": { texto: "No hace falta motivo. Estás en tu derecho.", cara: "gremlin" },
+};
+
+export const REACCION_ENFADO_NECESITA: Record<AngerNeed, Reaccion> = {
+  abrazo: { texto: "Abrazo de oso, pero que no hable.", cara: "cuidando" },
+  espacio: { texto: "Distancia de seguridad activada.", cara: "neutral" },
+  perdon: { texto: "Y un perdón de los buenos.", cara: "enfadada" },
+  hablar: { texto: "Con calma. Bueno, intentadlo.", cara: "neutral" },
+  comida: { texto: "Arnau: comida. YA.", cara: "gremlin" },
+  nada: { texto: "Se pasará. Tú mandas.", cara: "neutral" },
+};

@@ -20,6 +20,15 @@ export type Novedad = {
 
 export const NOVEDADES: Novedad[] = [
   {
+    id: "2026-10-07-d",
+    titulo: "Llorar y enfadarte ahora va paso a paso",
+    cambios: [
+      "«He llorado» te pregunta de una en una, como el registro del día: cómo de fuerte, por qué y si quieres contarme algo.",
+      "Cookie Monster igual: cuánto monstruo, qué ha hecho Arnau esta vez y qué te haría falta. Y yo opino, claro.",
+      "Al final te enseño cómo queda y tocas lo que quieras cambiar.",
+    ],
+  },
+  {
     id: "2026-10-07-c",
     titulo: "El PDF para la gine ya sale, por fin",
     cambios: [

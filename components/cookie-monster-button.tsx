@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   addAngerEvent,
   openAnger,
@@ -8,13 +8,17 @@ import {
   toKey,
   updateAngerEvent,
   type AngerEvent,
-  type AngerLevel,
   type DayLog,
 } from "@/lib/db";
-import { ANGER_LEVELS } from "@/lib/labels";
+import { ANGER_LEVELS, ANGER_NEEDS, ANGER_REASONS, labelOf } from "@/lib/labels";
 import { formatMinutes } from "@/lib/episodes";
 import { haptic } from "@/lib/use-lilaila";
-import { Chips } from "./pas-button";
+import {
+  REACCION_ENFADO_MOTIVO,
+  REACCION_ENFADO_NECESITA,
+  REACCION_ENFADO_NIVEL,
+} from "@/lib/lilita/reacciones";
+import { EpisodioSheet, UnaOpcion } from "./episodio-sheet";
 
 /* ═══════════════════════════════════════════════════════════════
    COOKIE MONSTER
@@ -29,10 +33,15 @@ import { Chips } from "./pas-button";
 
    Si el aviso falla, el enfado se apunta igual: lo que pasó, pasó,
    aunque no haya cobertura.
+
+   Lo de después va por pasos, como la hoja del día: cuánto
+   monstruo, qué ha pasado y qué le haría falta, una pregunta cada
+   vez y con Lilita echando leña. Todo se queda en su móvil: a Arnau
+   solo le llega el aviso, como siempre.
    ═══════════════════════════════════════════════════════════════ */
 
 export function CookieMonsterButton({ days }: { days: DayLog[] }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const [abierta, setAbierta] = useState(false);
   const [event, setEvent] = useState<AngerEvent | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -69,7 +78,7 @@ export function CookieMonsterButton({ days }: { days: DayLog[] }) {
       await addAngerEvent(fresh);
       setEvent(fresh);
       setSendError(null);
-      dialog.current?.showModal();
+      setAbierta(true);
       const error = await post("/api/cookie-monster");
       setSendError(error);
       haptic(error ? [40, 50, 40] : [14, 40, 18]);
@@ -93,18 +102,15 @@ export function CookieMonsterButton({ days }: { days: DayLog[] }) {
     }
   }
 
-  async function setLevel(level: AngerLevel | undefined) {
+  function patch(p: Partial<Omit<AngerEvent, "id" | "at">>) {
     if (!event) return;
-    haptic(8);
-    setEvent({ ...event, level });
-    await updateAngerEvent(toKey(new Date(event.at)), event.id, { level }).catch(() => {});
+    setEvent({ ...event, ...p });
+    void updateAngerEvent(toKey(new Date(event.at)), event.id, p).catch(() => {});
   }
 
   async function undo() {
     if (!event) return;
     await removeAngerEvent(toKey(new Date(event.at)), event.id).catch(() => {});
-    haptic(6);
-    dialog.current?.close();
   }
 
   const label = flash ?? (busy ? "Mandando…" : open ? "Se me ha pasado" : "Cookie Monster");
@@ -128,62 +134,83 @@ export function CookieMonsterButton({ days }: { days: DayLog[] }) {
         </span>
       </button>
 
-      <dialog
-        ref={dialog}
-        className="sheet"
-        aria-labelledby="cm-title"
-        onClose={() => setEvent(null)}
-        onPointerDown={(e) => {
-          if (e.target === dialog.current) dialog.current?.close();
-        }}
-      >
-        {event && (
-          <div className="sheet-panel flex flex-col gap-lg px-lg pt-md">
-            <div aria-hidden="true" className="mx-auto h-1 w-10 rounded-full" style={{ background: "var(--border-strong)" }} />
-            <header>
-              <h2 id="cm-title" className="font-display text-lg font-bold">
-                {busy ? "Avisando a Arnau…" : sendError ? "Apuntado, pero sin aviso" : "🍪 Arnau ya lo sabe"}
-              </h2>
-              <p className="mt-1 text-sm text-muted">
-                {sendError
-                  ? `${sendError} El enfado queda guardado igual.`
-                  : "Cuando se te pase, toca «Se me ha pasado» en Hoy y le llega la paz."}
-              </p>
-            </header>
-
-            <Chips
-              legend="¿Cuánto monstruo hoy?"
-              options={ANGER_LEVELS}
-              value={event.level}
-              onChange={(level) => void setLevel(level)}
-            />
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => void undo()}
-                className="min-h-[52px] flex-1 rounded-full font-semibold"
-                style={{ background: "var(--bg)", boxShadow: "var(--depth-sm)" }}
-              >
-                Deshacer
-              </button>
-              <button
-                type="button"
-                onClick={() => dialog.current?.close()}
-                className="min-h-[52px] flex-[1.5] rounded-full font-display font-bold"
-                style={{ background: "var(--accent)", color: "var(--on-accent)", boxShadow: "3px 3px 0 0 var(--depth-shadow)" }}
-              >
-                Listo
-              </button>
-            </div>
-            {!sendError && !busy && (
-              <p className="-mt-sm text-center text-xs text-faint">
-                «Deshacer» lo borra de aquí; el aviso a Arnau ya ha salido.
-              </p>
-            )}
-          </div>
-        )}
-      </dialog>
+      <EpisodioSheet
+        abierta={abierta && !!event}
+        label="Cookie Monster"
+        cara="enfadada"
+        titulo={busy ? "Avisando a Arnau…" : sendError ? "Apuntado, pero sin aviso" : "🍪 Arnau ya lo sabe"}
+        subtitulo={
+          sendError
+            ? `${sendError} El enfado queda guardado igual.`
+            : "Ahora cuéntame a mí. Solo si quieres."
+        }
+        celebra="Expediente completo. Arnau, tiembla."
+        aviso={
+          sendError
+            ? undefined
+            : "Cuando se te pase, toca «Se me ha pasado» en Hoy. «Deshacer» lo borra de aquí; el aviso a Arnau ya ha salido."
+        }
+        onDeshacer={() => void undo()}
+        onCerrar={() => setAbierta(false)}
+        pasos={[
+          {
+            id: "nivel",
+            nombre: "Cuánto",
+            titulo: "¿Cuánto monstruo?",
+            hecho: event?.level !== undefined,
+            valor: labelOf(ANGER_LEVELS, event?.level),
+            render: (contestada) => (
+              <UnaOpcion
+                label="Cuánto monstruo"
+                options={ANGER_LEVELS}
+                value={event?.level}
+                onChange={(v) => {
+                  patch({ level: v });
+                  contestada(v === undefined ? null : REACCION_ENFADO_NIVEL[v]);
+                }}
+              />
+            ),
+          },
+          {
+            id: "motivo",
+            nombre: "Por qué",
+            titulo: "¿Qué ha hecho esta vez?",
+            ayuda: "O qué no ha hecho, que también cuenta.",
+            hecho: event?.reason !== undefined,
+            valor: labelOf(ANGER_REASONS, event?.reason),
+            render: (contestada) => (
+              <UnaOpcion
+                label="Qué ha pasado"
+                options={ANGER_REASONS}
+                value={event?.reason}
+                onChange={(v) => {
+                  patch({ reason: v });
+                  contestada(v === undefined ? null : REACCION_ENFADO_MOTIVO[v]);
+                }}
+              />
+            ),
+          },
+          {
+            id: "necesita",
+            nombre: "Qué necesitas",
+            titulo: "¿Qué te haría falta?",
+            ayuda: "Para que se te pase antes.",
+            hecho: event?.need !== undefined,
+            valor: labelOf(ANGER_NEEDS, event?.need),
+            render: (contestada) => (
+              <UnaOpcion
+                label="Qué te haría falta"
+                options={ANGER_NEEDS}
+                value={event?.need}
+                onChange={(v) => {
+                  patch({ need: v });
+                  contestada(v === undefined ? null : REACCION_ENFADO_NECESITA[v]);
+                }}
+              />
+            ),
+          },
+        ]}
+      />
     </>
   );
 }
