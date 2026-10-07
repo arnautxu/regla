@@ -37,6 +37,10 @@ type Props = {
   className?: string;
   /** Mueve la boca como si hablara (p. ej. mientras suena su voz). */
   speaking?: boolean;
+  /** Saluda con la mano al aparecer (p. ej. al abrir el chat). */
+  saluda?: boolean;
+  /** Provisional, solo para comparar propuestas. */
+  manos?: "rojas" | "guantes";
 };
 
 const BODY = "M60 8 C60 8 98 56 98 88 A38 38 0 1 1 22 88 C22 56 60 8 60 8 Z";
@@ -57,7 +61,14 @@ const INSTANT = { duration: 0 } as const;
  *  interpolar; si no, la pieza se cambia de golpe (con la key). */
 const shapeOf = (d: string) => d.replace(/-?\d*\.?\d+/g, "#");
 
-export function Lilita({ mood = "neutral", size = 200, className, speaking = false }: Props) {
+export function Lilita({
+  mood = "neutral",
+  size = 200,
+  className,
+  speaking = false,
+  saluda = false,
+  manos = "rojas",
+}: Props) {
   const reduced = useReducedMotion() ?? false;
   const lively = !reduced && size >= LIVELY_MIN_SIZE;
 
@@ -198,6 +209,48 @@ export function Lilita({ mood = "neutral", size = 200, className, speaking = fal
     };
   }, [speaking, reduced, talk]);
 
+  /* --- Saludo: el brazo derecho sube y se agita unas veces ------ */
+  const [waving, setWaving] = useState(saluda && lively);
+  const wave = useMotionValue(0);
+  useEffect(() => {
+    if (!waving) return;
+    const ctrl = animate(wave, [0, -16, 12, -16, 12, -8, 0], {
+      duration: 1.5,
+      delay: 0.35,
+      ease: "easeInOut",
+    });
+    const t = setTimeout(() => setWaving(false), 2100);
+    return () => {
+      ctrl.stop();
+      clearTimeout(t);
+    };
+  }, [waving, wave]);
+  const arms: [Arm, Arm] = waving ? [f.arms[0], ARM_WAVE] : f.arms;
+
+  const hand = manos === "guantes" ? HAND_GLOVE : HAND_RED;
+  const armLayer = (front: boolean) =>
+    arms.map((a, i) =>
+      !!a.front === front ? (
+        <motion.g
+          key={`arm${i}-${front}`}
+          style={i === 1 ? { rotate: wave, originX: "96px", originY: "94px" } : undefined}
+        >
+          <g strokeLinecap="round" fill="none">
+            <g stroke="var(--li-line)" strokeWidth="10">{limb(a.d, i, "arm-o")}</g>
+            <g stroke="var(--li-body)" strokeWidth="5">{limb(a.d, i, "arm-i")}</g>
+          </g>
+          <motion.circle
+            initial={false}
+            animate={{ cx: endOf(a.d)[0], cy: endOf(a.d)[1], r: a.fist ? hand.r + 1 : hand.r }}
+            transition={morph}
+            fill={hand.fill}
+            stroke="var(--li-line)"
+            strokeWidth="3.5"
+          />
+        </motion.g>
+      ) : null,
+    );
+
   const limb = (d: string, i: number, part: string) => (
     <motion.path key={`${part}${i}-${shapeOf(d)}`} initial={false} animate={{ d }} transition={morph} />
   );
@@ -249,15 +302,11 @@ export function Lilita({ mood = "neutral", size = 200, className, speaking = fal
             {f.shoes.map((d, i) => limb(d, i, "shoe"))}
           </g>
 
-          {/* --- Brazos -------------------------------------------- */}
-          <g strokeLinecap="round" fill="none">
-            <g stroke="var(--li-line)" strokeWidth="10">
-              {f.arms.map((d, i) => limb(d, i, "arm-o"))}
-            </g>
-            <g stroke="var(--li-body)" strokeWidth="5">
-              {f.arms.map((d, i) => limb(d, i, "arm-i"))}
-            </g>
-          </g>
+          {/* --- Brazos de detrás -----------------------------------
+              Cada brazo va detrás o delante del cuerpo según la pose.
+              Antes los abrazos iban siempre detrás y desaparecían:
+              Lilita se quedaba sin brazos justo al abrir el chat. */}
+          {armLayer(false)}
 
           {/* --- Cuerpo -------------------------------------------- */}
           <path
@@ -340,6 +389,9 @@ export function Lilita({ mood = "neutral", size = 200, className, speaking = fal
               </motion.g>
             )}
           </AnimatePresence>
+
+          {/* --- Brazos de delante --------------------------------- */}
+          {armLayer(true)}
         </g>
         </motion.g>
       </g>
@@ -369,7 +421,7 @@ export type Face = {
   pupil: { dx: number; dy: number; r: number };
   lids?: [string | null, string | null];
   mouth: { d: string; fill?: boolean };
-  arms: [string, string];
+  arms: [Arm, Arm];
   legs: [string, string];
   shoes: [string, string];
   extra?: React.ReactNode;
@@ -381,10 +433,36 @@ const SHOES_DOWN: [string, string] = [
   "M66 143 h20 a4 4 0 0 1 4 4 v3 a4 4 0 0 1 -4 4 h-21 a3 3 0 0 1 -3 -3 v-4 a4 4 0 0 1 4 -4 z",
 ];
 
-const ARMS_DOWN: [string, string] = ["M24 96 C14 100 10 108 12 116", "M96 96 C106 100 110 108 108 116"];
-const ARMS_UP: [string, string] = ["M24 92 C12 84 8 72 10 60", "M96 92 C108 84 112 72 110 60"];
-const ARMS_OUT: [string, string] = ["M24 94 C10 92 4 100 2 108", "M96 94 C110 92 116 100 118 108"];
-const ARMS_HUG: [string, string] = ["M26 100 C36 112 52 116 60 114", "M94 100 C84 112 68 116 60 114"];
+/** Un brazo: trazo del hombro a la mano (siempre "M C" para que
+ *  se transformen entre poses) y en qué capa va. */
+type Arm = { d: string; front?: boolean; fist?: boolean };
+
+/** La mano va al final del trazo: los dos últimos números. */
+const endOf = (d: string): [number, number] => {
+  const n = d.match(/-?\d*\.?\d+/g)!.map(Number);
+  return [n[n.length - 2], n[n.length - 1]];
+};
+
+const HAND_RED = { fill: "var(--li-body)", r: 6 } as const;
+const HAND_GLOVE = { fill: "var(--li-shoe)", r: 6.5 } as const;
+
+/** Se dibuja el brazo izquierdo; el derecho es su espejo. */
+const mirror = (a: Arm): Arm => ({
+  ...a,
+  d: a.d.replace(/(-?\d*\.?\d+) (-?\d*\.?\d+)/g, (_, x, y) => `${120 - Number(x)} ${y}`),
+});
+const pair = (l: Arm, r: Arm = l): [Arm, Arm] => [l, mirror(r)];
+
+const ARM_DOWN: Arm = { d: "M24 96 C14 102 11 112 13 122" };
+const ARM_HIP: Arm = { d: "M24 96 C8 96 6 112 27 114" };
+const ARM_DANGLE: Arm = { d: "M24 98 C19 110 17 124 18 136" };
+const ARM_UP: Arm = { d: "M24 92 C12 84 8 72 10 57" };
+const ARM_FIST: Arm = { d: "M24 96 C8 98 4 86 8 73", fist: true };
+const ARM_CHEEK: Arm = { d: "M23 94 C12 102 16 116 32 107", front: true };
+const ARM_CHIN: Arm = { d: "M23 96 C10 106 16 120 33 114", front: true };
+const ARM_HEART: Arm = { d: "M24 98 C18 112 30 122 49 121", front: true };
+/** Brazo derecho saludando (ya en coordenadas de la derecha). */
+const ARM_WAVE: Arm = { d: "M96 92 C108 84 114 72 112 57" };
 
 export const FACES: Record<Mood, Face> = {
   /* Sarcástica de serie: una ceja arriba y media sonrisa. */
@@ -393,7 +471,7 @@ export const FACES: Record<Mood, Face> = {
     brows: ["M36 59 Q45 58 54 57", "M70 49 Q77 52 84 55"],
     pupil: { dx: 2, dy: -1, r: 6.5 },
     mouth: { d: "M46 104 Q58 112 76 100" },
-    arms: ARMS_DOWN,
+    arms: pair(ARM_HIP, ARM_DOWN),
     legs: LEGS_DOWN,
     shoes: SHOES_DOWN,
   },
@@ -408,7 +486,7 @@ export const FACES: Record<Mood, Face> = {
       "M59.5 78 a15.5 16.5 0 0 1 31 0 z",
     ],
     mouth: { d: "M47 106 Q60 105 73 104" },
-    arms: ["M24 98 C14 104 12 112 14 120", "M96 98 C106 104 108 112 106 120"],
+    arms: pair(ARM_DANGLE),
     legs: LEGS_DOWN,
     shoes: SHOES_DOWN,
   },
@@ -419,7 +497,7 @@ export const FACES: Record<Mood, Face> = {
     brows: ["M36 54 Q45 47 54 52", "M84 54 Q75 47 66 52"],
     pupil: { dx: 0, dy: -2, r: 7.5 },
     mouth: { d: "M42 98 Q60 124 78 98 Z", fill: true },
-    arms: ARMS_UP,
+    arms: pair(ARM_UP),
     legs: ["M48 122 C46.7 128.3 45.3 134.7 44 141", "M72 122 C74 128.3 76 134.7 78 141"],
     shoes: [
       "M32 141 h20 a4 4 0 0 1 4 4 v4 a3 3 0 0 1 -3 3 h-21 a4 4 0 0 1 -4 -4 v-3 a4 4 0 0 1 4 -4 z",
@@ -442,7 +520,7 @@ export const FACES: Record<Mood, Face> = {
     pupil: { dx: 4, dy: 0, r: 6.5 },
     lids: ["M29.5 74 a15.5 16.5 0 0 1 31 0 z", null],
     mouth: { d: "M44 106 Q56 110 78 96" },
-    arms: ARMS_HUG,
+    arms: pair(ARM_HIP, ARM_CHIN),
     legs: LEGS_DOWN,
     shoes: SHOES_DOWN,
   },
@@ -455,7 +533,7 @@ export const FACES: Record<Mood, Face> = {
     mouth: {
       d: "M42 100 h36 v10 h-36 z M50 100 v10 M58 100 v10 M66 100 v10",
     },
-    arms: ARMS_OUT,
+    arms: pair(ARM_FIST),
     legs: LEGS_DOWN,
     shoes: SHOES_DOWN,
     extra: (
@@ -471,7 +549,7 @@ export const FACES: Record<Mood, Face> = {
     brows: ["M36 49 Q45 44 54 48", "M84 49 Q75 44 66 48"],
     pupil: { dx: 0, dy: 0, r: 3.5 },
     mouth: { d: "M44 104 q6 -7 12 0 t12 0" },
-    arms: ["M24 94 C16 84 18 74 26 70", "M96 94 C104 84 102 74 94 70"],
+    arms: pair(ARM_CHEEK),
     legs: LEGS_DOWN,
     shoes: SHOES_DOWN,
     extra: (
@@ -487,9 +565,18 @@ export const FACES: Record<Mood, Face> = {
     brows: ["M36 58 Q45 55.5 54 53", "M84 58 Q75 55.5 66 53"],
     pupil: { dx: 0, dy: 1, r: 7 },
     mouth: { d: "M50 104 Q60 110 70 104" },
-    arms: ARMS_HUG,
+    arms: pair(ARM_HEART),
     legs: LEGS_DOWN,
     shoes: SHOES_DOWN,
+    extra: (
+      <path
+        d="M60 131 C48 123 48 113 54 113 C57.5 113 60 116.5 60 116.5 C60 116.5 62.5 113 66 113 C72 113 72 123 60 131 Z"
+        fill="var(--li-shine)"
+        stroke="var(--li-line)"
+        strokeWidth="3"
+        strokeLinejoin="round"
+      />
+    ),
   },
 
   /* Frita. */
@@ -502,7 +589,7 @@ export const FACES: Record<Mood, Face> = {
       "M59.5 78 a15.5 16.5 0 0 1 31 0 z",
     ],
     mouth: { d: "M54 104 a6 5 0 1 0 12 0 a6 5 0 1 0 -12 0" },
-    arms: ARMS_DOWN,
+    arms: pair(ARM_DOWN),
     legs: LEGS_DOWN,
     shoes: SHOES_DOWN,
     extra: (
@@ -522,7 +609,7 @@ export const FACES: Record<Mood, Face> = {
     brows: ["M36 52 Q45 46 54 51", "M84 52 Q75 46 66 51"],
     pupil: { dx: 0, dy: -2, r: 7 },
     mouth: { d: "M46 102 Q58 108 74 100" },
-    arms: ["M22 94 C8 82 2 62 6 38", "M98 94 C110 100 118 112 120 128"],
+    arms: [{ d: "M22 94 C8 82 2 62 6 38", fist: true }, { d: "M98 94 C110 100 118 112 120 128" }],
     legs: ["M48 122 C42 136 30 148 20 158", "M72 122 C78 136 90 148 100 158"],
     shoes: [
       "M10 158 h20 a4 4 0 0 1 4 4 v4 a3 3 0 0 1 -3 3 h-21 a4 4 0 0 1 -4 -4 v-3 a4 4 0 0 1 4 -4 z",
