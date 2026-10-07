@@ -43,7 +43,7 @@ export function FlowRow({
         Sangrado
       </h3>
 
-      <div className="mt-2 grid grid-cols-5 gap-1.5">
+      <div className="mt-1.5 grid grid-cols-5 gap-1.5">
         {opciones.map((opt) => {
           const active = value === opt.value;
           return (
@@ -55,7 +55,7 @@ export function FlowRow({
                 haptic(active ? 6 : 14);
                 onChange(active ? undefined : opt.value);
               }}
-              className={`flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-xl px-1 text-2xs leading-[1.15] ${CHOICE_CLASS}`}
+              className={`flex min-h-[50px] flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-2xs leading-[1.15] ${CHOICE_CLASS}`}
               style={choiceStyle(active)}
             >
               <Drops n={opt.value} active={active} />

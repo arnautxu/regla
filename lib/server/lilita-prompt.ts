@@ -171,7 +171,7 @@ function tono(c: LilitaContext): string {
 }
 
 /** Instrucciones para el chat. */
-export function chatInstructions(c: LilitaContext): string {
+export function chatInstructions(c: LilitaContext, { tools = true } = {}): string {
   return [
     PERSONAJE,
     tono(c),
@@ -193,10 +193,30 @@ le pasa. Tienes sus datos delante.
     // Las instrucciones de memoria solo si de verdad puede guardar.
     // Con el interruptor apagado, contarle que tiene una herramienta
     // que no existe es la receta para que la llame y falle.
-    c.memorias.length || c.puedeRecordar ? MEMORIA : "",
+    tools && (c.memorias.length || c.puedeRecordar) ? MEMORIA : "",
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+/* La llamada en directo. Mismo personaje y mismos datos que el chat,
+   pero hablado: nada de lo que solo tiene sentido escrito, y sin las
+   herramientas de memoria, que en la llamada no existen. */
+const LLAMADA = `
+ESTÁIS HABLANDO
+Esto es una llamada de voz en tiempo real, no el chat. Todo lo que
+digas se oye al momento.
+
+- Frases cortas y naturales, como en una conversación de verdad.
+  Una o dos por turno; si quiere más, ya te lo pedirá.
+- Nada de listas, markdown, emojis ni enlaces: no se pueden decir.
+- Si te interrumpe, no pasa nada: déjala hablar.
+- Los números, dichos como se dicen: "dentro de cuatro días", no "4d".
+`.trim();
+
+/** Instrucciones para la llamada en directo con ElevenLabs. */
+export function liveInstructions(c: LilitaContext): string {
+  return [chatInstructions(c, { tools: false }), LLAMADA].join("\n\n");
 }
 
 /* ═══════════════════════════════════════════════════════════════

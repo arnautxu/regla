@@ -50,7 +50,7 @@ export function MoodRow({
         Cómo va el día
       </h3>
 
-      <div className="mt-2 grid grid-cols-4 gap-1.5">
+      <div className="mt-1.5 grid grid-cols-4 gap-1.5">
         {OPTIONS.map((opt) => {
           const active = current === opt.key;
           return (
@@ -65,7 +65,7 @@ export function MoodRow({
                   badDay: active ? false : opt.bad,
                 });
               }}
-              className={`min-h-[44px] rounded-xl px-1 text-xs font-medium leading-[1.15] ${CHOICE_CLASS}`}
+              className={`min-h-[40px] rounded-xl px-1 text-xs font-medium leading-[1.15] ${CHOICE_CLASS}`}
               style={choiceStyle(active)}
             >
               {opt.label}

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { useChat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
@@ -19,6 +20,12 @@ import { addMemory, db, removeMemory, updateSettings } from "@/lib/db";
 import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
 import { useVoice } from "@/lib/use-voice";
+
+// La librería de llamadas solo se descarga cuando Lídia llama.
+const LiveCall = dynamic(
+  () => import("@/components/live-call").then((m) => m.LiveCall),
+  { ssr: false },
+);
 
 const LIST = {
   hidden: {},
@@ -51,6 +58,7 @@ export default function Chat() {
   const { ready, state, today, settings, cycles, dateKey, line } = useLilaila();
   const days = useLiveQuery(() => db.days.toArray(), [], []);
   const [input, setInput] = useState("");
+  const [calling, setCalling] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
   const voice = useVoice();
   const voiceOn = voice.available && settings.chat.voice;
@@ -125,23 +133,57 @@ export default function Chat() {
     });
   }, [messages, status]);
 
-  // Cuando Lilita termina de escribir, lo dice. Solo al ACABAR: leer
-  // a trozos mientras llega cortaría las frases por la mitad.
-  const prevStatus = useRef(status);
+  // Lilita habla mientras escribe: cada vez que acaba una frase (o
+  // unas cuantas, si son cortas) se manda a la voz, y lo que quede se
+  // manda al terminar. La primera va sola y corta para que empiece a
+  // sonar cuanto antes; las siguientes, más largas, para que la voz
+  // no suene a trompicones.
+  const awaitingVoice = useRef(false);
+  const liveVoice = useRef<{ id: string; pos: number } | null>(null);
   useEffect(() => {
-    const was = prevStatus.current;
-    prevStatus.current = status;
-    if (!voiceOn || status !== "ready" || was === "ready") return;
+    if (!voiceOn) return;
+    if (status === "error") {
+      awaitingVoice.current = false;
+      liveVoice.current = null;
+      return;
+    }
     const last = messages.at(-1);
     if (last?.role !== "assistant") return;
-    if (textOf(last)) void voice.speak(last.id, rawOf(last));
+    if (awaitingVoice.current && (status === "streaming" || status === "ready")) {
+      awaitingVoice.current = false;
+      liveVoice.current = { id: last.id, pos: 0 };
+    }
+    const lv = liveVoice.current;
+    if (!lv || lv.id !== last.id) return;
+
+    const raw = rawOf(last);
+    const boundary = /[.!?…]+["»)]*\s+/g;
+    boundary.lastIndex = lv.pos;
+    for (let m = boundary.exec(raw); m; m = boundary.exec(raw)) {
+      const cut = m.index + m[0].length;
+      const min = lv.pos === 0 ? 12 : 80;
+      const chunk = raw.slice(lv.pos, cut);
+      if (stripVoiceTags(chunk).length >= min) {
+        voice.enqueue(last.id, chunk);
+        lv.pos = cut;
+      }
+    }
+    if (status === "ready") {
+      const rest = raw.slice(lv.pos);
+      if (stripVoiceTags(rest)) voice.enqueue(last.id, rest);
+      voice.finish(last.id);
+      liveVoice.current = null;
+    }
   }, [status, messages, voiceOn, voice]);
 
   function send(text: string) {
     if (!text.trim() || status !== "ready") return;
     haptic(10);
     // Dentro del toque: es lo que deja sonar la respuesta en iOS.
-    if (voiceOn) voice.unlock();
+    if (voiceOn) {
+      voice.unlock();
+      awaitingVoice.current = true;
+    }
     void sendMessage({ text });
     setInput("");
   }
@@ -190,7 +232,31 @@ export default function Chat() {
             {settings.chat.voice ? "Voz" : "Muda"}
           </button>
         )}
+        {voice.available && (
+          <button
+            type="button"
+            aria-label="Llamar a Lilita"
+            onClick={() => {
+              haptic(10);
+              voice.stop();
+              setCalling(true);
+            }}
+            className="flex size-10 items-center justify-center rounded-full transition-transform active:scale-95"
+            style={{
+              background: "var(--accent)",
+              color: "var(--on-accent)",
+              boxShadow: "2px 2px 0 0 var(--depth-shadow)",
+            }}
+          >
+            <svg viewBox="0 0 24 24" className="size-5" fill="currentColor" aria-hidden="true">
+              <path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1l-2.3 2.2z" />
+            </svg>
+          </button>
+        )}
       </header>
+      {calling && (
+        <LiveCall context={context} mood={line.mood} onClose={() => setCalling(false)} />
+      )}
 
       <div className="flex flex-1 flex-col gap-lg overflow-y-auto pb-md">
         {messages.length === 0 && (

@@ -28,7 +28,7 @@ export function TagPicker<T extends string>({
         {label}
       </h3>
 
-      <ul className="mt-2 flex flex-wrap gap-1.5">
+      <ul className="mt-1.5 flex flex-wrap gap-1.5">
         {options.map((opt) => {
           const active = selected.includes(opt.value);
           return (
@@ -40,7 +40,7 @@ export function TagPicker<T extends string>({
                   haptic(active ? 6 : 12);
                   onToggle(opt.value);
                 }}
-                className={`min-h-[38px] rounded-full px-3 text-sm ${CHOICE_CLASS}`}
+                className={`min-h-[34px] rounded-full px-3 text-sm ${CHOICE_CLASS}`}
                 style={choiceStyle(active)}
               >
                 {opt.label}

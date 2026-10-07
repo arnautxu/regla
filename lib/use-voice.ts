@@ -51,8 +51,59 @@ export type Voice = {
   /** Hay que llamarlo dentro de un toque, antes de la primera respuesta */
   unlock: () => void;
   speak: (id: string, text: string) => Promise<void>;
+  /** Añade un trozo a la voz en directo de un mensaje que aún se escribe */
+  enqueue: (id: string, text: string) => void;
+  /** Ya no llegarán más trozos de ese mensaje */
+  finish: (id: string) => void;
   stop: () => void;
 };
+
+/** La voz en directo: trozos que se piden en cuanto llegan y suenan en orden. */
+type Live = {
+  id: string;
+  turn: number;
+  items: Promise<string>[];
+  next: number;
+  running: boolean;
+  done: boolean;
+};
+
+/** Pide el audio de un texto y devuelve una URL lista para sonar. */
+async function synth(text: string): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch("/api/voz", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+  } catch {
+    throw new Error("Sin conexión: no he podido pedir la voz.");
+  }
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(
+      body?.error ??
+        (res.status === 401
+          ? "La sesión ha caducado. Vuelve a entrar con el PIN."
+          : `La voz ha fallado (${res.status}).`),
+    );
+  }
+  const blob = await res.blob();
+  if (!blob.size) throw new Error("Ha llegado un audio vacío.");
+  return URL.createObjectURL(blob.type ? blob : new Blob([blob], { type: "audio/mpeg" }));
+}
+
+/** Espera a que el audio acabe (o lo paren). */
+function untilDone(el: HTMLAudioElement): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      for (const ev of ["ended", "pause", "error"]) el.removeEventListener(ev, done);
+      resolve();
+    };
+    for (const ev of ["ended", "pause", "error"]) el.addEventListener(ev, done);
+  });
+}
 
 export function useVoice(): Voice {
   const [available, setAvailable] = useState(false);
@@ -68,6 +119,7 @@ export function useVoice(): Voice {
   // Cada petición lleva un turno: si llega tarde una voz vieja (porque
   // ya se ha pedido otra o se ha parado), no pisa a la nueva.
   const turn = useRef(0);
+  const live = useRef<Live | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -84,8 +136,11 @@ export function useVoice(): Voice {
     if (!audio.current) {
       const el = new Audio();
       el.preload = "auto";
-      el.addEventListener("ended", () => setPlaying(null));
-      el.addEventListener("error", () => setPlaying(null));
+      // Entre trozos de la voz en directo el audio también "acaba":
+      // ahí no se apaga el altavoz, lo apaga la cola al terminar.
+      const end = () => !live.current?.running && setPlaying(null);
+      el.addEventListener("ended", end);
+      el.addEventListener("error", end);
       // El silencio de desbloqueo también "suena": solo cuenta la voz.
       el.addEventListener("playing", () => setTalking(el.src.startsWith("blob:")));
       for (const ev of ["pause", "ended", "error", "emptied"])
@@ -108,6 +163,7 @@ export function useVoice(): Voice {
 
   const stop = useCallback(() => {
     turn.current++;
+    live.current = null;
     audio.current?.pause();
     setPlaying(null);
   }, []);
@@ -135,6 +191,7 @@ export function useVoice(): Voice {
   const speak = useCallback(
     async (id: string, text: string) => {
       const mine = ++turn.current;
+      live.current = null;
       const el = ensure();
       el.pause();
       setError(null);
@@ -148,46 +205,113 @@ export function useVoice(): Voice {
         return;
       }
 
-      let blob: Blob;
+      let src: string;
       try {
-        const res = await fetch("/api/voz", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ text }),
-        });
-        if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(
-            body?.error ??
-              (res.status === 401
-                ? "La sesión ha caducado. Vuelve a entrar con el PIN."
-                : `La voz ha fallado (${res.status}).`),
-          );
-        }
-        blob = await res.blob();
-        if (!blob.size) throw new Error("Ha llegado un audio vacío.");
+        src = await synth(text);
       } catch (e) {
         if (mine !== turn.current) return;
         setPlaying(null);
-        setError({
-          id,
-          message: e instanceof Error && e.message !== "Failed to fetch"
-            ? e.message
-            : "Sin conexión: no he podido pedir la voz.",
-        });
+        setError({ id, message: (e as Error).message });
         return;
       }
-      if (mine !== turn.current) return;
+      if (mine !== turn.current) {
+        URL.revokeObjectURL(src);
+        return;
+      }
 
       if (url.current) URL.revokeObjectURL(url.current);
-      url.current = URL.createObjectURL(
-        blob.type ? blob : new Blob([blob], { type: "audio/mpeg" }),
-      );
+      url.current = src;
       ready.current = { id, text, url: url.current };
       await play(el, id, url.current);
     },
     [ensure, play],
   );
+
+  /* La voz en directo. Cada frase se pide en cuanto Lilita la acaba
+     de escribir, mientras sigue con la siguiente, y suenan en orden:
+     así empieza a hablar a la primera frase en vez de esperar a que
+     termine todo el mensaje y a que se genere el audio entero. */
+  const drain = useCallback(
+    async (q: Live) => {
+      const el = ensure();
+      q.running = true;
+      while (q.next < q.items.length) {
+        let src: string;
+        try {
+          src = await q.items[q.next++];
+        } catch (e) {
+          if (q.turn !== turn.current) return;
+          q.running = false;
+          live.current = null;
+          setPlaying(null);
+          setError({ id: q.id, message: (e as Error).message });
+          return;
+        }
+        if (q.turn !== turn.current) {
+          URL.revokeObjectURL(src);
+          return;
+        }
+        const old = url.current;
+        url.current = src;
+        el.src = src;
+        if (old) URL.revokeObjectURL(old);
+        const ended = untilDone(el);
+        try {
+          await el.play();
+        } catch (e) {
+          q.running = false;
+          live.current = null;
+          setPlaying(null);
+          const name = (e as { name?: string })?.name;
+          setError({
+            id: q.id,
+            message:
+              name === "NotAllowedError"
+                ? "El móvil no la ha dejado hablar sola. Toca Escuchar."
+                : "No ha sonado. Toca Escuchar.",
+          });
+          return;
+        }
+        await ended;
+        if (q.turn !== turn.current) return;
+      }
+      q.running = false;
+      if (q.done && live.current === q) {
+        live.current = null;
+        setPlaying(null);
+      }
+    },
+    [ensure],
+  );
+
+  const enqueue = useCallback(
+    (id: string, text: string) => {
+      let q = live.current;
+      if (!q || q.id !== id) {
+        const mine = ++turn.current;
+        audio.current?.pause();
+        q = { id, turn: mine, items: [], next: 0, running: false, done: false };
+        live.current = q;
+        setError(null);
+        setPlaying(id);
+      }
+      const item = synth(text);
+      item.catch(() => {}); // se gestiona al llegarle el turno
+      q.items.push(item);
+      if (!q.running) void drain(q);
+    },
+    [drain],
+  );
+
+  const finish = useCallback((id: string) => {
+    const q = live.current;
+    if (!q || q.id !== id) return;
+    q.done = true;
+    if (!q.running) {
+      live.current = null;
+      setPlaying(null);
+    }
+  }, []);
 
   useEffect(
     () => () => {
@@ -197,5 +321,5 @@ export function useVoice(): Voice {
     [],
   );
 
-  return { available, playing, talking, error, unlock, speak, stop };
+  return { available, playing, talking, error, unlock, speak, enqueue, finish, stop };
 }

@@ -71,7 +71,7 @@ export function SexRow({
           Sexo
         </h3>
 
-        <div className="mt-2 grid grid-cols-2 gap-1.5">
+        <div className="mt-1.5 grid grid-cols-2 gap-1.5">
           {[
             { value: true, label: "Sí" },
             { value: false, label: "No" },
@@ -86,7 +86,7 @@ export function SexRow({
                   haptic(active ? 6 : 12);
                   onSet(active ? undefined : opt.value);
                 }}
-                className={`min-h-[44px] rounded-xl px-1 text-sm font-medium leading-[1.15] ${CHOICE_CLASS}`}
+                className={`min-h-[40px] rounded-xl px-1 text-sm font-medium leading-[1.15] ${CHOICE_CLASS}`}
                 style={choiceStyle(active)}
               >
                 {opt.label}

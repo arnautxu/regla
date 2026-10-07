@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, requireSession } from "@/lib/server/auth";
+import { explain, voiceId } from "@/lib/server/elevenlabs";
 import { modelSupportsTags, stripVoiceTags } from "@/lib/voice-tags";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -21,11 +22,6 @@ export const maxDuration = 30;
 
 /** Respuestas más largas se cortan: Lilita no suelta discursos. */
 const MAX_CHARS = 1200;
-
-// Voz por defecto: una de las de la biblioteca de ElevenLabs que habla
-// español. Para la definitiva, elige o diseña una en elevenlabs.io y
-// pon su id en ELEVENLABS_VOICE_ID.
-const DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL";
 
 // v4: entiende las etiquetas de emoción ([sighs], [laughs]…) que
 // escribe Lilita. Cuesta el doble por carácter que Flash y tarda más
@@ -60,7 +56,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "No hay nada que decir." }, { status: 400 });
   }
 
-  const voice = process.env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE;
+  const voice = voiceId();
   const model = process.env.ELEVENLABS_MODEL || DEFAULT_MODEL;
 
   const tts = (modelId: string) =>
@@ -122,43 +118,6 @@ export async function POST(req: Request) {
       "cache-control": "no-store",
     },
   });
-}
-
-/**
- * Traduce el error de ElevenLabs a algo que Arnau pueda arreglar.
- * Callarse aquí es lo peor: el altavoz no suena y nadie sabe por qué.
- */
-function explain(status: number, raw: string): string {
-  let code = "";
-  let message = "";
-  try {
-    const d = (JSON.parse(raw) as { detail?: unknown }).detail;
-    if (typeof d === "string") message = d;
-    else if (d && typeof d === "object") {
-      const o = d as { status?: unknown; code?: unknown; message?: unknown };
-      code = String(o.status ?? o.code ?? "");
-      message = String(o.message ?? "");
-    }
-  } catch {
-    message = raw;
-  }
-  const all = `${code} ${message}`.toLowerCase();
-
-  if (all.includes("unusual_activity") || all.includes("unusual activity"))
-    return "ElevenLabs ha bloqueado la cuenta gratuita por usarse desde un servidor. Hace falta un plan de pago (el Starter basta).";
-  if (all.includes("missing_permissions") || all.includes("permission"))
-    return "La clave de ElevenLabs no tiene permiso de Text to Speech. Edítala en elevenlabs.io y actívalo.";
-  if (all.includes("quota") || all.includes("credits") || status === 402)
-    return "Se han acabado los créditos de ElevenLabs de este mes.";
-  if (all.includes("voice_not_found") || all.includes("voice") && status === 404)
-    return "ElevenLabs no encuentra la voz. Revisa ELEVENLABS_VOICE_ID en Vercel.";
-  if (all.includes("model") && (status === 400 || status === 422))
-    return "ElevenLabs no acepta el modelo. Revisa ELEVENLABS_MODEL en Vercel o bórrala.";
-  if (status === 401 || all.includes("invalid_api_key"))
-    return "ElevenLabs no acepta la clave. Revisa ELEVENLABS_API_KEY en Vercel (sin espacios) y vuelve a desplegar.";
-  if (status === 429)
-    return "ElevenLabs va saturado. Prueba otra vez en un momento.";
-  return `ElevenLabs ha fallado (${status}${message ? `: ${message.slice(0, 120)}` : ""}).`;
 }
 
 /** El cuerpo de la petición según el modelo. */

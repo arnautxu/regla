@@ -68,6 +68,7 @@ export function DaySheet({
   onPeriodStart?: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
   const { settings, cycles, dateKey: hoyKey } = useLilaila();
   const empezoRegla = useRef(false);
 
@@ -76,7 +77,12 @@ export function DaySheet({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (base && !el.open) el.showModal();
+    if (base && !el.open) {
+      el.showModal();
+      // Si no, el navegador enfoca el primer botón (la flecha ‹) y en
+      // iPhone se queda con el aro rojo de foco nada más abrir.
+      panel.current?.focus({ preventScroll: true });
+    }
     if (!base && el.open) el.close();
   }, [base]);
 
@@ -172,7 +178,13 @@ export function DaySheet({
       aria-label={day ? format(day.date, "d 'de' MMMM", { locale: es }) : ""}
     >
       {day && (
-        <div className="sheet-panel flex flex-col gap-md px-lg pt-md">
+        <div ref={panel} tabIndex={-1} className="sheet-panel flex flex-col outline-none">
+          {/* Cabecera, cuerpo y pie como tres piezas: solo el cuerpo se
+              desplaza, si hace falta. Antes la hoja entera era el
+              contenedor con scroll y el pie "pegado" con sticky; en
+              iPhone el pie se quedaba a media hoja y la Nota asomaba
+              por debajo de él. */}
+          <div className="flex shrink-0 flex-col gap-xs px-lg pt-sm">
           <div
             aria-hidden="true"
             className="mx-auto h-1 w-10 rounded-full"
@@ -204,7 +216,7 @@ export function DaySheet({
                     haptic(6);
                     setOffset((o) => o + b.delta);
                   }}
-                  className="flex size-11 items-center justify-center rounded-full disabled:opacity-25"
+                  className="flex size-10 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:opacity-25"
                   style={{ color: "var(--fg-muted)" }}
                 >
                   <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -214,7 +226,9 @@ export function DaySheet({
               ))}
             </div>
           </header>
+          </div>
 
+          <div data-sheet-body className="flex min-h-0 flex-1 flex-col gap-sm overflow-y-auto overscroll-contain px-lg pt-2xs pb-md">
           {day.isFuture ? (
             <p className="text-sm leading-relaxed text-muted">
               Este día todavía no ha pasado. Cuando llegue me cuentas.
@@ -368,15 +382,16 @@ export function DaySheet({
                       note: e.target.value.trim() || undefined,
                     })
                   }
-                  rows={2}
+                  rows={1}
                   placeholder="Lo que quieras acordarte"
-                  className="mt-2 w-full resize-none rounded-xl px-3 py-2.5 text-sm outline-none"
+                  className="mt-1.5 w-full resize-none rounded-xl px-3 py-2 text-sm outline-none field-sizing-content"
                   style={{ background: "var(--surface)", boxShadow: "inset 0 0 0 1.5px var(--border)" }}
                 />
               </section>
 
             </>
           )}
+          </div>
 
           {/* Cada toque escribe al momento, y ahora la hoja lo dice
               junto al botón: antes "Guardar día" sugería que sin
@@ -385,12 +400,8 @@ export function DaySheet({
               click, así que llega. Pegado abajo para que "Listo" esté
               siempre a mano aunque la hoja sea larga. */}
           <div
-            className="sticky bottom-0 -mx-lg mt-auto flex items-center gap-md border-t border-line px-lg pt-sm"
-            style={{
-              background: "var(--surface)",
-              paddingBottom: "calc(var(--spacing-md) + env(safe-area-inset-bottom))",
-              marginBottom: "calc(-1 * (var(--spacing-lg) + env(safe-area-inset-bottom)))",
-            }}
+            className="flex shrink-0 items-center gap-md border-t border-line px-lg pt-sm"
+            style={{ paddingBottom: "calc(var(--spacing-sm) + env(safe-area-inset-bottom))" }}
           >
             <p className="flex-1 text-xs font-semibold" style={{ color: "var(--ok)" }}>
               {day.isFuture ? "" : "✓ Se guarda al momento"}
@@ -398,7 +409,7 @@ export function DaySheet({
             <button
               type="button"
               onClick={() => ref.current?.close()}
-              className="min-h-[50px] rounded-full px-xl font-display text-base font-bold tracking-[-0.01em] transition-[transform,box-shadow] duration-150 active:scale-[0.98] active:translate-x-[1px] active:translate-y-[1px]"
+              className="min-h-[46px] rounded-full px-xl font-display text-base font-bold tracking-[-0.01em] transition-[transform,box-shadow] duration-150 active:scale-[0.98] active:translate-x-[1px] active:translate-y-[1px]"
               style={{
                 background: "var(--accent)",
                 color: "var(--on-accent)",
