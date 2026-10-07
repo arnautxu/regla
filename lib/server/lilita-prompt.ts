@@ -257,6 +257,34 @@ export function resolveModel() {
   return process.env.LILAILA_MODEL ?? GATEWAY_DEFAULT;
 }
 
+/* ═══ Plan B cuando Gemini se queda sin cuota ════════════════════
+   La cuota gratuita de Gemini va por modelo, así que el primer
+   recambio es otro Flash con su propia cuota. Si tampoco, el AI
+   Gateway de Vercel (con clave, o por OIDC en los despliegues de
+   Vercel, aunque ahí exige tarjeta en la cuenta). */
+
+/** Un modelo candidato y si es Gemini (para sus opciones propias). */
+export type Candidate = { model: ReturnType<typeof resolveModel>; gemini: boolean; name: string };
+
+const GEMINI_FALLBACK = "gemini-3.5-flash";
+
+export function modelChain(): Candidate[] {
+  const chain: Candidate[] = [];
+  if (usingGemini()) {
+    const first = process.env.LILAILA_MODEL ?? GEMINI_DEFAULT;
+    const second = process.env.LILAILA_FALLBACK_MODEL ?? GEMINI_FALLBACK;
+    chain.push({ model: google(first), gemini: true, name: first });
+    if (second && second !== first) {
+      chain.push({ model: google(second), gemini: true, name: second });
+    }
+  }
+  if (process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN) {
+    const name = usingGemini() ? GATEWAY_DEFAULT : (process.env.LILAILA_MODEL ?? GATEWAY_DEFAULT);
+    chain.push({ model: name, gemini: false, name });
+  }
+  return chain;
+}
+
 export function modelName(): string {
   return usingGemini()
     ? `google/${process.env.LILAILA_MODEL ?? GEMINI_DEFAULT}`
