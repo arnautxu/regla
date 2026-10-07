@@ -204,13 +204,13 @@
 
 :root {
   --ph-menstrual: oklch(51% 0.2 26);
-  --ph-menstrual-bg: oklch(95% 0.032 26);
+  --ph-menstrual-bg: oklch(93.5% 0.045 22);
   --ph-folicular: oklch(48% 0.11 172);
   --ph-folicular-bg: oklch(95% 0.026 172);
   --ph-ovulacion: oklch(50% 0.18 350);
-  --ph-ovulacion-bg: oklch(95% 0.03 350);
+  --ph-ovulacion-bg: oklch(94.5% 0.035 335);
   --ph-lutea: oklch(50% 0.13 58);
-  --ph-lutea-bg: oklch(95% 0.03 58);
+  --ph-lutea-bg: oklch(95.5% 0.045 80);
   --ok: oklch(48% 0.11 172);
   --ok-bg: oklch(95% 0.026 172);
   --cookie: oklch(52% 0.11 240);

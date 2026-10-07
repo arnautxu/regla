@@ -2,7 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { addMonths, format, isSameMonth, startOfMonth } from "date-fns";
+import {
+  addMonths,
+  differenceInCalendarDays,
+  format,
+  isSameMonth,
+  startOfMonth,
+} from "date-fns";
 import { es } from "date-fns/locale";
 import { motion, type PanInfo } from "motion/react";
 import { Lilita } from "@/components/lilita";
@@ -10,7 +16,9 @@ import { DaySheet } from "@/components/day-sheet";
 import { BandSwatch, MonthGrid } from "@/components/month-grid";
 import { buildMonth, type DayCell, type SummaryRow } from "@/lib/calendar";
 import { capitalize } from "@/lib/format";
-import { db } from "@/lib/db";
+import { db, fromKey, type Cycle } from "@/lib/db";
+import { phaseByDay, PHASE_LABEL, type Phase } from "@/lib/cycle";
+import { summarize as summarizeDay } from "@/lib/day-summary";
 import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
 
@@ -18,9 +26,13 @@ import { haptic, useLilaila } from "@/lib/use-lilaila";
 const SWIPE = 56;
 
 export default function Calendario() {
-  const { ready, settings, cycles, dateKey } = useLilaila();
+  const { ready, settings, cycles, dateKey, state } = useLilaila();
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
   const [selected, setSelected] = useState<DayCell | null>(null);
+  // El día que se mira abajo, sin abrir nada. Tocar un día enseña qué
+  // pasó; tocarlo otra vez (o "Editar") abre la hoja. Antes cada toque
+  // tapaba el mes entero con un modal solo para leer una línea.
+  const [preview, setPreview] = useState<DayCell | null>(null);
   // De dónde viene el mes nuevo: a la derecha si avanzas, a la
   // izquierda si retrocedes. Solo afecta a la entrada; la salida no
   // se anima (el mes viejo desaparece al cambiar la key, como en las
@@ -54,6 +66,30 @@ export default function Calendario() {
     () => buildMonth(month, cycles, days ?? [], settings, dateKey),
     [month, cycles, days, settings, dateKey],
   );
+
+  const phases = useMemo(
+    () =>
+      phaseMap(
+        weeks.flat().map((c) => c.key),
+        cycles,
+        state.avgLength,
+        state.model.periodLength,
+      ),
+    [weeks, cycles, state.avgLength, state.model.periodLength],
+  );
+
+  const previewLog = useMemo(
+    () => (preview ? days?.find((d) => d.date === preview.key) : undefined),
+    [preview, days],
+  );
+
+  function pick(cell: DayCell) {
+    if (preview?.key === cell.key) {
+      setSelected(cell);
+      return;
+    }
+    setPreview(cell);
+  }
 
   const isCurrentMonth = isSameMonth(month, new Date());
   const hoyAño = new Date().getFullYear();
@@ -142,9 +178,26 @@ export default function Calendario() {
                 ease: EASE_OUT_QUART,
               }}
             >
-              <MonthGrid weeks={weeks} onSelect={setSelected} />
+              <MonthGrid
+                weeks={weeks}
+                onSelect={pick}
+                phases={phases}
+                selectedKey={preview?.key}
+              />
             </motion.div>
           </motion.div>
+
+          <PhaseLegend />
+
+          {preview && (
+            <DayPreview
+              cell={preview}
+              phase={phases.get(preview.key)}
+              lines={summarizeDay(previewLog, preview.key, cycles)}
+              onEdit={() => setSelected(preview)}
+              onClose={() => setPreview(null)}
+            />
+          )}
 
           <MonthSummary
             title={capitalize(format(month, "LLLL", { locale: es }))}
@@ -190,6 +243,131 @@ export default function Calendario() {
   );
 }
 
+/* ── Fase de cada día ────────────────────────────────────────────
+   El ciclo que contiene ese día y en qué día de él cae. Los días
+   después del último inicio siguen el ritmo medio hacia delante, así
+   que el mes que viene también se pinta: es una estimación, y por eso
+   va solo de fondo suave y nunca como banda. */
+function phaseMap(
+  keys: string[],
+  cycles: Cycle[],
+  avgLength: number,
+  periodLength: number,
+): Map<string, Phase> {
+  const sorted = [...cycles].sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const out = new Map<string, Phase>();
+  if (!sorted.length) return out;
+  for (const key of keys) {
+    let i = sorted.length - 1;
+    while (i >= 0 && sorted[i].startDate > key) i--;
+    if (i < 0) continue;
+    const cycle = sorted[i];
+    const next = sorted[i + 1];
+    let day = differenceInCalendarDays(fromKey(key), fromKey(cycle.startDate)) + 1;
+    let length = next
+      ? differenceInCalendarDays(fromKey(next.startDate), fromKey(cycle.startDate))
+      : avgLength;
+    if (!next && day > length) {
+      day = ((day - 1) % avgLength) + 1;
+      length = avgLength;
+    }
+    out.set(key, phaseByDay(day, length, periodLength));
+  }
+  return out;
+}
+
+function PhaseLegend() {
+  const items: { phase: Phase; v: string }[] = [
+    { phase: "menstrual", v: "menstrual" },
+    { phase: "folicular", v: "folicular" },
+    { phase: "ovulacion", v: "ovulacion" },
+    { phase: "lutea", v: "lutea" },
+  ];
+  return (
+    <ul className="-mt-sm flex flex-wrap gap-x-md gap-y-1 text-2xs text-muted" aria-label="Fases">
+      {items.map(({ phase, v }) => (
+        <li key={phase} className="flex items-center gap-1.5">
+          <span
+            aria-hidden="true"
+            className="size-3 rounded-[4px]"
+            style={{ background: `var(--ph-${v}-bg)`, boxShadow: `inset 0 0 0 1.5px var(--ph-${v})` }}
+          />
+          {PHASE_LABEL[phase]}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function DayPreview({
+  cell,
+  phase,
+  lines,
+  onEdit,
+  onClose,
+}: {
+  cell: DayCell;
+  phase?: Phase;
+  lines: ReturnType<typeof summarizeDay>;
+  onEdit: () => void;
+  onClose: () => void;
+}) {
+  const vacio = !lines.lineas.length && !lines.nota;
+  return (
+    <section
+      className="flat flex flex-col gap-2 rounded-2xl px-md py-md"
+      style={{ background: "var(--surface)" }}
+      aria-live="polite"
+    >
+      <div className="flex items-start justify-between gap-md">
+        <div>
+          <h2 className="font-display text-base font-bold tracking-[-0.015em]">
+            {capitalize(format(cell.date, "EEEE d 'de' MMMM", { locale: es }))}
+          </h2>
+          <p className="text-xs text-faint">
+            {[lines.estado, phase && !lines.estado ? `Fase ${PHASE_LABEL[phase].toLowerCase()}` : null]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Cerrar"
+          className="-mr-2 -mt-1 flex size-9 items-center justify-center rounded-full text-faint"
+        >
+          ✕
+        </button>
+      </div>
+      {cell.isFuture ? (
+        <p className="text-sm text-muted">Todavía no ha pasado.</p>
+      ) : vacio ? (
+        <p className="text-sm text-muted">Nada apuntado este día.</p>
+      ) : (
+        <ul className="flex flex-col gap-0.5 text-sm">
+          {lines.lineas.map((l) => (
+            <li key={l}>{l}</li>
+          ))}
+          {lines.nota && <li className="italic text-muted">“{lines.nota}”</li>}
+        </ul>
+      )}
+      {!cell.isFuture && (
+        <button
+          type="button"
+          onClick={() => {
+            haptic(10);
+            onEdit();
+          }}
+          className="mt-1 self-start rounded-full px-md py-2 text-sm font-bold"
+          style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+        >
+          {vacio ? "Apuntar este día" : "Editar este día"}
+        </button>
+      )}
+    </section>
+  );
+}
+
 /* ── Lo que se ve, dicho con palabras ────────────────────────────
    Esto era dos cosas separadas: una tarjeta de "lo que viene" y una
    leyenda de formas. La tarjeta hablaba SIEMPRE desde hoy, así que al
@@ -205,8 +383,7 @@ function MonthSummary({ title, rows }: { title: string; rows: SummaryRow[] }) {
 
   return (
     <section
-      className="sticker-phase flex flex-col gap-3 rounded-2xl px-lg py-md"
-      style={{ background: "var(--phase-bg)" }}
+      className="flex flex-col gap-3 px-1"
       aria-label={`Resumen: ${title}`}
     >
       <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">

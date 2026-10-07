@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { Droplet } from "lucide-react";
 import { WEEKDAY_LABELS, type Band, type DayCell } from "@/lib/calendar";
+import type { Phase } from "@/lib/cycle";
 import { haptic } from "@/lib/use-lilaila";
 
 /* La banda se dibuja como una capa a sangre dentro de la celda y solo
@@ -93,14 +94,30 @@ function numberColor(cell: DayCell): string {
   return cell.isFuture ? "var(--fg-muted)" : "var(--fg)";
 }
 
+/* El fondo de fase: el ciclo entero pintado en tonos suaves, para
+   que el mes se lea como "aquí folicular, aquí fértil, aquí lútea"
+   sin tener que contar días. Va POR DEBAJO de las bandas y es muy
+   claro a propósito: el fondo dice la fase, la banda sigue diciendo
+   la certeza (plena, discontinua, subrayado). */
+const PHASE_BG: Record<Phase, string> = {
+  menstrual: "var(--ph-menstrual-bg)",
+  folicular: "var(--ph-folicular-bg)",
+  ovulacion: "var(--ph-ovulacion-bg)",
+  lutea: "var(--ph-lutea-bg)",
+};
+
 function DayButton({
   cell,
   onSelect,
   tabIndex,
+  phase,
+  selected,
 }: {
   cell: DayCell;
   onSelect: (cell: DayCell) => void;
   tabIndex: number;
+  phase?: Phase;
+  selected: boolean;
 }) {
   return (
     <button
@@ -114,8 +131,16 @@ function DayButton({
       }}
       aria-label={ariaLabel(cell)}
       aria-current={cell.isToday ? "date" : undefined}
+      aria-selected={selected}
       className="relative flex h-12 items-center justify-center outline-none focus-visible:z-10"
     >
+      {phase && cell.inMonth && (
+        <span
+          aria-hidden="true"
+          className="absolute inset-x-0 inset-y-[2px]"
+          style={{ background: PHASE_BG[phase] }}
+        />
+      )}
       <span
         aria-hidden="true"
         className="absolute inset-x-0"
@@ -129,6 +154,15 @@ function DayButton({
           aria-hidden="true"
           className="absolute size-8 rounded-full"
           style={{ boxShadow: "inset 0 0 0 2px var(--fg)" }}
+        />
+      )}
+
+      {/* El día que estás mirando abajo, con el acento. */}
+      {selected && !cell.isToday && (
+        <span
+          aria-hidden="true"
+          className="absolute size-8 rounded-full"
+          style={{ boxShadow: "inset 0 0 0 2px var(--accent)" }}
         />
       )}
 
@@ -238,9 +272,13 @@ const SALTO: Record<string, number> = {
 export function MonthGrid({
   weeks,
   onSelect,
+  phases,
+  selectedKey,
 }: {
   weeks: DayCell[][];
   onSelect: (cell: DayCell) => void;
+  phases?: Map<string, Phase>;
+  selectedKey?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const cells = weeks.flat();
@@ -284,7 +322,7 @@ export function MonthGrid({
       <div role="grid" aria-label="Calendario del mes">
         <WeekdayHeader />
 
-        <div role="rowgroup" className="flex flex-col gap-1">
+        <div role="rowgroup" className="flex flex-col">
           {weeks.map((week) => (
             <div role="row" key={week[0].key} className="grid grid-cols-7">
               {week.map((cell) => (
@@ -293,6 +331,8 @@ export function MonthGrid({
                   cell={cell}
                   onSelect={onSelect}
                   tabIndex={cell.key === foco ? 0 : -1}
+                  phase={phases?.get(cell.key)}
+                  selected={cell.key === selectedKey}
                 />
               ))}
             </div>
