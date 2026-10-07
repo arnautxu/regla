@@ -279,6 +279,11 @@ export default function Chat() {
                   {sounding ? "Hablando… toca para parar" : "Escuchar"}
                 </button>
               )}
+              {!mine && voice.error?.id === m.id && (
+                <p role="alert" className="max-w-[92%] px-1 text-xs" style={{ color: "var(--accent)" }}>
+                  {voice.error.message}
+                </p>
+              )}
             </motion.div>
           );
         })}
