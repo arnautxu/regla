@@ -7,6 +7,8 @@ import { updateSettings } from "@/lib/db";
 import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import { useLilaila } from "@/lib/use-lilaila";
 import { Onboarding } from "./onboarding";
+import { Novedades } from "./novedades";
+import { marcarNovedadesVistas } from "@/lib/novedades";
 import { PinGate } from "./pin-gate";
 import { CookieMonsterGate } from "./cookie-monster-gate";
 import { ServiceWorker } from "./service-worker";
@@ -40,6 +42,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       void updateSettings({ onboarded: true });
     }
   }, [ready, settings.onboarded, cycles.length]);
+
+  // Quien instala de cero no tiene nada que "volver a ver": todo lo
+  // publicado hasta hoy ya viene de serie. Sin esto, al terminar el
+  // onboarding le saltaría la hoja de novedades encima.
+  useEffect(() => {
+    if (needsOnboarding) marcarNovedadesVistas();
+  }, [needsOnboarding]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -110,6 +119,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {children}
               </motion.main>
               {!fullscreen && <TabBar />}
+              {ready && <Novedades />}
             </>
           )}
           <ServiceWorker />

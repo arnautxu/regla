@@ -220,3 +220,9 @@ las safe areas y con el gesto de swipe-back).
 ## 9. Siguiente paso
 
 Fase 1: montar el esqueleto, que se instale en su iPhone y que Lilita ya diga hola.
+
+---
+
+## Novedades tras cada actualización
+
+La primera vez que Lídia abre la app tras un despliegue con cambios visibles, Lilita se los cuenta en una hoja (`components/novedades.tsx`). Las entradas viven en `lib/novedades.ts`, la más nueva arriba; el móvil guarda en `localStorage` el id de la última vista. Cada PR con cambios que se noten añade su entrada (regla en `AGENTS.md`).
