@@ -49,6 +49,7 @@ export function SexRow({
   onPatch,
   dateKey,
   only,
+  bare = false,
 }: {
   /** Pintar solo el sí/no o solo el detalle, para colocarlos aparte */
   only?: "answer" | "detail";
@@ -57,6 +58,8 @@ export function SexRow({
   onSet: (yes: boolean | undefined) => void;
   onPatch: (patch: Partial<Omit<DayLog, "date">>) => void;
   dateKey: string;
+  /** Sin título y con el sí/no grande, para la hoja por pasos */
+  bare?: boolean;
 }) {
   const yes = log?.sex === true;
 
@@ -66,12 +69,12 @@ export function SexRow({
       <div>
         <h3
           id={`sexo-${dateKey}`}
-          className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint"
+          className={bare ? "sr-only" : "text-2xs font-semibold uppercase tracking-[0.14em] text-faint"}
         >
           Sexo
         </h3>
 
-        <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+        <div className={bare ? "grid grid-cols-2 gap-2" : "mt-1.5 grid grid-cols-2 gap-1.5"}>
           {[
             { value: true, label: "Sí" },
             { value: false, label: "No" },
@@ -86,7 +89,7 @@ export function SexRow({
                   haptic(active ? 6 : 12);
                   onSet(active ? undefined : opt.value);
                 }}
-                className={`min-h-[40px] rounded-xl px-1 text-sm font-medium leading-[1.15] ${CHOICE_CLASS}`}
+                className={`${bare ? "min-h-[64px] text-base" : "min-h-[40px] text-sm"} rounded-xl px-1 font-medium leading-[1.15] ${CHOICE_CLASS}`}
                 style={choiceStyle(active)}
               >
                 {opt.label}

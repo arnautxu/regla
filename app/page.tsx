@@ -6,7 +6,8 @@ import { addDays, format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Lilita } from "@/components/lilita";
 import { PeriodStartFX } from "@/components/period-start-fx";
-import { DaySheet } from "@/components/day-sheet";
+import { DaySheet, type Paso } from "@/components/day-sheet";
+import { moodLabel } from "@/components/mood-row";
 import { CycleRing } from "@/components/cycle-ring";
 import { CookieMonsterButton } from "@/components/cookie-monster-button";
 import { PasButton } from "@/components/pas-button";
@@ -30,6 +31,9 @@ export default function Hoy() {
   const [celebrating, setCelebrating] = useState(false);
   // La ficha abierta: hoy, o un día pasado elegido desde el anillo.
   const [detailing, setDetailing] = useState<string | null>(null);
+  // En qué pregunta abre la ficha: la casilla de "Sangrado" va directa
+  // al sangrado, la de "Cómo va" a cómo va. Sin nada, decide la ficha.
+  const [startAt, setStartAt] = useState<Paso | undefined>(undefined);
 
 
 
@@ -88,6 +92,7 @@ export default function Hoy() {
           mood={line.mood}
           onOpenDay={(key) => {
             haptic(12);
+            setStartAt(undefined);
             setDetailing(key);
           }}
         >
@@ -169,14 +174,14 @@ export default function Hoy() {
             value={labelOf(FLOW, today?.flow) ?? "—"}
             hint={today?.flow !== undefined ? "✓ apuntado" : "sin contestar"}
             done={today?.flow !== undefined}
-            onClick={openSheet}
+            onClick={() => openSheet("flow")}
           />
           <Tile
             label="Cómo va"
             value={dayFeeling(today) ?? "—"}
             hint={dayFeeling(today) ? "✓ apuntado" : "sin contestar"}
             done={dayFeeling(today) !== undefined}
-            onClick={openSheet}
+            onClick={() => openSheet("dia")}
           />
         </div>
       </section>
@@ -192,7 +197,7 @@ export default function Hoy() {
           sangras?" con la regla, "Apuntar cómo voy" el resto. */}
       <button
         type="button"
-        onClick={openSheet}
+        onClick={() => openSheet()}
         className="sticky z-30 mt-auto w-full rounded-full px-lg py-4 font-display text-base font-bold tracking-[-0.01em] transition-[transform,background-color,box-shadow] duration-150 ease-[var(--ease-out-quart)] active:scale-[0.975] active:translate-x-[1px] active:translate-y-[1px]"
         style={{
           // Pegado encima de la barra de pestañas: si la pantalla es
@@ -219,14 +224,16 @@ export default function Hoy() {
               }
             : null
         }
+        startAt={startAt}
         onClose={() => setDetailing(null)}
         onPeriodStart={() => setCelebrating(true)}
       />
     </div>
   );
 
-  function openSheet() {
+  function openSheet(paso?: Paso) {
     haptic(12);
+    setStartAt(paso);
     setDetailing(dateKey);
   }
 }
@@ -286,14 +293,9 @@ function Tile({
   );
 }
 
-/** "Bien", "Regular"... a partir del dolor y el freno de mano, igual
-    que lo marca la fila de la ficha. */
+/** "Bien", "Regular"... con las mismas palabras que la ficha. */
 function dayFeeling(log: DayLog | undefined): string | undefined {
-  if (!log || log.painLevel === undefined) return undefined;
-  if (log.badDay) return "De mierda";
-  if (log.painLevel >= 7) return "Mal";
-  if (log.painLevel >= 3) return "Regular";
-  return "Bien";
+  return moodLabel(log);
 }
 
 /** La acción más probable ahora mismo. */

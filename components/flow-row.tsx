@@ -26,24 +26,29 @@ export function FlowRow({
    * modelo las dos cosas son el mismo flujo 0.
    */
   endsPeriod = false,
+  bare = false,
 }: {
   value: FlowLevel | undefined;
   onChange: (value: FlowLevel | undefined) => void;
   dateKey: string;
   endsPeriod?: boolean;
+  /** Sin título: en la hoja por pasos la pregunta ya lo dice en grande */
+  bare?: boolean;
 }) {
   const opciones = flowOptions(endsPeriod);
 
   return (
-    <section aria-labelledby={`flow-${dateKey}`}>
-      <h3
-        id={`flow-${dateKey}`}
-        className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint"
-      >
-        Sangrado
-      </h3>
+    <section aria-labelledby={bare ? undefined : `flow-${dateKey}`} aria-label={bare ? "Sangrado" : undefined}>
+      {!bare && (
+        <h3
+          id={`flow-${dateKey}`}
+          className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint"
+        >
+          Sangrado
+        </h3>
+      )}
 
-      <div className="mt-1.5 grid grid-cols-5 gap-1.5">
+      <div className={`${bare ? "" : "mt-1.5 "}grid grid-cols-5 gap-1.5`}>
         {opciones.map((opt) => {
           const active = value === opt.value;
           return (
@@ -55,7 +60,7 @@ export function FlowRow({
                 haptic(active ? 6 : 14);
                 onChange(active ? undefined : opt.value);
               }}
-              className={`flex min-h-[50px] flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-2xs leading-[1.15] ${CHOICE_CLASS}`}
+              className={`flex ${bare ? "min-h-[84px] text-xs" : "min-h-[50px] text-2xs"} flex-col items-center justify-center gap-0.5 rounded-xl px-1 leading-[1.15] ${CHOICE_CLASS}`}
               style={choiceStyle(active)}
             >
               <Drops n={opt.value} active={active} />

@@ -37,6 +37,7 @@ export function PillRow({
   streak,
   onChange,
   dateKey,
+  bare = false,
 }: {
   value: boolean | undefined;
   /** ISO del momento en que se marcó, si está tomada */
@@ -45,13 +46,15 @@ export function PillRow({
   streak?: number;
   onChange: (taken: boolean | undefined) => void;
   dateKey: string;
+  /** Sin título y con botones grandes, para la hoja por pasos */
+  bare?: boolean;
 }) {
   return (
     <section aria-labelledby={`pill-${dateKey}`}>
       <div className="flex items-baseline justify-between gap-md">
         <h3
           id={`pill-${dateKey}`}
-          className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint"
+          className={bare ? "sr-only" : "text-2xs font-semibold uppercase tracking-[0.14em] text-faint"}
         >
           Pastilla
         </h3>
@@ -70,7 +73,7 @@ export function PillRow({
                 haptic(active ? 6 : opt.taken ? 14 : 8);
                 onChange(active ? undefined : opt.taken);
               }}
-              className={`min-h-[40px] rounded-xl px-1 text-sm font-medium leading-[1.15] ${CHOICE_CLASS}`}
+              className={`${bare ? "min-h-[64px] text-base" : "min-h-[40px] text-sm"} rounded-xl px-1 font-medium leading-[1.15] ${CHOICE_CLASS}`}
               style={choiceStyle(active)}
             >
               {opt.label}
