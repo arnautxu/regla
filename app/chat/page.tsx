@@ -14,9 +14,10 @@ import { Lilita } from "@/components/lilita";
 import { buildContext } from "@/lib/ai-context";
 import { computeInsights } from "@/lib/insights";
 import { phaseByDay } from "@/lib/cycle";
-import { addMemory, db, removeMemory } from "@/lib/db";
+import { addMemory, db, removeMemory, updateSettings } from "@/lib/db";
 import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
+import { useVoice } from "@/lib/use-voice";
 
 const LIST = {
   hidden: {},
@@ -50,6 +51,8 @@ export default function Chat() {
   const days = useLiveQuery(() => db.days.toArray(), [], []);
   const [input, setInput] = useState("");
   const bottom = useRef<HTMLDivElement>(null);
+  const voice = useVoice();
+  const voiceOn = voice.available && settings.chat.voice;
 
   const memories = useLiveQuery(() => db.memories.toArray(), [], []);
 
@@ -121,9 +124,24 @@ export default function Chat() {
     });
   }, [messages, status]);
 
+  // Cuando Lilita termina de escribir, lo dice. Solo al ACABAR: leer
+  // a trozos mientras llega cortaría las frases por la mitad.
+  const prevStatus = useRef(status);
+  useEffect(() => {
+    const was = prevStatus.current;
+    prevStatus.current = status;
+    if (!voiceOn || status !== "ready" || was === "ready") return;
+    const last = messages.at(-1);
+    if (last?.role !== "assistant") return;
+    const text = textOf(last);
+    if (text) void voice.speak(last.id, text);
+  }, [status, messages, voiceOn, voice]);
+
   function send(text: string) {
     if (!text.trim() || status !== "ready") return;
     haptic(10);
+    // Dentro del toque: es lo que deja sonar la respuesta en iOS.
+    if (voiceOn) voice.unlock();
     void sendMessage({ text });
     setInput("");
   }
@@ -144,9 +162,33 @@ export default function Chat() {
             <path d="M14.5 5 L8 12 L14.5 19" />
           </svg>
         </button>
-        <h1 className="font-display text-lg font-bold tracking-[-0.02em]">
+        <h1 className="flex-1 font-display text-lg font-bold tracking-[-0.02em]">
           Pregúntale a Lilita
         </h1>
+        {voice.available && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.chat.voice}
+            aria-label="Lilita habla en voz alta"
+            onClick={() => {
+              haptic(8);
+              if (settings.chat.voice) voice.stop();
+              else voice.unlock();
+              void updateSettings({
+                chat: { ...settings.chat, voice: !settings.chat.voice },
+              });
+            }}
+            className="flat flex h-10 items-center gap-1.5 rounded-full px-3 text-xs font-semibold"
+            style={{
+              background: settings.chat.voice ? "var(--accent-soft)" : "var(--surface)",
+              color: settings.chat.voice ? "var(--accent)" : "var(--fg-faint)",
+            }}
+          >
+            <SpeakerIcon on={settings.chat.voice} />
+            {settings.chat.voice ? "Voz" : "Muda"}
+          </button>
+        )}
       </header>
 
       <div className="flex flex-1 flex-col gap-lg overflow-y-auto pb-md">
@@ -187,10 +229,9 @@ export default function Chat() {
 
         {messages.map((m) => {
           const mine = m.role === "user";
-          const text = m.parts
-            .map((p) => (p.type === "text" ? p.text : ""))
-            .join("");
+          const text = textOf(m);
           if (!text) return null;
+          const sounding = voice.playing === m.id;
 
           return (
             <motion.div
@@ -198,7 +239,7 @@ export default function Chat() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: DURATION.standard, ease: EASE_OUT_QUART }}
-              className={mine ? "flex justify-end" : "flex justify-start"}
+              className={mine ? "flex justify-end" : "flex flex-col items-start gap-1"}
             >
               <p
                 className={
@@ -218,6 +259,25 @@ export default function Chat() {
               >
                 {text}
               </p>
+              {!mine && voice.available && (status === "ready" || m.id !== messages.at(-1)?.id) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic(8);
+                    if (sounding) voice.stop();
+                    else {
+                      voice.unlock();
+                      void voice.speak(m.id, text);
+                    }
+                  }}
+                  className="flex min-h-[32px] items-center gap-1.5 px-1 text-xs font-semibold"
+                  style={{ color: sounding ? "var(--accent)" : "var(--fg-faint)" }}
+                  aria-label={sounding ? "Parar la voz" : "Escuchar a Lilita"}
+                >
+                  <SpeakerIcon on={sounding} />
+                  {sounding ? "Hablando… toca para parar" : "Escuchar"}
+                </button>
+              )}
             </motion.div>
           );
         })}
@@ -272,5 +332,22 @@ export default function Chat() {
         </button>
       </form>
     </div>
+  );
+}
+
+function textOf(m: UIMessage): string {
+  return m.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
+}
+
+function SpeakerIcon({ on }: { on: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" />
+      {on ? (
+        <path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" />
+      ) : (
+        <path d="M16 9.5l5 5M21 9.5l-5 5" />
+      )}
+    </svg>
   );
 }
