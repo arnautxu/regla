@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { stripVoiceTags } from "./voice-tags";
 
 /* ═══════════════════════════════════════════════════════════════
    LILITA EN VOZ ALTA
@@ -48,9 +49,13 @@ export type Voice = {
   talking: boolean;
   /** Por qué no ha sonado el último intento, para enseñarlo */
   error: { id: string; message: string } | null;
+  /** Lo que ya se ha oído del mensaje en directo, para enseñar solo eso */
+  shown: { id: string; text: string } | null;
   /** Hay que llamarlo dentro de un toque, antes de la primera respuesta */
   unlock: () => void;
   speak: (id: string, text: string) => Promise<void>;
+  /** Este mensaje se va a decir en directo: su texto espera a la voz */
+  begin: (id: string) => void;
   /** Añade un trozo a la voz en directo de un mensaje que aún se escribe */
   enqueue: (id: string, text: string) => void;
   /** Ya no llegarán más trozos de ese mensaje */
@@ -63,6 +68,8 @@ type Live = {
   id: string;
   turn: number;
   items: Promise<string>[];
+  /** El texto visible (sin acotaciones) de cada trozo */
+  texts: string[];
   next: number;
   running: boolean;
   done: boolean;
@@ -94,6 +101,15 @@ async function synth(text: string): Promise<string> {
   return URL.createObjectURL(blob.type ? blob : new Blob([blob], { type: "audio/mpeg" }));
 }
 
+/** Lo que se ha dicho de un trozo, hasta la última palabra entera. */
+function heard(text: string, fraction: number): string {
+  if (fraction >= 1) return text;
+  const k = Math.floor(text.length * fraction);
+  const end = text.indexOf(" ", k);
+  // Se enseña la palabra que está sonando entera, no a trozos.
+  return end === -1 ? text : text.slice(0, end);
+}
+
 /** Espera a que el audio acabe (o lo paren). */
 function untilDone(el: HTMLAudioElement): Promise<void> {
   return new Promise((resolve) => {
@@ -110,6 +126,7 @@ export function useVoice(): Voice {
   const [playing, setPlaying] = useState<string | null>(null);
   const [talking, setTalking] = useState(false);
   const [error, setError] = useState<{ id: string; message: string } | null>(null);
+  const [shown, setShown] = useState<{ id: string; text: string } | null>(null);
   // El último audio descargado. Si iOS no deja sonarlo porque llegó
   // fuera del toque, el siguiente toque lo reproduce al instante, sin
   // volver a esperar a la red (y por tanto dentro del gesto).
@@ -164,6 +181,7 @@ export function useVoice(): Voice {
   const stop = useCallback(() => {
     turn.current++;
     live.current = null;
+    setShown(null);
     audio.current?.pause();
     setPlaying(null);
   }, []);
@@ -192,6 +210,7 @@ export function useVoice(): Voice {
     async (id: string, text: string) => {
       const mine = ++turn.current;
       live.current = null;
+      setShown(null);
       const el = ensure();
       el.pause();
       setError(null);
@@ -231,19 +250,26 @@ export function useVoice(): Voice {
      de escribir, mientras sigue con la siguiente, y suenan en orden:
      así empieza a hablar a la primera frase en vez de esperar a que
      termine todo el mensaje y a que se genere el audio entero. */
+  /* El texto acompaña a la voz: de cada trozo se enseña la parte
+     proporcional a lo que lleva sonado, palabra a palabra. */
   const drain = useCallback(
     async (q: Live) => {
       const el = ensure();
       q.running = true;
+      const quit = () => {
+        q.running = false;
+        live.current = null;
+        setPlaying(null);
+        setShown(null);
+      };
       while (q.next < q.items.length) {
+        const i = q.next;
         let src: string;
         try {
           src = await q.items[q.next++];
         } catch (e) {
           if (q.turn !== turn.current) return;
-          q.running = false;
-          live.current = null;
-          setPlaying(null);
+          quit();
           setError({ id: q.id, message: (e as Error).message });
           return;
         }
@@ -256,12 +282,27 @@ export function useVoice(): Voice {
         el.src = src;
         if (old) URL.revokeObjectURL(old);
         const ended = untilDone(el);
+        const before = q.texts.slice(0, i).filter(Boolean).join(" ");
+        const text = q.texts[i];
+        const show = (fraction: number) => {
+          const now = heard(text, fraction);
+          const all = before && now ? `${before} ${now}` : before || now;
+          setShown((s) => (s?.id === q.id && s.text === all ? s : { id: q.id, text: all }));
+        };
+        let frame = 0;
+        const tick = () => {
+          // Si el navegador no sabe la duración, se estima a ritmo de
+          // habla (unos 14 caracteres por segundo).
+          const d = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : text.length / 14;
+          show(Math.min(1, el.currentTime / d));
+          frame = requestAnimationFrame(tick);
+        };
         try {
           await el.play();
+          tick();
         } catch (e) {
-          q.running = false;
-          live.current = null;
-          setPlaying(null);
+          if (q.turn !== turn.current) return;
+          quit();
           const name = (e as { name?: string })?.name;
           setError({
             id: q.id,
@@ -273,34 +314,41 @@ export function useVoice(): Voice {
           return;
         }
         await ended;
+        cancelAnimationFrame(frame);
         if (q.turn !== turn.current) return;
+        show(1);
       }
       q.running = false;
-      if (q.done && live.current === q) {
-        live.current = null;
-        setPlaying(null);
-      }
+      if (q.done && live.current === q) quit();
     },
     [ensure],
   );
 
+  const open = useCallback((id: string): Live => {
+    const q = live.current;
+    if (q && q.id === id) return q;
+    const mine = ++turn.current;
+    audio.current?.pause();
+    const fresh: Live = { id, turn: mine, items: [], texts: [], next: 0, running: false, done: false };
+    live.current = fresh;
+    setError(null);
+    setPlaying(id);
+    setShown({ id, text: "" });
+    return fresh;
+  }, []);
+
+  const begin = useCallback((id: string) => void open(id), [open]);
+
   const enqueue = useCallback(
     (id: string, text: string) => {
-      let q = live.current;
-      if (!q || q.id !== id) {
-        const mine = ++turn.current;
-        audio.current?.pause();
-        q = { id, turn: mine, items: [], next: 0, running: false, done: false };
-        live.current = q;
-        setError(null);
-        setPlaying(id);
-      }
+      const q = open(id);
       const item = synth(text);
       item.catch(() => {}); // se gestiona al llegarle el turno
       q.items.push(item);
+      q.texts.push(stripVoiceTags(text));
       if (!q.running) void drain(q);
     },
-    [drain],
+    [drain, open],
   );
 
   const finish = useCallback((id: string) => {
@@ -310,6 +358,7 @@ export function useVoice(): Voice {
     if (!q.running) {
       live.current = null;
       setPlaying(null);
+      setShown(null);
     }
   }, []);
 
@@ -321,5 +370,5 @@ export function useVoice(): Voice {
     [],
   );
 
-  return { available, playing, talking, error, unlock, speak, enqueue, finish, stop };
+  return { available, playing, talking, error, shown, unlock, speak, begin, enqueue, finish, stop };
 }

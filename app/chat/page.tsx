@@ -131,7 +131,7 @@ export default function Chat() {
       behavior: status === "streaming" ? "auto" : "smooth",
       block: "end",
     });
-  }, [messages, status]);
+  }, [messages, status, voice.shown?.text]);
 
   // Lilita habla mientras escribe: cada vez que acaba una frase (o
   // unas cuantas, si son cortas) se manda a la voz, y lo que quede se
@@ -144,6 +144,7 @@ export default function Chat() {
     if (!voiceOn) return;
     if (status === "error") {
       awaitingVoice.current = false;
+      if (liveVoice.current) voice.stop();
       liveVoice.current = null;
       return;
     }
@@ -152,6 +153,9 @@ export default function Chat() {
     if (awaitingVoice.current && (status === "streaming" || status === "ready")) {
       awaitingVoice.current = false;
       liveVoice.current = { id: last.id, pos: 0 };
+      // Desde aquí su texto no se enseña de golpe: va saliendo según
+      // se oye la voz.
+      voice.begin(last.id);
     }
     const lv = liveVoice.current;
     if (!lv || lv.id !== last.id) return;
@@ -296,7 +300,8 @@ export default function Chat() {
 
         {messages.map((m) => {
           const mine = m.role === "user";
-          const text = textOf(m);
+          // Si se está diciendo en directo, solo lo que ya se ha oído.
+          const text = voice.shown?.id === m.id ? voice.shown.text : textOf(m);
           if (!text) return null;
           const sounding = voice.playing === m.id;
 
@@ -354,7 +359,7 @@ export default function Chat() {
           );
         })}
 
-        {status === "submitted" && (
+        {(status === "submitted" || voice.shown?.text === "") && (
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
