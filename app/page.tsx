@@ -22,13 +22,16 @@ export default function Hoy() {
   // está escrito y calibrado a mano, y lo generado sonaba peor. Ya no
   // se llama a /api/lilita aquí; ese endpoint sigue vivo solo para el
   // chat, que sí es una conversación abierta y no tiene banco posible.
-  const { ready, state, today, line, dateKey, cycles, settings, pillStreak } =
+  const { ready, state, today, line, dateKey, cycles, settings, pillStreak, days, windows } =
     useLilaila();
 
   // Solo cuando EMPIEZA una regla, no cada día que sigue sangrando:
   // gastar la fanfarria a diario la convierte en ruido.
   const [celebrating, setCelebrating] = useState(false);
-  const [detailing, setDetailing] = useState(false);
+  // La ficha abierta: hoy, o un día pasado elegido desde el anillo.
+  const [detailing, setDetailing] = useState<string | null>(null);
+
+
 
   // Antes de que IndexedDB conteste no pintamos números: un "día 1"
   // fantasma que salta a "día 14" es peor que medio segundo en blanco.
@@ -71,16 +74,23 @@ export default function Hoy() {
           en otra tarjeta debajo. Ahora el dato vive dentro del ciclo
           dibujado, con Lilita en el centro: dónde estás y cuánto
           falta, en una sola mirada. */}
-      {state.dayOfCycle !== undefined ? (
+      {state.dayOfCycle !== undefined && latest ? (
         <CycleRing
           day={state.dayOfCycle}
           length={state.avgLength}
           periodLength={state.model.periodLength}
           bleeding={bleeding}
           range={state.predictionRange}
-          size={236}
+          startKey={latest.startDate}
+          days={days}
+          sensitive={windows.sensitive}
+          monster={windows.monster}
+          mood={line.mood}
+          onOpenDay={(key) => {
+            haptic(12);
+            setDetailing(key);
+          }}
         >
-          <Lilita mood={line.mood} size={38} />
           <Big {...head} />
         </CycleRing>
       ) : (
@@ -173,7 +183,7 @@ export default function Hoy() {
 
       <div className="flex gap-2">
         <PasButton />
-        <CookieMonsterButton />
+        <CookieMonsterButton days={days} />
       </div>
 
       {/* ── Acción principal ──────────────────────────────────────
@@ -202,14 +212,14 @@ export default function Hoy() {
         day={
           detailing
             ? {
-                key: dateKey,
-                date: fromKey(dateKey),
-                isToday: true,
+                key: detailing,
+                date: fromKey(detailing),
+                isToday: detailing === dateKey,
                 isFuture: false,
               }
             : null
         }
-        onClose={() => setDetailing(false)}
+        onClose={() => setDetailing(null)}
         onPeriodStart={() => setCelebrating(true)}
       />
     </div>
@@ -217,7 +227,7 @@ export default function Hoy() {
 
   function openSheet() {
     haptic(12);
-    setDetailing(true);
+    setDetailing(dateKey);
   }
 }
 
@@ -388,12 +398,12 @@ function shortRange(from: Date, to: Date): string {
 
 function Big({ label, value, unit, detail, caveat, alarm }: Head) {
   return (
-    <div className="mt-1 flex flex-col items-center">
+    <div className="mt-0.5 flex flex-col items-center">
       <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-faint">
         {label}
       </p>
       <p
-        className="tnum font-display text-[52px] font-extrabold leading-[0.95] tracking-[-0.045em]"
+        className="tnum font-display text-[40px] font-extrabold leading-[0.95] tracking-[-0.045em]"
         style={alarm ? { color: "var(--accent)" } : undefined}
       >
         {value}
@@ -403,8 +413,8 @@ function Big({ label, value, unit, detail, caveat, alarm }: Head) {
           </span>
         )}
       </p>
-      <p className="mt-0.5 max-w-[16ch] text-[13px] font-semibold leading-tight">{detail}</p>
-      {caveat && <p className="max-w-[17ch] text-2xs leading-snug text-faint">{caveat}</p>}
+      <p className="mt-0.5 max-w-[30ch] text-[13px] font-semibold leading-tight">{detail}</p>
+      {caveat && <p className="max-w-[30ch] text-2xs leading-snug text-faint">{caveat}</p>}
     </div>
   );
 }

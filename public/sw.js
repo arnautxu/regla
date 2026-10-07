@@ -122,6 +122,12 @@ self.addEventListener("push", (event) => {
   }
 
   const title = aviso.title || "Lilaila";
+  // Lo que Cookie Monster contesta se apunta en el día (solo el tipo
+  // y la hora) para ver luego qué respuesta arregla antes un enfado.
+  // Si falla, el aviso sale igual: apuntar nunca puede tapar el aviso.
+  if (aviso.registro && aviso.registro.tipo === "respuesta-monstruo") {
+    event.waitUntil(apuntarRespuesta(aviso.registro.kind).catch(() => {}));
+  }
   event.waitUntil(
     self.registration.showNotification(title, {
       body: aviso.body || "Tienes algo que apuntar.",
@@ -189,6 +195,43 @@ async function marcarPastilla() {
         date,
         pill: true,
         pillAt: stamp,
+        updatedAt: stamp,
+      });
+    };
+    tx.oncomplete = () => {
+      db.close();
+      resolve({ date, at: stamp });
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+  });
+}
+
+const RESPUESTAS = ["animos", "pulla", "mensaje"];
+
+async function apuntarRespuesta(kind) {
+  if (!RESPUESTAS.includes(kind)) return null;
+  const db = await abrirDb();
+  if (!db.objectStoreNames.contains(STORE)) {
+    db.close();
+    return null;
+  }
+
+  const date = claveDeHoy();
+  const stamp = new Date().toISOString();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    const store = tx.objectStore(STORE);
+    const previo = store.get(date);
+    previo.onsuccess = () => {
+      const dia = previo.result || {};
+      store.put({
+        ...dia,
+        date,
+        monsterReplies: [...(dia.monsterReplies || []), { at: stamp, kind }],
         updatedAt: stamp,
       });
     };

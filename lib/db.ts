@@ -45,10 +45,43 @@ export interface CryEvent {
   id: string;
   /** Instante del episodio; la fecha del DayLog sigue siendo local. */
   at: string;
-  reason: CryReason;
+  /**
+   * Opcional desde que el botón guarda de un toque: llorando no
+   * apetece rellenar nada, y un PAS sin motivo sigue siendo un dato.
+   */
+  reason?: CryReason;
   /** 1 = suave, 2 = medio, 3 = intenso. Ausente si no se indicó. */
   intensity?: 1 | 2 | 3;
   note?: string;
+}
+
+/* ── Cookie Monster ──────────────────────────────────────────────
+   El botón de las galletas es el «estoy enfadada contigo» que Lídia
+   le manda a Arnau (el Cookie Monster de la casa). Hasta ahora solo
+   salía el aviso; ahora además queda apuntado aquí, en su móvil,
+   con principio y final, para poder ver cuándo y cuánto duran.
+
+   Las respuestas de Arnau (ánimos, pulla, mensaje) las apunta el
+   service worker al recibirlas: solo el tipo y la hora, nunca el
+   texto. ─────────────────────────────────────────────────────── */
+
+/** 1 = un mordisquito, 2 = bastante, 3 = monstruo total */
+export type AngerLevel = 1 | 2 | 3;
+
+export interface AngerEvent {
+  id: string;
+  /** Cuándo pulsó el botón, ISO */
+  at: string;
+  level?: AngerLevel;
+  /** «Ya se me ha pasado», ISO. Sin él, el enfado sigue abierto. */
+  endedAt?: string;
+}
+
+export type MonsterReplyKind = "animos" | "pulla" | "mensaje";
+
+export interface MonsterReply {
+  at: string;
+  kind: MonsterReplyKind;
 }
 
 /* Sexo. Se guarda en campos planos y no en un objeto anidado porque
@@ -89,6 +122,10 @@ export interface DayLog {
   note?: string;
   /** Puede haber varios episodios PAS en un mismo día. */
   cryEvents?: CryEvent[];
+  /** Enfados con Arnau (el botón de Cookie Monster). */
+  angerEvents?: AngerEvent[];
+  /** Lo que Arnau contestó desde su móvil: tipo y hora, sin texto. */
+  monsterReplies?: MonsterReply[];
   /** Hubo sexo ese dia. Lo de abajo solo tiene sentido si es true. */
   sex?: boolean;
   sexActivities?: SexActivity[];
@@ -602,6 +639,96 @@ export async function removeCryEvent(date: string, id: string): Promise<void> {
     });
   });
   touch();
+}
+
+/** Completa un PAS ya guardado (motivo, intensidad, nota). */
+export async function updateCryEvent(
+  date: string,
+  id: string,
+  patch: Partial<Omit<CryEvent, "id" | "at">>,
+): Promise<void> {
+  await db.transaction("rw", db.days, async () => {
+    const existing = await db.days.get(date);
+    if (!existing?.cryEvents) return;
+    await db.days.put({
+      ...existing,
+      cryEvents: existing.cryEvents.map((event) =>
+        event.id === id ? { ...event, ...patch } : event,
+      ),
+      updatedAt: now(),
+    });
+  });
+  touch();
+}
+
+/* ── Enfados ──────────────────────────────────────────────────── */
+
+export async function addAngerEvent(event: AngerEvent): Promise<void> {
+  const date = toKey(new Date(event.at));
+  await db.transaction("rw", db.days, async () => {
+    const existing = await db.days.get(date);
+    await db.days.put({
+      ...existing,
+      date,
+      angerEvents: [...(existing?.angerEvents ?? []), event],
+      updatedAt: now(),
+    });
+  });
+  touch();
+}
+
+export async function updateAngerEvent(
+  date: string,
+  id: string,
+  patch: Partial<Omit<AngerEvent, "id" | "at">>,
+): Promise<void> {
+  await db.transaction("rw", db.days, async () => {
+    const existing = await db.days.get(date);
+    if (!existing?.angerEvents) return;
+    await db.days.put({
+      ...existing,
+      angerEvents: existing.angerEvents.map((event) =>
+        event.id === id ? { ...event, ...patch } : event,
+      ),
+      updatedAt: now(),
+    });
+  });
+  touch();
+}
+
+export async function removeAngerEvent(date: string, id: string): Promise<void> {
+  await db.transaction("rw", db.days, async () => {
+    const existing = await db.days.get(date);
+    if (!existing) return;
+    await db.days.put({
+      ...existing,
+      angerEvents: existing.angerEvents?.filter((event) => event.id !== id),
+      updatedAt: now(),
+    });
+  });
+  touch();
+}
+
+/**
+ * El enfado que sigue abierto, si lo hay. Solo mira las últimas 36 h:
+ * uno que se quedó sin cerrar hace una semana no puede dejar el botón
+ * en «se me ha pasado» para siempre.
+ */
+export function openAnger(
+  days: DayLog[],
+  at = new Date(),
+): { date: string; event: AngerEvent } | undefined {
+  const limit = at.getTime() - 36 * 3600 * 1000;
+  let found: { date: string; event: AngerEvent } | undefined;
+  for (const day of days) {
+    for (const event of day.angerEvents ?? []) {
+      if (event.endedAt) continue;
+      const t = new Date(event.at).getTime();
+      if (t < limit || t > at.getTime()) continue;
+      if (!found || event.at > found.event.at) found = { date: day.date, event };
+    }
+  }
+  return found;
 }
 
 /* --- Backup ------------------------------------------------------ */

@@ -208,6 +208,15 @@ function DayButton({
         </span>
       )}
 
+      {/* Cookie Monster: una galleta azul abajo a la derecha. */}
+      {cell.angerCount > 0 && (
+        <span
+          aria-hidden="true"
+          className="absolute bottom-0.5 right-0.5 size-[9px] rounded-full"
+          style={{ background: "var(--cookie)", boxShadow: "0 0 0 1.5px var(--surface)" }}
+        />
+      )}
+
       {/* Pastilla olvidada: anillo hueco abajo a la
           izquierda. Hueco y no relleno a propósito — es la
           forma de "falta algo", y se distingue del punto de
@@ -365,6 +374,7 @@ function ariaLabel(cell: DayCell): string {
     cell.mostLikely ? ", el día más probable" : "",
     cell.pillSkipped ? ", sin pastilla" : "",
     cell.cryCount ? `, PAS: ${cell.cryCount} ${cell.cryCount === 1 ? "episodio" : "episodios"} de llanto` : "",
+    cell.angerCount ? `, Cookie Monster: ${cell.angerCount} ${cell.angerCount === 1 ? "enfado" : "enfados"}` : "",
   ].join("");
 }
 

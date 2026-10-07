@@ -1,21 +1,31 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Lilita } from "@/components/lilita";
-import { CycleBars, CycleBarsLegend } from "@/components/cycle-bars";
-import { InsightList } from "@/components/insight-list";
+import { CycleRings, CycleRingsLegend } from "@/components/cycle-rings";
+import type { FaceMood } from "@/components/lilita-face";
+import { episodeReport } from "@/lib/episodes";
+import {
+  FILTERS,
+  FILTER_LABEL,
+  conclusion,
+  crossings,
+  type Filter,
+} from "@/lib/crossings";
 import { computeStats, summarizeCycles } from "@/lib/history";
 import { computeInsights } from "@/lib/insights";
 import { phaseByDay } from "@/lib/cycle";
-import { db } from "@/lib/db";
+import { db, fromKey } from "@/lib/db";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 import type { CycleSummary } from "@/lib/history";
-import { useLilaila } from "@/lib/use-lilaila";
+import { haptic, useLilaila } from "@/lib/use-lilaila";
 
 export default function Historial() {
   const { ready, settings, cycles, dateKey, state } = useLilaila();
   const [open, setOpen] = useState<string | null>(null);
-  const [all, setAll] = useState(false);
+  const on = useFilters();
   const days = useLiveQuery(() => db.days.toArray(), [], []);
 
   const summaries = useMemo(
@@ -34,6 +44,30 @@ export default function Historial() {
       ),
     [cycles, days, settings, dateKey],
   );
+
+  // PAS y enfados, leídos igual que la regla. Todo en el móvil.
+  const episodes = useMemo(() => {
+    const all = days ?? [];
+    return {
+      pas: episodeReport("pas", all, cycles, settings, dateKey),
+      monster: episodeReport("monstruo", all, cycles, settings, dateKey),
+    };
+  }, [cycles, days, settings, dateKey]);
+
+  // Una sola conclusión, la que más vale con lo que está encendido.
+  const said = useMemo(
+    () => conclusion(on, insights, crossings(on, days ?? [], cycles, episodes), episodes),
+    [on, insights, days, cycles, episodes],
+  );
+  const face: FaceMood = said.aviso
+    ? "cuidando"
+    : said.over.includes("monstruo")
+      ? "enfadada"
+      : said.over.includes("pas")
+        ? "llorando"
+        : said.basis === 0
+          ? "neutral"
+          : "flirty";
 
   const detail = (s: CycleSummary) => (
     <dl className="grid grid-cols-2 gap-x-md gap-y-3">
@@ -57,6 +91,10 @@ export default function Historial() {
         label="PAS · Llantos"
         value={s.cryEvents > 0 ? String(s.cryEvents) : "Ninguno"}
       />
+      <Fact
+        label="Cookie Monster"
+        value={s.angerEvents > 0 ? String(s.angerEvents) : "Ninguno"}
+      />
       {s.notes.length > 0 && (
         <div className="col-span-2">
           <dt className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
@@ -72,10 +110,7 @@ export default function Historial() {
     </dl>
   );
 
-  // Con más de seis ciclos las barras se hacen una pared; los
-  // recientes son los que cuentan y el resto queda a un toque.
-  const visible = all ? summaries : summaries.slice(0, 6);
-  const [featured, ...rest] = insights;
+  const openSummary = summaries.find((s) => s.id === open);
 
   return (
     <div className="flex flex-1 flex-col gap-lg px-safe pt-safe pb-lg">
@@ -151,68 +186,90 @@ export default function Historial() {
             )
           )}
 
+          {/* Filtros: qué se pinta en los anillos y de qué se concluye */}
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Qué enseñar">
+            {FILTERS.map((f) => {
+              const pressed = on.has(f.value);
+              return (
+                <button
+                  key={f.value}
+                  type="button"
+                  aria-pressed={pressed}
+                  onClick={() => {
+                    haptic(6);
+                    toggleFilter(f.value);
+                  }}
+                  className="flex min-h-[36px] items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-shadow"
+                  style={{
+                    background: "var(--surface)",
+                    color: pressed ? "var(--fg)" : "var(--fg-muted)",
+                    boxShadow: pressed
+                      ? "inset 0 0 0 1.5px var(--fg), 2px 2px 0 0 var(--depth-shadow)"
+                      : "inset 0 0 0 1.5px var(--border-strong)",
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="size-2 rounded-full"
+                    style={{ background: f.color, opacity: pressed ? 1 : 0.35 }}
+                  />
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+
           <section className="flex flex-col gap-sm">
-            <div className="flex items-baseline justify-between">
-              <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
-                Ciclo a ciclo
-              </h2>
-              <p className="text-2xs text-faint">Toca uno para verlo</p>
-            </div>
-            <CycleBars
-              summaries={visible}
+            <CycleRings
+              summaries={summaries}
               days={days ?? []}
               avgLength={state.avgLength}
               periodLength={state.model.periodLength}
               todayKey={dateKey}
+              show={on}
+              face={face}
               open={open}
-              onToggle={(id) => setOpen((o) => (o === id ? null : id))}
-              renderDetail={detail}
+              onToggle={setOpen}
             />
-            <CycleBarsLegend />
-            {summaries.length > 6 && (
-              <button
-                type="button"
-                onClick={() => setAll((v) => !v)}
-                className="self-start py-1 text-sm font-semibold"
-                style={{ color: "var(--accent)" }}
-              >
-                {all ? "Ver solo los recientes" : `Ver los ${summaries.length} ciclos`}
-              </button>
+            <CycleRingsLegend show={on} />
+            {openSummary ? (
+              <div className="rounded-2xl px-md py-sm flat" style={{ background: "var(--surface)" }}>
+                <p className="mb-2 font-display text-sm font-bold">
+                  Ciclo de {format(fromKey(openSummary.startKey), "MMMM", { locale: es })}
+                  {openSummary.ongoing && <span className="font-normal text-faint"> · en curso</span>}
+                </p>
+                {detail(openSummary)}
+              </div>
+            ) : (
+              <p className="text-center text-2xs text-faint">
+                Fuera, el ciclo de ahora. Toca un aro para ver ese ciclo.
+              </p>
             )}
           </section>
 
-          {featured && (
-            <section className="flex flex-col gap-sm">
-              <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
-                Lo que veo
-              </h2>
-              {/* El patrón más fuerte, con Lilita, que es quien lo dice.
-                  El resto, debajo y en plano. */}
-              <article
-                className="sticker flex gap-3 rounded-[20px] px-md py-md"
-                style={{
-                  background: featured.kind === "aviso" ? "var(--accent-soft)" : "var(--ph-menstrual-bg)",
-                }}
-              >
-                <Lilita mood={featured.kind === "aviso" ? "cuidando" : "neutral"} size={40} className="shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-2xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--ph-menstrual)" }}>
-                    {featured.kind === "aviso" ? "Coméntalo con un médico" : featured.kind === "patron" ? "Tu patrón" : "Dato"}
-                  </p>
-                  <h3 className="mt-1 font-display text-base font-bold leading-tight tracking-[-0.015em]">
-                    {featured.title}
-                  </h3>
-                  <p className="mt-1 text-sm leading-relaxed text-muted">{featured.detail}</p>
-                  {featured.kind !== "dato" && (
-                    <p className="mt-1 text-xs text-faint">
-                      Sobre {featured.basis} {featured.basis === 1 ? "registro" : "registros"}
-                    </p>
-                  )}
-                </div>
-              </article>
-              {rest.length > 0 && <InsightList insights={rest} />}
-            </section>
-          )}
+          {/* La conclusión: una, y cambia con los filtros */}
+          <article
+            aria-live="polite"
+            className="sticker rounded-[20px] px-md py-md"
+            style={{ background: said.aviso ? "var(--accent-soft)" : "var(--surface)" }}
+          >
+            <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
+              {said.aviso
+                ? "Coméntalo con un médico"
+                : said.over.length
+                  ? said.over.map((f) => FILTER_LABEL[f]).join(" + ")
+                  : "Conclusión"}
+            </p>
+            <h2 className="mt-1 font-display text-lg font-bold leading-tight tracking-[-0.015em]">
+              {said.title}
+            </h2>
+            <p className="mt-1 text-sm leading-relaxed text-muted">{said.detail}</p>
+            {said.basis > 0 && (
+              <p className="mt-1 text-xs text-faint">
+                Sobre {said.basis} {said.basis === 1 ? "registro" : "registros"}
+              </p>
+            )}
+          </article>
 
           <p className="text-xs leading-relaxed text-faint">
             Todo esto sale de tus propios registros y se calcula en este móvil.
@@ -254,4 +311,51 @@ function Fact({ label, value }: { label: string; value: string }) {
       <dd className="tnum mt-0.5 text-sm text-fg">{value}</dd>
     </div>
   );
+}
+
+/* ── Filtros, recordados en este móvil ─────────────────────────── */
+
+const FILTERS_KEY = "lilaila:historial-filtros";
+const ALL: Filter[] = FILTERS.map((f) => f.value);
+const listeners = new Set<() => void>();
+let cached: { raw: string | null; set: ReadonlySet<Filter> } | null = null;
+
+function readFilters(): ReadonlySet<Filter> {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(FILTERS_KEY);
+  } catch {}
+  if (cached && cached.raw === raw) return cached.set;
+  let set: ReadonlySet<Filter> = new Set(ALL);
+  try {
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    if (Array.isArray(parsed)) set = new Set(parsed.filter((f): f is Filter => ALL.includes(f)));
+  } catch {}
+  cached = { raw, set };
+  return set;
+}
+
+const SERVER_FILTERS: ReadonlySet<Filter> = new Set(ALL);
+
+function useFilters() {
+  return useSyncExternalStore(
+    (cb) => {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    readFilters,
+    () => SERVER_FILTERS,
+  );
+}
+
+function toggleFilter(f: Filter) {
+  const next = new Set(readFilters());
+  if (next.has(f)) next.delete(f);
+  else next.add(f);
+  try {
+    localStorage.setItem(FILTERS_KEY, JSON.stringify([...next]));
+  } catch {
+    cached = { raw: cached?.raw ?? null, set: next };
+  }
+  listeners.forEach((l) => l());
 }

@@ -13,6 +13,7 @@ export interface CycleSummary {
   maxPain?: number;
   badDays: number;
   cryEvents: number;
+  angerEvents: number;
   loggedDays: number;
   notes: string[];
 }
@@ -67,6 +68,7 @@ export function summarizeCycles(
         maxPain: pains.length ? Math.max(...pains) : undefined,
         badDays: inside.filter((d) => d.badDay).length,
         cryEvents: inside.reduce((count, day) => count + (day.cryEvents?.length ?? 0), 0),
+        angerEvents: inside.reduce((count, day) => count + (day.angerEvents?.length ?? 0), 0),
         loggedDays: inside.length,
         notes: inside.map((d) => d.note).filter((n): n is string => !!n),
       };

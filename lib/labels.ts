@@ -1,4 +1,5 @@
 import type {
+  AngerLevel,
   CryReason,
   FlowLevel,
   MoodTag,
@@ -15,6 +16,13 @@ export const CRY_REASONS: Opcion<CryReason>[] = [
   { value: "alegria", label: "Alegría" },
   { value: "no-se", label: "No lo sé" },
   { value: "otro", label: "Otra cosa" },
+];
+
+/** Cuánto monstruo: el enfado con Arnau, en las palabras de casa. */
+export const ANGER_LEVELS: Opcion<AngerLevel>[] = [
+  { value: 1, label: "Un mordisquito" },
+  { value: 2, label: "Bastante" },
+  { value: 3, label: "Monstruo total" },
 ];
 
 export const CRY_INTENSITIES = [
