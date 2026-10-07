@@ -46,6 +46,8 @@ export type Voice = {
   playing: string | null;
   /** El audio está sonando de verdad (no cargando): para mover la boca */
   talking: boolean;
+  /** Por qué no ha sonado el último intento, para enseñarlo */
+  error: { id: string; message: string } | null;
   /** Hay que llamarlo dentro de un toque, antes de la primera respuesta */
   unlock: () => void;
   speak: (id: string, text: string) => Promise<void>;
@@ -56,6 +58,11 @@ export function useVoice(): Voice {
   const [available, setAvailable] = useState(false);
   const [playing, setPlaying] = useState<string | null>(null);
   const [talking, setTalking] = useState(false);
+  const [error, setError] = useState<{ id: string; message: string } | null>(null);
+  // El último audio descargado. Si iOS no deja sonarlo porque llegó
+  // fuera del toque, el siguiente toque lo reproduce al instante, sin
+  // volver a esperar a la red (y por tanto dentro del gesto).
+  const ready = useRef<{ id: string; text: string; url: string } | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
   const url = useRef<string | null>(null);
   // Cada petición lleva un turno: si llega tarde una voz vieja (porque
@@ -105,30 +112,81 @@ export function useVoice(): Voice {
     setPlaying(null);
   }, []);
 
+  const play = useCallback(async (el: HTMLAudioElement, id: string, src: string) => {
+    if (el.src !== src) el.src = src;
+    try {
+      await el.play();
+      setError(null);
+    } catch (e) {
+      setPlaying(null);
+      const name = (e as { name?: string })?.name;
+      setError({
+        id,
+        message:
+          name === "NotAllowedError"
+            ? "El móvil no la ha dejado hablar sola. Toca Escuchar otra vez."
+            : name === "NotSupportedError"
+              ? "Este navegador no sabe reproducir el audio de Lilita."
+              : "No ha sonado. Toca Escuchar otra vez.",
+      });
+    }
+  }, []);
+
   const speak = useCallback(
     async (id: string, text: string) => {
       const mine = ++turn.current;
       const el = ensure();
       el.pause();
+      setError(null);
       setPlaying(id);
+
+      // Ya descargado: suena sin esperar, todavía dentro del toque.
+      const cached = ready.current;
+      if (cached && cached.id === id && cached.text === text) {
+        el.currentTime = 0;
+        await play(el, id, cached.url);
+        return;
+      }
+
+      let blob: Blob;
       try {
         const res = await fetch("/api/voz", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ text }),
         });
-        if (!res.ok) throw new Error(String(res.status));
-        const blob = await res.blob();
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(
+            body?.error ??
+              (res.status === 401
+                ? "La sesión ha caducado. Vuelve a entrar con el PIN."
+                : `La voz ha fallado (${res.status}).`),
+          );
+        }
+        blob = await res.blob();
+        if (!blob.size) throw new Error("Ha llegado un audio vacío.");
+      } catch (e) {
         if (mine !== turn.current) return;
-        if (url.current) URL.revokeObjectURL(url.current);
-        url.current = URL.createObjectURL(blob);
-        el.src = url.current;
-        await el.play();
-      } catch {
-        if (mine === turn.current) setPlaying(null);
+        setPlaying(null);
+        setError({
+          id,
+          message: e instanceof Error && e.message !== "Failed to fetch"
+            ? e.message
+            : "Sin conexión: no he podido pedir la voz.",
+        });
+        return;
       }
+      if (mine !== turn.current) return;
+
+      if (url.current) URL.revokeObjectURL(url.current);
+      url.current = URL.createObjectURL(
+        blob.type ? blob : new Blob([blob], { type: "audio/mpeg" }),
+      );
+      ready.current = { id, text, url: url.current };
+      await play(el, id, url.current);
     },
-    [ensure],
+    [ensure, play],
   );
 
   useEffect(
@@ -139,5 +197,5 @@ export function useVoice(): Voice {
     [],
   );
 
-  return { available, playing, talking, unlock, speak, stop };
+  return { available, playing, talking, error, unlock, speak, stop };
 }

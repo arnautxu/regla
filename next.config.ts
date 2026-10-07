@@ -2,7 +2,12 @@ import type { NextConfig } from "next";
 import { execFileSync } from "node:child_process";
 
 function currentDeploymentId(): string | undefined {
-  // Vercel accepts at most 32 characters for skew protection IDs.
+  // Vercel accepts at most 32 characters for skew protection IDs, and
+  // they must be unique per deployment: a redeploy of the same commit
+  // (e.g. after adding an env var) fails if the ID is just the SHA.
+  if (process.env.VERCEL_DEPLOYMENT_ID) {
+    return process.env.VERCEL_DEPLOYMENT_ID.slice(0, 32);
+  }
   if (process.env.VERCEL_GIT_COMMIT_SHA) {
     return process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 20);
   }
