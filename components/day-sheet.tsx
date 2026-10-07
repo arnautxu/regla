@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -52,6 +52,114 @@ function toggle<T>(list: T[] | undefined, value: T): T[] {
     : [...current, value];
 }
 
+/* Arrastrar la hoja hacia abajo para cerrarla. La rayita de arriba
+   lo promete, y hasta ahora no había nada detrás: el dedo bajaba y la
+   hoja ni se movía.
+
+   Con touch* y no con pointer*: en iPhone, en cuanto Safari decide
+   que el gesto es un scroll lanza pointercancel y el arrastre muere a
+   medias. Y el listener va a mano con passive:false, porque el de
+   React es pasivo y su preventDefault no frena el rebote de Safari.
+
+   Desde la cabecera o el pie se arrastra siempre. Desde el cuerpo
+   solo si ya está arriba del todo: si no, ese dedo hacia abajo es
+   volver a subir por la hoja, no cerrarla. */
+const CIERRA_PX = 110;
+const CIERRA_VELOCIDAD = 0.5; // px/ms: un tirón corto y rápido también cierra
+
+function useSwipeToClose(
+  panel: RefObject<HTMLDivElement | null>,
+  abierta: boolean,
+  cerrar: () => void,
+) {
+  const cerrarRef = useRef(cerrar);
+  useEffect(() => {
+    cerrarRef.current = cerrar;
+  });
+
+  useEffect(() => {
+    const el = panel.current;
+    if (!abierta || !el) return;
+
+    let inicioY = 0;
+    let inicioX = 0;
+    let inicioT = 0;
+    let dy = 0;
+    let puede = false;
+    // null: aún no se sabe si es arrastre o scroll.
+    let arrastrando: boolean | null = null;
+
+    const mover = (y: number, ms: number) => {
+      el.style.transition = ms ? `transform ${ms}ms var(--ease-out-quart)` : "none";
+      el.style.transform = y ? `translateY(${y}px)` : "";
+    };
+
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) {
+        arrastrando = false;
+        return;
+      }
+      const t = e.touches[0];
+      inicioY = t.clientY;
+      inicioX = t.clientX;
+      inicioT = e.timeStamp;
+      dy = 0;
+      arrastrando = null;
+      const cuerpo = el.querySelector<HTMLElement>("[data-sheet-body]");
+      const enCuerpo = cuerpo?.contains(e.target as Node) ?? false;
+      puede = !enCuerpo || (cuerpo?.scrollTop ?? 0) <= 0;
+    };
+
+    const onMove = (e: TouchEvent) => {
+      if (arrastrando === false || !puede) return;
+      const t = e.touches[0];
+      const y = t.clientY - inicioY;
+      const x = t.clientX - inicioX;
+      if (arrastrando === null) {
+        // Hacia abajo y desde arriba del todo, Safari solo haría el
+        // rebote: se frena ya, antes de decidir, o luego ya no deja.
+        if (y > 0) e.preventDefault();
+        if (Math.abs(y) < 8 && Math.abs(x) < 8) return;
+        arrastrando = y > 0 && y > Math.abs(x);
+        if (!arrastrando) return;
+      }
+      e.preventDefault();
+      dy = Math.max(0, y);
+      mover(dy, 0);
+    };
+
+    const onEnd = (e: TouchEvent) => {
+      if (!arrastrando) {
+        arrastrando = null;
+        return;
+      }
+      arrastrando = null;
+      const velocidad = dy / Math.max(1, e.timeStamp - inicioT);
+      if (dy > CIERRA_PX || (dy > 40 && velocidad > CIERRA_VELOCIDAD)) {
+        haptic(6);
+        mover(el.offsetHeight, 200);
+        window.setTimeout(() => cerrarRef.current(), 190);
+      } else {
+        mover(0, 220);
+      }
+    };
+
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", onEnd);
+    el.addEventListener("touchcancel", onEnd);
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+      // La próxima vez que se abra, que no aparezca medio bajada.
+      el.style.transform = "";
+      el.style.transition = "";
+    };
+  }, [panel, abierta]);
+}
+
 export function DaySheet({
   day: base,
   onClose,
@@ -87,6 +195,9 @@ export function DaySheet({
     }
     if (!base && el.open) el.close();
   }, [base]);
+
+  const abierta = Boolean(base);
+  useSwipeToClose(panel, abierta, () => ref.current?.close());
 
   // Se ajusta DURANTE el render y no en un efecto: es el patrón que
   // documenta React para "resetear estado cuando cambia una prop", y
