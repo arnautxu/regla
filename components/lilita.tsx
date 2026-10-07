@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   AnimatePresence,
   animate,
@@ -37,6 +37,8 @@ type Props = {
   className?: string;
   /** Mueve la boca como si hablara (p. ej. mientras suena su voz). */
   speaking?: boolean;
+  /** Saluda con la mano al aparecer (p. ej. al abrir el chat). */
+  saluda?: boolean;
 };
 
 const BODY = "M60 8 C60 8 98 56 98 88 A38 38 0 1 1 22 88 C22 56 60 8 60 8 Z";
@@ -57,7 +59,14 @@ const INSTANT = { duration: 0 } as const;
  *  interpolar; si no, la pieza se cambia de golpe (con la key). */
 const shapeOf = (d: string) => d.replace(/-?\d*\.?\d+/g, "#");
 
-export function Lilita({ mood = "neutral", size = 200, className, speaking = false }: Props) {
+export function Lilita({
+  mood = "neutral",
+  size = 200,
+  className,
+  speaking = false,
+  saluda = false,
+}: Props) {
+  const clipId = `li-clip-${useId().replace(/:/g, "")}`;
   const reduced = useReducedMotion() ?? false;
   const lively = !reduced && size >= LIVELY_MIN_SIZE;
 
@@ -71,10 +80,18 @@ export function Lilita({ mood = "neutral", size = 200, className, speaking = fal
   /* --- Aplastar y estirar, con los pies como ancla --------------- */
   const squashX = useMotionValue(1);
   const squashY = useMotionValue(1);
+  const hopY = useMotionValue(0);
   const squash = (k: number) => {
     const opts = { duration: 0.42, times: [0, 0.28, 0.62, 1], ease: "easeOut" as const };
     animate(squashY, [1, 1 - 0.13 * k, 1 + 0.05 * k, 1], opts);
     animate(squashX, [1, 1 + 0.09 * k, 1 - 0.03 * k, 1], opts);
+  };
+  /** Saltito: se agacha, sube estirada y aterriza aplastándose. */
+  const hop = (k: number) => {
+    const t = { duration: 0.56, times: [0, 0.18, 0.5, 0.78, 1], ease: "easeOut" as const };
+    animate(hopY, [0, 2 * k, -14 * k, 0, 0], t);
+    animate(squashY, [1, 1 - 0.12 * k, 1 + 0.1 * k, 1 - 0.14 * k, 1], t);
+    animate(squashX, [1, 1 + 0.08 * k, 1 - 0.06 * k, 1 + 0.1 * k, 1], t);
   };
 
   // Cada cambio de humor es una reacción visible, no un recambio.
@@ -82,7 +99,7 @@ export function Lilita({ mood = "neutral", size = 200, className, speaking = fal
   useEffect(() => {
     if (prevMood.current === shown) return;
     prevMood.current = shown;
-    if (!reduced) squash(1);
+    if (!reduced) hop(0.8);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shown, reduced]);
 
@@ -175,6 +192,8 @@ export function Lilita({ mood = "neutral", size = 200, className, speaking = fal
       t.n = 0;
       setTantrum(true);
       tantrumTimer.current = setTimeout(() => setTantrum(false), TANTRUM_MS);
+    } else if (t.n % 3 === 0) {
+      hop(0.7);
     } else {
       squash(0.7);
     }
@@ -197,6 +216,45 @@ export function Lilita({ mood = "neutral", size = 200, className, speaking = fal
       animate(talk, 1, { duration: 0.12 });
     };
   }, [speaking, reduced, talk]);
+
+  /* --- Saludo: el brazo derecho sube y se agita unas veces ------ */
+  const [waving, setWaving] = useState(saluda && lively);
+  useEffect(() => {
+    if (!waving) return;
+    const t = setTimeout(() => setWaving(false), 2300);
+    return () => clearTimeout(t);
+  }, [waving]);
+  const arms: [Arm, Arm] = waving ? [f.arms[0], ARM_WAVE] : f.arms;
+
+  const armLayer = (front: boolean) =>
+    arms.map((a, i) =>
+      !!a.front === front ? (
+        <g key={`arm${i}-${front}`}>
+          {/* Los brazos sueltos se balancean un poco a destiempo
+              del cuerpo; los que tocan algo (mejillas, corazón) no. */}
+          <g
+            className={
+              waving && i === 1 ? "li-wave" : front ? undefined : `li-swing li-swing-${i}`
+            }
+          >
+            <g strokeLinecap="round" fill="none">
+              <g stroke="var(--li-line)" strokeWidth="10">{limb(a.d, i, "arm-o")}</g>
+              <g stroke="var(--li-body)" strokeWidth="5">{limb(a.d, i, "arm-i")}</g>
+            </g>
+            <motion.circle
+              initial={false}
+              animate={{ cx: endOf(a.d)[0], cy: endOf(a.d)[1], r: a.fist ? HAND_R + 1 : HAND_R }}
+              transition={morph}
+              fill="var(--li-shoe)"
+              stroke="var(--li-line)"
+              strokeWidth="3.5"
+            />
+          </g>
+        </g>
+      ) : null,
+    );
+
+  const pr = f.pupil.r * PUPIL_K;
 
   const limb = (d: string, i: number, part: string) => (
     <motion.path key={`${part}${i}-${shapeOf(d)}`} initial={false} animate={{ d }} transition={morph} />
@@ -223,8 +281,12 @@ export function Lilita({ mood = "neutral", size = 200, className, speaking = fal
         style={{ overflow: "visible", WebkitTapHighlightColor: "transparent" }}
         onPointerDown={lively ? onTap : undefined}
       >
-      <g className="lilita-idle" style={{ transformOrigin: "60px 140px" }}>
-        <motion.g style={{ scaleX: squashX, scaleY: squashY, originX: 0.5, originY: 1 }}>
+      {/* Sombra en el suelo: no bota con ella, se encoge cuando sube. */}
+      {shown !== "volando" && (
+        <ellipse className={`lilita-shadow li-m-${shown}`} cx="60" cy="155" rx="30" ry="4.5" fill="var(--li-line)" opacity={0.14} />
+      )}
+      <g className={`lilita-idle li-m-${shown}`} style={{ transformOrigin: "60px 140px" }}>
+        <motion.g style={{ y: hopY, scaleX: squashX, scaleY: squashY, originX: 0.5, originY: 1 }}>
         <g
           style={{
             transform: `rotate(${f.tilt}deg)`,
@@ -249,26 +311,37 @@ export function Lilita({ mood = "neutral", size = 200, className, speaking = fal
             {f.shoes.map((d, i) => limb(d, i, "shoe"))}
           </g>
 
-          {/* --- Brazos -------------------------------------------- */}
-          <g strokeLinecap="round" fill="none">
-            <g stroke="var(--li-line)" strokeWidth="10">
-              {f.arms.map((d, i) => limb(d, i, "arm-o"))}
-            </g>
-            <g stroke="var(--li-body)" strokeWidth="5">
-              {f.arms.map((d, i) => limb(d, i, "arm-i"))}
-            </g>
-          </g>
+          {/* --- Brazos de detrás -----------------------------------
+              Cada brazo va detrás o delante del cuerpo según la pose.
+              Antes los abrazos iban siempre detrás y desaparecían:
+              Lilita se quedaba sin brazos justo al abrir el chat. */}
+          {armLayer(false)}
 
           {/* --- Cuerpo -------------------------------------------- */}
+          {/* Volumen sin degradados: una media luna de sombra abajo
+              a la derecha, recortada por la silueta. */}
+          <clipPath id={clipId}>
+            <path d={BODY} />
+          </clipPath>
+          <g clipPath={`url(#${clipId})`}>
+            <path d={BODY} fill="var(--li-shade)" />
+            <ellipse cx="50" cy="64" rx="38" ry="56" fill="var(--li-body)" />
+          </g>
+          <path d={BODY} fill="none" stroke="var(--li-line)" strokeWidth="4" />
+          <ellipse cx="42" cy="50" rx="6.5" ry="13" fill="var(--li-shine)" transform="rotate(-24 42 50)" />
+          <circle cx="49" cy="34" r="2.6" fill="var(--li-shine)" />
+          {/* Mejillas */}
+          <ellipse cx="31" cy="99" rx="6.5" ry="3.8" fill="var(--li-blush)" />
+          <ellipse cx="89" cy="99" rx="6.5" ry="3.8" fill="var(--li-blush)" />
+          {/* Rizo en la punta: el único pelo que tiene, y lo sabe. */}
           <path
-            d={BODY}
-            fill="var(--li-body)"
-            stroke="var(--li-line)"
-            strokeWidth="4"
+            className="li-curl"
+            d="M60 9 C58 1 66 -4 71 0 C75 3 72 9 67 7"
+            fill="none"
+            stroke="var(--li-curl)"
+            strokeWidth="3.5"
+            strokeLinecap="round"
           />
-          {/* Brillo: un solo destello, arriba a la izquierda, como en
-              una gota de verdad. Sin degradados. */}
-          <ellipse cx="44" cy="52" rx="7" ry="12" fill="var(--li-shine)" transform="rotate(-18 44 52)" />
 
           {/* --- Ojos ---------------------------------------------- */}
           <motion.g style={{ scaleY: blink, originX: 0.5, originY: 0.5 }}>
@@ -276,12 +349,35 @@ export function Lilita({ mood = "neutral", size = 200, className, speaking = fal
             <ellipse cx="75" cy="78" rx="15.5" ry="16.5" fill="var(--li-sclera)" stroke="var(--li-line)" strokeWidth="3.5" />
             <motion.g style={{ x: lookX, y: lookY }} fill="var(--li-line)">
               {[45, 75].map((cx) => (
-                <motion.circle
-                  key={cx}
-                  initial={false}
-                  animate={{ cx: cx + f.pupil.dx, cy: 78 + f.pupil.dy, r: f.pupil.r }}
-                  transition={morph}
-                />
+                <g key={cx}>
+                  <motion.circle
+                    initial={false}
+                    animate={{ cx: cx + f.pupil.dx, cy: 78 + f.pupil.dy, r: pr }}
+                    transition={morph}
+                  />
+                  {/* Dos brillos, uno grande y otro pequeño: lo que
+                      hace que un ojo de dibujo parezca tierno. */}
+                  <motion.circle
+                    initial={false}
+                    animate={{
+                      cx: cx + f.pupil.dx - pr * 0.42,
+                      cy: 78 + f.pupil.dy - pr * 0.48,
+                      r: f.pupil.r ? Math.max(1.6, pr * 0.42) : 0,
+                    }}
+                    transition={morph}
+                    fill="var(--li-sclera)"
+                  />
+                  <motion.circle
+                    initial={false}
+                    animate={{
+                      cx: cx + f.pupil.dx + pr * 0.5,
+                      cy: 78 + f.pupil.dy + pr * 0.45,
+                      r: pr > 5 ? pr * 0.15 : 0,
+                    }}
+                    transition={morph}
+                    fill="var(--li-sclera)"
+                  />
+                </g>
               ))}
             </motion.g>
             {/* Párpados: se dibujan encima para cerrar el ojo por arriba.
@@ -304,6 +400,10 @@ export function Lilita({ mood = "neutral", size = 200, className, speaking = fal
                   ),
               )}
             </AnimatePresence>
+            <g stroke="var(--li-line)" strokeWidth="3" strokeLinecap="round">
+              <path d="M31.5 70 L25 66.5 M34 65.5 L29 60.5" />
+              <path d="M88.5 70 L95 66.5 M86 65.5 L91 60.5" />
+            </g>
           </motion.g>
 
           {/* --- Cejas: donde ocurre la actuación ------------------- */}
@@ -340,20 +440,122 @@ export function Lilita({ mood = "neutral", size = 200, className, speaking = fal
               </motion.g>
             )}
           </AnimatePresence>
+
+          {/* --- Brazos de delante --------------------------------- */}
+          {armLayer(true)}
         </g>
         </motion.g>
       </g>
 
       <style>{`
-        .lilita-idle {
-          animation: li-bob 3.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+        /* Todo lo que se mueve en bucle va en CSS: corre en el
+           compositor y no despierta a React. Cada humor tiene su
+           forma de estar quieta. */
+        .lilita-idle, .lilita-shadow { animation: li-bob 3.4s cubic-bezier(0.45, 0, 0.55, 1) infinite }
+        .lilita-shadow { transform-origin: 60px 155px; animation-name: li-shadow }
+        @keyframes li-bob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-5px) } }
+        @keyframes li-shadow { 0%, 100% { transform: scaleX(1); opacity: .14 } 50% { transform: scaleX(.86); opacity: .1 } }
+
+        /* Enérgica: no para de botar. */
+        .lilita-idle.li-m-energica { animation: li-jump .9s cubic-bezier(0.33, 0, 0.67, 1) infinite }
+        .lilita-shadow.li-m-energica { animation: li-jump-shadow .9s cubic-bezier(0.33, 0, 0.67, 1) infinite }
+        @keyframes li-jump {
+          0%, 100% { transform: translateY(0) scale(1.07, .93) }
+          12% { transform: translateY(0) scale(.96, 1.05) }
+          50% { transform: translateY(-13px) scale(1, 1) }
+          88% { transform: translateY(0) scale(.98, 1.02) }
         }
-        @keyframes li-bob {
-          0%, 100% { transform: translateY(0) }
-          50% { transform: translateY(-5px) }
+        @keyframes li-jump-shadow { 0%, 100% { transform: scaleX(1.05) } 50% { transform: scaleX(.65); opacity: .07 } }
+
+        /* Exhausta: respira lenta y se le cae el peso a un lado. */
+        .lilita-idle.li-m-exhausta { animation: li-droop 5.2s ease-in-out infinite }
+        @keyframes li-droop {
+          0%, 100% { transform: translateY(0) rotate(0) scale(1, 1) }
+          50% { transform: translateY(2px) rotate(-1.5deg) scale(1.03, .97) }
         }
+
+        /* Dormida: respiración profunda, sin flotar. */
+        .lilita-idle.li-m-dormida { animation: li-breathe 3.8s ease-in-out infinite }
+        .lilita-shadow.li-m-dormida { animation: none }
+        @keyframes li-breathe { 0%, 100% { transform: scale(1, 1) } 50% { transform: scale(1.035, 1.03) } }
+
+        /* Pánico: tiembla entera. */
+        .lilita-idle.li-m-panico { animation: li-tremble .16s linear infinite }
+        @keyframes li-tremble {
+          0%, 100% { transform: translate(0, 0) }
+          25% { transform: translate(-1px, .5px) }
+          50% { transform: translate(1px, -.5px) }
+          75% { transform: translate(-.5px, -.5px) }
+        }
+
+        /* Enfadada: vibra de rabia con pausas. */
+        .lilita-idle.li-m-gremlin { animation: li-rage 1.6s linear infinite }
+        @keyframes li-rage {
+          0%, 40%, 100% { transform: rotate(0) }
+          44%, 52%, 60% { transform: rotate(-2.5deg) }
+          48%, 56%, 64% { transform: rotate(2.5deg) }
+          68% { transform: rotate(0) }
+        }
+
+        /* Pícara y cuidando: se balancean, cada una a su ritmo. */
+        .lilita-idle.li-m-flirty { animation: li-sway 2.6s ease-in-out infinite }
+        .lilita-idle.li-m-cuidando { animation: li-sway-soft 4s ease-in-out infinite }
+        @keyframes li-sway { 0%, 100% { transform: rotate(-3deg) } 50% { transform: rotate(3deg) translateY(-2px) } }
+        @keyframes li-sway-soft { 0%, 100% { transform: rotate(-1.5deg) } 50% { transform: rotate(1.5deg) translateY(-3px) } }
+
+        /* Brazos sueltos: péndulo desde el hombro, a destiempo. */
+        .li-swing { animation: li-swing-l 3.4s ease-in-out infinite }
+        .li-swing-0 { transform-origin: 24px 96px }
+        .li-swing-1 { transform-origin: 96px 96px; animation-name: li-swing-r; animation-delay: -.4s }
+        @keyframes li-swing-l { 0%, 100% { transform: rotate(0) } 50% { transform: rotate(6deg) } }
+        @keyframes li-swing-r { 0%, 100% { transform: rotate(0) } 50% { transform: rotate(-6deg) } }
+        .li-m-energica .li-swing { animation-duration: .9s }
+        .li-m-energica .li-swing-0 { animation-name: li-flap-l }
+        .li-m-energica .li-swing-1 { animation-name: li-flap-r; animation-delay: 0s }
+        @keyframes li-flap-l { 0%, 100% { transform: rotate(8deg) } 50% { transform: rotate(-14deg) } }
+        @keyframes li-flap-r { 0%, 100% { transform: rotate(-8deg) } 50% { transform: rotate(14deg) } }
+        .li-m-gremlin .li-swing { animation: li-fist .32s ease-in-out infinite alternate }
+        .li-m-gremlin .li-swing-1 { animation-delay: -.16s }
+        @keyframes li-fist { from { transform: rotate(-7deg) } to { transform: rotate(7deg) } }
+        .li-m-exhausta .li-swing { animation-duration: 5.2s }
+
+        /* Saludo: la mano se agita desde el hombro. */
+        .li-wave { transform-origin: 96px 92px; animation: li-wave 1.6s ease-in-out .3s both }
+        @keyframes li-wave {
+          0%, 100% { transform: rotate(0) }
+          15%, 45%, 75% { transform: rotate(-18deg) }
+          30%, 60% { transform: rotate(10deg) }
+        }
+
+        /* El rizo va con retraso, como el pelo de verdad. */
+        .li-curl { transform-origin: 60px 9px; animation: li-curl 3.4s ease-in-out infinite; animation-delay: -.6s }
+        @keyframes li-curl { 0%, 100% { transform: rotate(-9deg) } 50% { transform: rotate(10deg) } }
+        .li-m-energica .li-curl { animation-duration: .9s; animation-delay: -.25s }
+
+        /* Attrezzo vivo. */
+        .li-beat { transform-origin: 60px 122px; animation: li-beat 1.1s ease-in-out infinite }
+        @keyframes li-beat { 0%, 40%, 100% { transform: scale(1) } 15% { transform: scale(1.22) } 28% { transform: scale(1.08) } }
+        .li-z { animation: li-z 2.6s ease-out infinite }
+        .li-z-2 { animation-delay: -1.3s }
+        @keyframes li-z {
+          0% { transform: translate(-4px, 10px); opacity: 0 }
+          30% { opacity: 1 }
+          100% { transform: translate(6px, -10px); opacity: 0 }
+        }
+        .li-sweat { animation: li-sweat 1.4s ease-in infinite }
+        @keyframes li-sweat {
+          0% { transform: translateY(-2px); opacity: 0 }
+          20% { opacity: 1 }
+          100% { transform: translateY(10px); opacity: 0 }
+        }
+        .li-spark { animation: li-spark .45s ease-in-out infinite alternate; transform-origin: 60px 40px }
+        @keyframes li-spark { from { transform: scale(.92); opacity: .6 } to { transform: scale(1.08); opacity: 1 } }
+        .li-fume { animation: li-fume .8s ease-out infinite }
+        @keyframes li-fume { 0% { transform: translateY(4px); opacity: 0 } 40% { opacity: 1 } 100% { transform: translateY(-6px); opacity: 0 } }
+
         @media (prefers-reduced-motion: reduce) {
-          .lilita-idle { animation: none }
+          .lilita-idle, .lilita-shadow, .li-swing, .li-curl, .li-beat,
+          .li-z, .li-sweat, .li-spark, .li-fume, .li-wave { animation: none !important }
         }
       `}</style>
       </svg>
@@ -369,7 +571,7 @@ export type Face = {
   pupil: { dx: number; dy: number; r: number };
   lids?: [string | null, string | null];
   mouth: { d: string; fill?: boolean };
-  arms: [string, string];
+  arms: [Arm, Arm];
   legs: [string, string];
   shoes: [string, string];
   extra?: React.ReactNode;
@@ -381,10 +583,40 @@ const SHOES_DOWN: [string, string] = [
   "M66 143 h20 a4 4 0 0 1 4 4 v3 a4 4 0 0 1 -4 4 h-21 a3 3 0 0 1 -3 -3 v-4 a4 4 0 0 1 4 -4 z",
 ];
 
-const ARMS_DOWN: [string, string] = ["M24 96 C14 100 10 108 12 116", "M96 96 C106 100 110 108 108 116"];
-const ARMS_UP: [string, string] = ["M24 92 C12 84 8 72 10 60", "M96 92 C108 84 112 72 110 60"];
-const ARMS_OUT: [string, string] = ["M24 94 C10 92 4 100 2 108", "M96 94 C110 92 116 100 118 108"];
-const ARMS_HUG: [string, string] = ["M26 100 C36 112 52 116 60 114", "M94 100 C84 112 68 116 60 114"];
+/** Un brazo: trazo del hombro a la mano (siempre "M C" para que
+ *  se transformen entre poses) y en qué capa va. */
+type Arm = { d: string; front?: boolean; fist?: boolean };
+
+/** La mano va al final del trazo: los dos últimos números. */
+const endOf = (d: string): [number, number] => {
+  const n = d.match(/-?\d*\.?\d+/g)!.map(Number);
+  return [n[n.length - 2], n[n.length - 1]];
+};
+
+/** Guantes blancos, a juego con las zapatillas. */
+const HAND_R = 6.5;
+
+/** Pupilas más grandes que el ojo "realista": con poco blanco
+ *  alrededor la mirada es tierna; con mucho, da miedo. */
+const PUPIL_K = 1.32;
+
+/** Se dibuja el brazo izquierdo; el derecho es su espejo. */
+const mirror = (a: Arm): Arm => ({
+  ...a,
+  d: a.d.replace(/(-?\d*\.?\d+) (-?\d*\.?\d+)/g, (_, x, y) => `${120 - Number(x)} ${y}`),
+});
+const pair = (l: Arm, r: Arm = l): [Arm, Arm] => [l, mirror(r)];
+
+const ARM_DOWN: Arm = { d: "M24 96 C14 102 11 112 13 122" };
+const ARM_HIP: Arm = { d: "M24 96 C8 96 6 112 27 114" };
+const ARM_DANGLE: Arm = { d: "M24 98 C19 110 17 124 18 136" };
+const ARM_UP: Arm = { d: "M24 92 C12 84 8 72 10 57" };
+const ARM_FIST: Arm = { d: "M24 96 C8 98 4 86 8 73", fist: true };
+const ARM_CHEEK: Arm = { d: "M23 94 C12 102 16 116 32 107", front: true };
+const ARM_CHIN: Arm = { d: "M23 96 C10 106 16 120 33 114", front: true };
+const ARM_HEART: Arm = { d: "M24 98 C18 112 30 122 49 121", front: true };
+/** Brazo derecho saludando (ya en coordenadas de la derecha). */
+const ARM_WAVE: Arm = { d: "M96 92 C108 84 114 72 112 57" };
 
 export const FACES: Record<Mood, Face> = {
   /* Sarcástica de serie: una ceja arriba y media sonrisa. */
@@ -393,7 +625,7 @@ export const FACES: Record<Mood, Face> = {
     brows: ["M36 59 Q45 58 54 57", "M70 49 Q77 52 84 55"],
     pupil: { dx: 2, dy: -1, r: 6.5 },
     mouth: { d: "M46 104 Q58 112 76 100" },
-    arms: ARMS_DOWN,
+    arms: pair(ARM_HIP, ARM_DOWN),
     legs: LEGS_DOWN,
     shoes: SHOES_DOWN,
   },
@@ -408,7 +640,7 @@ export const FACES: Record<Mood, Face> = {
       "M59.5 78 a15.5 16.5 0 0 1 31 0 z",
     ],
     mouth: { d: "M47 106 Q60 105 73 104" },
-    arms: ["M24 98 C14 104 12 112 14 120", "M96 98 C106 104 108 112 106 120"],
+    arms: pair(ARM_DANGLE),
     legs: LEGS_DOWN,
     shoes: SHOES_DOWN,
   },
@@ -419,14 +651,14 @@ export const FACES: Record<Mood, Face> = {
     brows: ["M36 54 Q45 47 54 52", "M84 54 Q75 47 66 52"],
     pupil: { dx: 0, dy: -2, r: 7.5 },
     mouth: { d: "M42 98 Q60 124 78 98 Z", fill: true },
-    arms: ARMS_UP,
+    arms: pair(ARM_UP),
     legs: ["M48 122 C46.7 128.3 45.3 134.7 44 141", "M72 122 C74 128.3 76 134.7 78 141"],
     shoes: [
       "M32 141 h20 a4 4 0 0 1 4 4 v4 a3 3 0 0 1 -3 3 h-21 a4 4 0 0 1 -4 -4 v-3 a4 4 0 0 1 4 -4 z",
       "M68 141 h20 a4 4 0 0 1 4 4 v3 a4 4 0 0 1 -4 4 h-21 a3 3 0 0 1 -3 -3 v-4 a4 4 0 0 1 4 -4 z",
     ],
     extra: (
-      <g stroke="var(--li-line)" strokeWidth="3.5" strokeLinecap="round">
+      <g className="li-spark" stroke="var(--li-line)" strokeWidth="3.5" strokeLinecap="round">
         <path d="M8 44 L2 38" />
         <path d="M14 34 L11 26" />
         <path d="M112 44 L118 38" />
@@ -442,7 +674,7 @@ export const FACES: Record<Mood, Face> = {
     pupil: { dx: 4, dy: 0, r: 6.5 },
     lids: ["M29.5 74 a15.5 16.5 0 0 1 31 0 z", null],
     mouth: { d: "M44 106 Q56 110 78 96" },
-    arms: ARMS_HUG,
+    arms: pair(ARM_HIP, ARM_CHIN),
     legs: LEGS_DOWN,
     shoes: SHOES_DOWN,
   },
@@ -455,11 +687,11 @@ export const FACES: Record<Mood, Face> = {
     mouth: {
       d: "M42 100 h36 v10 h-36 z M50 100 v10 M58 100 v10 M66 100 v10",
     },
-    arms: ARMS_OUT,
+    arms: pair(ARM_FIST),
     legs: LEGS_DOWN,
     shoes: SHOES_DOWN,
     extra: (
-      <g stroke="var(--li-line)" strokeWidth="3.5" strokeLinecap="round" fill="none">
+      <g className="li-fume" stroke="var(--li-line)" strokeWidth="3.5" strokeLinecap="round" fill="none">
         <path d="M96 30 q6 -5 12 0 M96 38 q6 -5 12 0" />
       </g>
     ),
@@ -471,11 +703,11 @@ export const FACES: Record<Mood, Face> = {
     brows: ["M36 49 Q45 44 54 48", "M84 49 Q75 44 66 48"],
     pupil: { dx: 0, dy: 0, r: 3.5 },
     mouth: { d: "M44 104 q6 -7 12 0 t12 0" },
-    arms: ["M24 94 C16 84 18 74 26 70", "M96 94 C104 84 102 74 94 70"],
+    arms: pair(ARM_CHEEK),
     legs: LEGS_DOWN,
     shoes: SHOES_DOWN,
     extra: (
-      <g fill="var(--li-sweat)" stroke="var(--li-line)" strokeWidth="2.5">
+      <g className="li-sweat" fill="var(--li-sweat)" stroke="var(--li-line)" strokeWidth="2.5">
         <path d="M100 58 C100 58 106 68 106 72 a6 6 0 0 1 -12 0 c0 -4 6 -14 6 -14 z" />
       </g>
     ),
@@ -487,9 +719,19 @@ export const FACES: Record<Mood, Face> = {
     brows: ["M36 58 Q45 55.5 54 53", "M84 58 Q75 55.5 66 53"],
     pupil: { dx: 0, dy: 1, r: 7 },
     mouth: { d: "M50 104 Q60 110 70 104" },
-    arms: ARMS_HUG,
+    arms: pair(ARM_HEART),
     legs: LEGS_DOWN,
     shoes: SHOES_DOWN,
+    extra: (
+      <path
+        className="li-beat"
+        d="M60 131 C48 123 48 113 54 113 C57.5 113 60 116.5 60 116.5 C60 116.5 62.5 113 66 113 C72 113 72 123 60 131 Z"
+        fill="var(--li-shine)"
+        stroke="var(--li-line)"
+        strokeWidth="3"
+        strokeLinejoin="round"
+      />
+    ),
   },
 
   /* Frita. */
@@ -502,13 +744,13 @@ export const FACES: Record<Mood, Face> = {
       "M59.5 78 a15.5 16.5 0 0 1 31 0 z",
     ],
     mouth: { d: "M54 104 a6 5 0 1 0 12 0 a6 5 0 1 0 -12 0" },
-    arms: ARMS_DOWN,
+    arms: pair(ARM_DOWN),
     legs: LEGS_DOWN,
     shoes: SHOES_DOWN,
     extra: (
       <g fill="var(--li-line)" fontFamily="var(--font-display)" fontWeight="700">
-        <text x="98" y="40" fontSize="16">z</text>
-        <text x="108" y="26" fontSize="12">z</text>
+        <text className="li-z" x="98" y="40" fontSize="16">z</text>
+        <text className="li-z li-z-2" x="108" y="26" fontSize="12">z</text>
       </g>
     ),
   },
@@ -522,7 +764,7 @@ export const FACES: Record<Mood, Face> = {
     brows: ["M36 52 Q45 46 54 51", "M84 52 Q75 46 66 51"],
     pupil: { dx: 0, dy: -2, r: 7 },
     mouth: { d: "M46 102 Q58 108 74 100" },
-    arms: ["M22 94 C8 82 2 62 6 38", "M98 94 C110 100 118 112 120 128"],
+    arms: [{ d: "M22 94 C8 82 2 62 6 38", fist: true }, { d: "M98 94 C110 100 118 112 120 128" }],
     legs: ["M48 122 C42 136 30 148 20 158", "M72 122 C78 136 90 148 100 158"],
     shoes: [
       "M10 158 h20 a4 4 0 0 1 4 4 v4 a3 3 0 0 1 -3 3 h-21 a4 4 0 0 1 -4 -4 v-3 a4 4 0 0 1 4 -4 z",
