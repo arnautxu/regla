@@ -16,11 +16,25 @@ import {
   type Candidate,
 } from "@/lib/server/lilita-prompt";
 import type { LilitaContext } from "@/lib/ai-context";
-import { firstThatAnswers } from "@/lib/server/first-answer";
+import {
+  OVERLOADED,
+  SlowModelError,
+  firstThatAnswers,
+  rootError,
+} from "@/lib/server/first-answer";
 
-export const maxDuration = 30;
+/* Vercel mata la función al llegar a maxDuration con un
+   FUNCTION_INVOCATION_TIMEOUT que el móvil enseña tal cual. Con 30 s,
+   un Gemini colgado sin decir nada se comía todo el tiempo y el
+   recambio ni llegaba a probarse. Ahora hay 60 s, cada modelo tiene
+   FIRST_WORD_MS para empezar a hablar y todo termina en BUDGET_MS,
+   antes de que Vercel corte, para poder decir qué ha pasado. */
+export const maxDuration = 60;
+const BUDGET_MS = 52_000;
+const FIRST_WORD_MS = 12_000;
 
 export async function POST(req: Request) {
+  const deadline = Date.now() + BUDGET_MS;
   if (!aiConfigured()) {
     return Response.json({ error: "IA no configurada." }, { status: 503 });
   }
@@ -71,9 +85,10 @@ export async function POST(req: Request) {
 
   const instructions = chatInstructions(context);
   const modelMessages = await convertToModelMessages(messages);
-  const start = (c: Candidate, last: boolean) =>
+  const start = (c: Candidate, last: boolean, abortSignal: AbortSignal) =>
     streamText({
       model: c.model,
+      abortSignal,
       instructions,
       messages: modelMessages,
       maxOutputTokens: 320,
@@ -98,7 +113,11 @@ export async function POST(req: Request) {
       tools,
     });
 
-  const stream = await firstThatAnswers(modelChain(), (c, last) => start(c, last).stream);
+  const stream = await firstThatAnswers(
+    modelChain(),
+    (c, last, signal) => start(c, last, signal).stream,
+    { deadline, firstWordMs: FIRST_WORD_MS },
+  );
 
   return createUIMessageStreamResponse({
     stream: toUIMessageStream({ stream, onError: explain }),
@@ -112,9 +131,13 @@ export async function POST(req: Request) {
  */
 function explain(error: unknown): string {
   console.error("chat", error);
-  const e = error as { statusCode?: number; message?: string };
-  const status = e?.statusCode;
-  const message = String(e?.message ?? error).slice(0, 160);
+  const root = rootError(error);
+  const status = root.statusCode;
+  const message = root.message.slice(0, 160);
+  if (error instanceof SlowModelError)
+    return `El modelo tarda demasiado en contestar (${message}). Prueba otra vez en un momento.`;
+  if (status === 503 || OVERLOADED.test(message))
+    return "Google tiene los modelos saturados ahora mismo. Prueba otra vez en un momento.";
   if (status === 429 || /quota|rate limit|resource.?exhausted/i.test(message))
     return "Gemini dice que se ha pasado de cuota. Prueba en un rato o revisa la facturación de la clave.";
   if (status === 401 || status === 403 || /api key|permission|unauthori/i.test(message))

@@ -266,16 +266,21 @@ export function resolveModel() {
 /** Un modelo candidato y si es Gemini (para sus opciones propias). */
 export type Candidate = { model: ReturnType<typeof resolveModel>; gemini: boolean; name: string };
 
-const GEMINI_FALLBACK = "gemini-3.5-flash";
+/* Cuando hay mucha demanda Google satura los Flash nuevos a la vez
+   ("This model is currently experiencing high demand"), así que el
+   último recambio es uno de generación anterior, que va por otra
+   capacidad. LILAILA_FALLBACK_MODEL acepta varios separados por comas. */
+const GEMINI_FALLBACKS = ["gemini-3.5-flash", "gemini-2.5-flash"];
 
 export function modelChain(): Candidate[] {
   const chain: Candidate[] = [];
   if (usingGemini()) {
     const first = process.env.LILAILA_MODEL ?? GEMINI_DEFAULT;
-    const second = process.env.LILAILA_FALLBACK_MODEL ?? GEMINI_FALLBACK;
-    chain.push({ model: google(first), gemini: true, name: first });
-    if (second && second !== first) {
-      chain.push({ model: google(second), gemini: true, name: second });
+    const rest = process.env.LILAILA_FALLBACK_MODEL
+      ? process.env.LILAILA_FALLBACK_MODEL.split(",").map((m) => m.trim())
+      : GEMINI_FALLBACKS;
+    for (const name of [...new Set([first, ...rest])].filter(Boolean)) {
+      chain.push({ model: google(name), gemini: true, name });
     }
   }
   if (process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN) {
