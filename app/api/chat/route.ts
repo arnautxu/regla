@@ -92,6 +92,25 @@ export async function POST(req: Request) {
   });
 
   return createUIMessageStreamResponse({
-    stream: toUIMessageStream({ stream: result.stream }),
+    stream: toUIMessageStream({ stream: result.stream, onError: explain }),
   });
+}
+
+/**
+ * El fallo del modelo, dicho de forma que Arnau sepa qué tocar. Sin
+ * esto el móvil solo recibe "An error occurred" y Lilita se queda
+ * "sin palabras" sin que nadie sepa por qué.
+ */
+function explain(error: unknown): string {
+  console.error("chat", error);
+  const e = error as { statusCode?: number; message?: string };
+  const status = e?.statusCode;
+  const message = String(e?.message ?? error).slice(0, 160);
+  if (status === 429 || /quota|rate limit|resource.?exhausted/i.test(message))
+    return "Gemini dice que se ha pasado de cuota. Prueba en un rato o revisa la facturación de la clave.";
+  if (status === 401 || status === 403 || /api key|permission|unauthori/i.test(message))
+    return "El modelo no acepta la clave. Revisa GOOGLE_GENERATIVE_AI_API_KEY en Vercel.";
+  if (status === 404 || /not found|model/i.test(message))
+    return `El modelo no responde (${message}). Revisa LILAILA_MODEL en Vercel.`;
+  return `El modelo ha fallado${status ? ` (${status})` : ""}: ${message}`;
 }
