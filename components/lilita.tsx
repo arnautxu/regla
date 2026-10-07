@@ -1,6 +1,14 @@
 "use client";
 
-import { motion } from "motion/react";
+import { useEffect, useRef, useState } from "react";
+import {
+  AnimatePresence,
+  animate,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useSpring,
+} from "motion/react";
 import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import type { Mood } from "@/lib/lilita/lines";
 
@@ -14,6 +22,12 @@ import type { Mood } from "@/lib/lilita/lines";
    Es siempre roja, en todas las fases. El acento de la app cambia;
    ella no. Una mascota que cambia de color deja de ser un personaje
    y pasa a ser un icono de estado.
+
+   Está viva: al cambiar de humor las piezas se transforman de una
+   cara a otra (en vez de saltar) y el cuerpo se aplasta y estira
+   como al caer; parpadea a ritmo irregular, mira de reojo, sigue el
+   dedo y reacciona a los toques. Diez toques seguidos y se cabrea.
+   Todo es SVG + Motion: cero peso extra y cero ilustración nueva.
    ═══════════════════════════════════════════════════════════════ */
 
 type Props = {
@@ -21,36 +35,203 @@ type Props = {
   /** Ancho en px. La altura sale de la proporción. */
   size?: number;
   className?: string;
+  /** Mueve la boca como si hablara (p. ej. mientras suena su voz). */
+  speaking?: boolean;
 };
 
 const BODY = "M60 8 C60 8 98 56 98 88 A38 38 0 1 1 22 88 C22 56 60 8 60 8 Z";
 
-export function Lilita({ mood = "neutral", size = 200, className }: Props) {
-  const f = FACES[mood];
+/** Por debajo de este ancho es un icono de cabecera: parpadea, pero
+ *  no mira ni atiende toques — a 38 px nadie lo vería y molestaría. */
+const LIVELY_MIN_SIZE = 64;
+
+/** Toques seguidos (sin pausa > TAP_GAP_MS) para que se cabree. */
+const TANTRUM_TAPS = 10;
+const TAP_GAP_MS = 700;
+const TANTRUM_MS = 2600;
+
+const MORPH = { duration: DURATION.slow, ease: EASE_OUT_QUART } as const;
+const INSTANT = { duration: 0 } as const;
+
+/** Dos trazos con la misma secuencia de comandos se pueden
+ *  interpolar; si no, la pieza se cambia de golpe (con la key). */
+const shapeOf = (d: string) => d.replace(/-?\d*\.?\d+/g, "#");
+
+export function Lilita({ mood = "neutral", size = 200, className, speaking = false }: Props) {
+  const reduced = useReducedMotion() ?? false;
+  const lively = !reduced && size >= LIVELY_MIN_SIZE;
+
+  const [tantrum, setTantrum] = useState(false);
+  const shown: Mood = tantrum ? "gremlin" : mood;
+  const f = FACES[shown];
+  const morph = reduced ? INSTANT : MORPH;
+
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  /* --- Aplastar y estirar, con los pies como ancla --------------- */
+  const squashX = useMotionValue(1);
+  const squashY = useMotionValue(1);
+  const squash = (k: number) => {
+    const opts = { duration: 0.42, times: [0, 0.28, 0.62, 1], ease: "easeOut" as const };
+    animate(squashY, [1, 1 - 0.13 * k, 1 + 0.05 * k, 1], opts);
+    animate(squashX, [1, 1 + 0.09 * k, 1 - 0.03 * k, 1], opts);
+  };
+
+  // Cada cambio de humor es una reacción visible, no un recambio.
+  const prevMood = useRef(shown);
+  useEffect(() => {
+    if (prevMood.current === shown) return;
+    prevMood.current = shown;
+    if (!reduced) squash(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown, reduced]);
+
+  /* --- Parpadeo: irregular, a veces doble ------------------------ */
+  const blink = useMotionValue(1);
+  useEffect(() => {
+    if (reduced) return;
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const once = () => animate(blink, [1, 0.06, 1], { duration: 0.17, ease: "easeInOut" });
+    const schedule = () => {
+      timer = setTimeout(async () => {
+        await once();
+        if (alive && Math.random() < 0.2) await once();
+        if (alive) schedule();
+      }, 2200 + Math.random() * 4200);
+    };
+    schedule();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [reduced, blink]);
+
+  /* --- Mirada: sigue el dedo; si nadie toca, mira de reojo ------- */
+  const lookX = useSpring(0, { stiffness: 220, damping: 20 });
+  const lookY = useSpring(0, { stiffness: 220, damping: 20 });
+  useEffect(() => {
+    if (!lively) return;
+    let lastPointer = 0;
+    let release: ReturnType<typeof setTimeout>;
+    let glance: ReturnType<typeof setTimeout>;
+
+    const lookAt = (e: PointerEvent) => {
+      const el = svgRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      // Centro entre los ojos (y = 78 de 168 en el viewBox).
+      const dx = e.clientX - (r.left + r.width / 2);
+      const dy = e.clientY - (r.top + (r.height * 78) / 168);
+      const dist = Math.hypot(dx, dy) || 1;
+      const reach = Math.min(1, dist / 140);
+      lookX.set((dx / dist) * reach * 4);
+      lookY.set((dy / dist) * reach * 3.2);
+      lastPointer = Date.now();
+      clearTimeout(release);
+      release = setTimeout(() => {
+        lookX.set(0);
+        lookY.set(0);
+      }, 1800);
+    };
+
+    const scheduleGlance = () => {
+      glance = setTimeout(() => {
+        if (Date.now() - lastPointer > 3000 && Math.random() < 0.65) {
+          lookX.set((Math.random() < 0.5 ? -1 : 1) * (2 + Math.random() * 2));
+          lookY.set(Math.random() * 3 - 1.5);
+          setTimeout(() => {
+            if (Date.now() - lastPointer > 3000) {
+              lookX.set(0);
+              lookY.set(0);
+            }
+          }, 700 + Math.random() * 600);
+        }
+        scheduleGlance();
+      }, 3500 + Math.random() * 4500);
+    };
+    scheduleGlance();
+
+    window.addEventListener("pointermove", lookAt, { passive: true });
+    window.addEventListener("pointerdown", lookAt, { passive: true });
+    return () => {
+      window.removeEventListener("pointermove", lookAt);
+      window.removeEventListener("pointerdown", lookAt);
+      clearTimeout(release);
+      clearTimeout(glance);
+    };
+  }, [lively, lookX, lookY]);
+
+  /* --- Toques: se encoge; diez seguidos y se cabrea -------------- */
+  const taps = useRef({ n: 0, last: 0 });
+  const tantrumTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(tantrumTimer.current), []);
+  const onTap = () => {
+    const now = Date.now();
+    const t = taps.current;
+    t.n = now - t.last < TAP_GAP_MS ? t.n + 1 : 1;
+    t.last = now;
+    if (t.n >= TANTRUM_TAPS && !tantrum) {
+      t.n = 0;
+      setTantrum(true);
+      tantrumTimer.current = setTimeout(() => setTantrum(false), TANTRUM_MS);
+    } else {
+      squash(0.7);
+    }
+  };
+
+  /* --- Hablar: la boca se abre y cierra a golpes irregulares ----- */
+  const talk = useMotionValue(1);
+  useEffect(() => {
+    if (!speaking || reduced) return;
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const step = () => {
+      animate(talk, 0.45 + Math.random() * 1.1, { duration: 0.09 });
+      timer = setTimeout(() => alive && step(), 90 + Math.random() * 80);
+    };
+    step();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      animate(talk, 1, { duration: 0.12 });
+    };
+  }, [speaking, reduced, talk]);
+
+  const limb = (d: string, i: number, part: string) => (
+    <motion.path key={`${part}${i}-${shapeOf(d)}`} initial={false} animate={{ d }} transition={morph} />
+  );
 
   return (
-    // key={mood}: al cambiar de humor, el bloque se remonta entero y
-    // entra con un pop breve — la reacción se nota sin depender de
-    // que alguien esté mirando la cara en el momento exacto en que
-    // cambia. Es la única pieza de la app con licencia para "actuar":
-    // el resto del chrome se queda quieto a propósito.
+    // Entrada con un pop breve; los cambios de humor posteriores ya
+    // no remontan nada: se transforman y se aplastan. Es la única
+    // pieza de la app con licencia para "actuar": el resto del
+    // chrome se queda quieto a propósito.
     <motion.div
-      key={mood}
-      initial={{ scale: 0.86, opacity: 0.5 }}
+      initial={reduced ? false : { scale: 0.86, opacity: 0.5 }}
       animate={{ scale: 1, opacity: 1 }}
       transition={{ duration: DURATION.standard, ease: EASE_OUT_QUART }}
       className={`inline-block ${className ?? ""}`}
     >
       <svg
+        ref={svgRef}
         viewBox="0 0 120 168"
         width={size}
         height={(size * 168) / 120}
         role="img"
-        aria-label={`Lilita, ${MOOD_ALT[mood]}`}
-        style={{ overflow: "visible" }}
+        aria-label={`Lilita, ${MOOD_ALT[shown]}`}
+        style={{ overflow: "visible", WebkitTapHighlightColor: "transparent" }}
+        onPointerDown={lively ? onTap : undefined}
       >
       <g className="lilita-idle" style={{ transformOrigin: "60px 140px" }}>
-        <g style={{ transform: `rotate(${f.tilt}deg)`, transformOrigin: "60px 120px" }}>
+        <motion.g style={{ scaleX: squashX, scaleY: squashY, originX: 0.5, originY: 1 }}>
+        <g
+          style={{
+            transform: `rotate(${f.tilt}deg)`,
+            transformOrigin: "60px 120px",
+            transition: reduced ? undefined : `transform ${DURATION.slow}s cubic-bezier(0.25, 1, 0.5, 1)`,
+          }}
+        >
           {/* --- Piernas y zapatillas -------------------------------
               Doble trazo: uno grueso oscuro debajo y uno fino del
               color del cuerpo encima. Con un solo trazo granate las
@@ -58,28 +239,23 @@ export function Lilita({ mood = "neutral", size = 200, className }: Props) {
               quedan flotando solas. */}
           <g strokeLinecap="round" fill="none">
             <g stroke="var(--li-line)" strokeWidth="10">
-              <path d={f.legs[0]} />
-              <path d={f.legs[1]} />
+              {f.legs.map((d, i) => limb(d, i, "leg-o"))}
             </g>
             <g stroke="var(--li-body)" strokeWidth="5">
-              <path d={f.legs[0]} />
-              <path d={f.legs[1]} />
+              {f.legs.map((d, i) => limb(d, i, "leg-i"))}
             </g>
           </g>
           <g fill="var(--li-shoe)" stroke="var(--li-line)" strokeWidth="3.5" strokeLinejoin="round">
-            <path d={f.shoes[0]} />
-            <path d={f.shoes[1]} />
+            {f.shoes.map((d, i) => limb(d, i, "shoe"))}
           </g>
 
           {/* --- Brazos -------------------------------------------- */}
           <g strokeLinecap="round" fill="none">
             <g stroke="var(--li-line)" strokeWidth="10">
-              <path d={f.arms[0]} />
-              <path d={f.arms[1]} />
+              {f.arms.map((d, i) => limb(d, i, "arm-o"))}
             </g>
             <g stroke="var(--li-body)" strokeWidth="5">
-              <path d={f.arms[0]} />
-              <path d={f.arms[1]} />
+              {f.arms.map((d, i) => limb(d, i, "arm-i"))}
             </g>
           </g>
 
@@ -95,61 +271,89 @@ export function Lilita({ mood = "neutral", size = 200, className }: Props) {
           <ellipse cx="44" cy="52" rx="7" ry="12" fill="var(--li-shine)" transform="rotate(-18 44 52)" />
 
           {/* --- Ojos ---------------------------------------------- */}
-          <g className="lilita-blink">
+          <motion.g style={{ scaleY: blink, originX: 0.5, originY: 0.5 }}>
             <ellipse cx="45" cy="78" rx="15.5" ry="16.5" fill="var(--li-sclera)" stroke="var(--li-line)" strokeWidth="3.5" />
             <ellipse cx="75" cy="78" rx="15.5" ry="16.5" fill="var(--li-sclera)" stroke="var(--li-line)" strokeWidth="3.5" />
-            <circle cx={45 + f.pupil.dx} cy={78 + f.pupil.dy} r={f.pupil.r} fill="var(--li-line)" />
-            <circle cx={75 + f.pupil.dx} cy={78 + f.pupil.dy} r={f.pupil.r} fill="var(--li-line)" />
+            <motion.g style={{ x: lookX, y: lookY }} fill="var(--li-line)">
+              {[45, 75].map((cx) => (
+                <motion.circle
+                  key={cx}
+                  initial={false}
+                  animate={{ cx: cx + f.pupil.dx, cy: 78 + f.pupil.dy, r: f.pupil.r }}
+                  transition={morph}
+                />
+              ))}
+            </motion.g>
             {/* Párpados: se dibujan encima para cerrar el ojo por arriba.
                 Pueden ir de uno en uno — el guiño de la fase fértil. */}
-            {f.lids?.[0] && (
-              <path d={f.lids[0]} fill="var(--li-body)" stroke="var(--li-line)" strokeWidth="3.5" strokeLinejoin="round" />
-            )}
-            {f.lids?.[1] && (
-              <path d={f.lids[1]} fill="var(--li-body)" stroke="var(--li-line)" strokeWidth="3.5" strokeLinejoin="round" />
-            )}
-          </g>
+            <AnimatePresence initial={false}>
+              {f.lids?.map(
+                (d, i) =>
+                  d && (
+                    <motion.path
+                      key={`lid${i}`}
+                      initial={{ opacity: 0, d }}
+                      animate={{ opacity: 1, d }}
+                      exit={{ opacity: 0 }}
+                      transition={morph}
+                      fill="var(--li-body)"
+                      stroke="var(--li-line)"
+                      strokeWidth="3.5"
+                      strokeLinejoin="round"
+                    />
+                  ),
+              )}
+            </AnimatePresence>
+          </motion.g>
 
           {/* --- Cejas: donde ocurre la actuación ------------------- */}
           <g stroke="var(--li-line)" strokeWidth="5" strokeLinecap="round" fill="none">
-            <path d={f.brows[0]} />
-            <path d={f.brows[1]} />
+            {f.brows.map((d, i) => limb(d, i, "brow"))}
           </g>
 
           {/* --- Boca ---------------------------------------------- */}
-          <path
-            d={f.mouth.d}
-            fill={f.mouth.fill ? "var(--li-line)" : "none"}
-            stroke="var(--li-line)"
-            strokeWidth="4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <motion.g style={{ scaleY: talk, originX: 0.5, originY: 0.3 }}>
+            <motion.path
+              key={`mouth-${shapeOf(f.mouth.d)}`}
+              initial={false}
+              animate={{ d: f.mouth.d }}
+              transition={morph}
+              fill={f.mouth.fill ? "var(--li-line)" : "none"}
+              stroke="var(--li-line)"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </motion.g>
 
           {/* --- Attrezzo ------------------------------------------ */}
-          {f.extra}
+          <AnimatePresence initial={false}>
+            {f.extra && (
+              <motion.g
+                key={shown}
+                initial={{ opacity: 0, scale: 0.6 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, transition: { duration: DURATION.quick } }}
+                transition={{ duration: DURATION.standard, ease: EASE_OUT_QUART }}
+              >
+                {f.extra}
+              </motion.g>
+            )}
+          </AnimatePresence>
         </g>
+        </motion.g>
       </g>
 
       <style>{`
         .lilita-idle {
           animation: li-bob 3.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
         }
-        .lilita-blink {
-          transform-box: fill-box;
-          transform-origin: center;
-          animation: li-blink 5.6s linear infinite;
-        }
         @keyframes li-bob {
           0%, 100% { transform: translateY(0) }
           50% { transform: translateY(-5px) }
         }
-        @keyframes li-blink {
-          0%, 93%, 100% { transform: scaleY(1) }
-          96% { transform: scaleY(0.06) }
-        }
         @media (prefers-reduced-motion: reduce) {
-          .lilita-idle, .lilita-blink { animation: none }
+          .lilita-idle { animation: none }
         }
       `}</style>
       </svg>
@@ -171,7 +375,7 @@ type Face = {
   extra?: React.ReactNode;
 };
 
-const LEGS_DOWN: [string, string] = ["M48 122 L46 143", "M72 122 L74 143"];
+const LEGS_DOWN: [string, string] = ["M48 122 C47.3 129 46.7 136 46 143", "M72 122 C72.7 129 73.3 136 74 143"];
 const SHOES_DOWN: [string, string] = [
   "M34 143 h20 a4 4 0 0 1 4 4 v4 a3 3 0 0 1 -3 3 h-21 a4 4 0 0 1 -4 -4 v-3 a4 4 0 0 1 4 -4 z",
   "M66 143 h20 a4 4 0 0 1 4 4 v3 a4 4 0 0 1 -4 4 h-21 a3 3 0 0 1 -3 -3 v-4 a4 4 0 0 1 4 -4 z",
@@ -186,7 +390,7 @@ const FACES: Record<Mood, Face> = {
   /* Sarcástica de serie: una ceja arriba y media sonrisa. */
   neutral: {
     tilt: 0,
-    brows: ["M36 59 L54 57", "M70 49 L84 55"],
+    brows: ["M36 59 Q45 58 54 57", "M70 49 Q77 52 84 55"],
     pupil: { dx: 2, dy: -1, r: 6.5 },
     mouth: { d: "M46 104 Q58 112 76 100" },
     arms: ARMS_DOWN,
@@ -197,13 +401,13 @@ const FACES: Record<Mood, Face> = {
   /* Muerta en vida. Párpados a media asta, boca plana. */
   exhausta: {
     tilt: -4,
-    brows: ["M36 61 L54 53", "M84 61 L66 53"],
+    brows: ["M36 61 Q45 57 54 53", "M84 61 Q75 57 66 53"],
     pupil: { dx: 0, dy: 3, r: 6 },
     lids: [
       "M29.5 78 a15.5 16.5 0 0 1 31 0 z",
       "M59.5 78 a15.5 16.5 0 0 1 31 0 z",
     ],
-    mouth: { d: "M47 106 L73 104" },
+    mouth: { d: "M47 106 Q60 105 73 104" },
     arms: ["M24 98 C14 104 12 112 14 120", "M96 98 C106 104 108 112 106 120"],
     legs: LEGS_DOWN,
     shoes: SHOES_DOWN,
@@ -216,7 +420,7 @@ const FACES: Record<Mood, Face> = {
     pupil: { dx: 0, dy: -2, r: 7.5 },
     mouth: { d: "M42 98 Q60 124 78 98 Z", fill: true },
     arms: ARMS_UP,
-    legs: ["M48 122 L44 141", "M72 122 L78 141"],
+    legs: ["M48 122 C46.7 128.3 45.3 134.7 44 141", "M72 122 C74 128.3 76 134.7 78 141"],
     shoes: [
       "M32 141 h20 a4 4 0 0 1 4 4 v4 a3 3 0 0 1 -3 3 h-21 a4 4 0 0 1 -4 -4 v-3 a4 4 0 0 1 4 -4 z",
       "M68 141 h20 a4 4 0 0 1 4 4 v3 a4 4 0 0 1 -4 4 h-21 a3 3 0 0 1 -3 -3 v-4 a4 4 0 0 1 4 -4 z",
@@ -234,7 +438,7 @@ const FACES: Record<Mood, Face> = {
   /* Una ceja hasta el techo, un ojo entornado, sonrisa torcida. */
   flirty: {
     tilt: 2,
-    brows: ["M36 59 L54 57", "M70 45 Q78 40 84 48"],
+    brows: ["M36 59 Q45 58 54 57", "M70 45 Q78 40 84 48"],
     pupil: { dx: 4, dy: 0, r: 6.5 },
     lids: ["M29.5 74 a15.5 16.5 0 0 1 31 0 z", null],
     mouth: { d: "M44 106 Q56 110 78 96" },
@@ -246,7 +450,7 @@ const FACES: Record<Mood, Face> = {
   /* Cejas en V, dientes apretados. No razona. */
   gremlin: {
     tilt: -2,
-    brows: ["M36 51 L54 61", "M84 51 L66 61"],
+    brows: ["M36 51 Q45 56 54 61", "M84 51 Q75 56 66 61"],
     pupil: { dx: 0, dy: 1, r: 5 },
     mouth: {
       d: "M42 100 h36 v10 h-36 z M50 100 v10 M58 100 v10 M66 100 v10",
@@ -280,7 +484,7 @@ const FACES: Record<Mood, Face> = {
   /* Modo cuidados: sin ironía. Ojos blandos, sonrisa mínima. */
   cuidando: {
     tilt: -3,
-    brows: ["M36 58 L54 53", "M84 58 L66 53"],
+    brows: ["M36 58 Q45 55.5 54 53", "M84 58 Q75 55.5 66 53"],
     pupil: { dx: 0, dy: 1, r: 7 },
     mouth: { d: "M50 104 Q60 110 70 104" },
     arms: ARMS_HUG,
@@ -291,7 +495,7 @@ const FACES: Record<Mood, Face> = {
   /* Frita. */
   dormida: {
     tilt: -6,
-    brows: ["M36 58 L54 56", "M84 58 L66 56"],
+    brows: ["M36 58 Q45 57 54 56", "M84 58 Q75 57 66 56"],
     pupil: { dx: 0, dy: 0, r: 0 },
     lids: [
       "M29.5 78 a15.5 16.5 0 0 1 31 0 z",
