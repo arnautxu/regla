@@ -1,6 +1,7 @@
 "use client";
 
 import { haptic } from "@/lib/use-lilaila";
+import { CHOICE_CLASS, choiceStyle } from "@/lib/choice";
 
 /* Chips de selección múltiple. Sin relleno: el estado lo dice el
    trazo y el color del texto, igual que el resto de la app.
@@ -39,15 +40,8 @@ export function TagPicker<T extends string>({
                   haptic(active ? 6 : 12);
                   onToggle(opt.value);
                 }}
-                className="min-h-[40px] rounded-full px-3.5 text-sm transition-[transform,box-shadow,color] duration-150 active:scale-[0.95] active:translate-x-[1px] active:translate-y-[1px]"
-                style={{
-                  background: active ? "var(--accent-soft)" : "var(--surface)",
-                  boxShadow: active
-                    ? "inset 0 0 0 1.5px var(--accent), 2px 2px 0 0 var(--depth-shadow)"
-                    : "var(--depth-sm)",
-                  color: active ? "var(--accent)" : "var(--fg-muted)",
-                  fontWeight: active ? 600 : 400,
-                }}
+                className={`min-h-[38px] rounded-full px-3 text-sm ${CHOICE_CLASS}`}
+                style={choiceStyle(active)}
               >
                 {opt.label}
               </button>

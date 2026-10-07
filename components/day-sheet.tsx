@@ -14,7 +14,7 @@ import {
   toKey,
   upsertDay,
 } from "@/lib/db";
-import { summarize, type DaySummary } from "@/lib/day-summary";
+import { summarize } from "@/lib/day-summary";
 import { ANIMOS, CRY_INTENSITIES, CRY_REASONS, SINTOMAS, labelOf } from "@/lib/labels";
 import { capitalize } from "@/lib/format";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
@@ -36,40 +36,6 @@ export interface SheetDay {
   isFuture: boolean;
 }
 
-function Resumen({ resumen }: { resumen: DaySummary }) {
-  if (!resumen.lineas.length && !resumen.nota) {
-    return (
-      <p className="text-sm text-muted">Aquí no hay nada apuntado todavía.</p>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-2">
-      {resumen.lineas.length > 0 && (
-        <ul className="flex flex-col gap-1">
-          {resumen.lineas.map((l) => (
-            <li key={l} className="text-sm leading-relaxed">
-              {l}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* La nota, como cita y no como dato: la escribió ella, y
-          alinearla con "Pastilla tomada a las 22:04" la convertiría
-          en una fila más de un parte médico. */}
-      {resumen.nota && (
-        <p
-          className="border-l-2 pl-3 text-sm italic leading-relaxed text-muted"
-          style={{ borderColor: "var(--border-strong)" }}
-        >
-          {resumen.nota}
-        </p>
-      )}
-    </div>
-  );
-}
-
 /** El día de al lado, en clave 'YYYY-MM-DD'. */
 function vecino(key: string, delta: number): string {
   const d = fromKey(key);
@@ -85,7 +51,7 @@ function toggle<T>(list: T[] | undefined, value: T): T[] {
 }
 
 export function DaySheet({
-  day,
+  day: base,
   onClose,
   onPeriodStart,
 }: {
@@ -102,7 +68,7 @@ export function DaySheet({
   onPeriodStart?: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  const { settings, cycles } = useLilaila();
+  const { settings, cycles, dateKey: hoyKey } = useLilaila();
   const empezoRegla = useRef(false);
 
   // <dialog> nativo: da trampa de foco, Escape y scroll bloqueado sin
@@ -110,9 +76,31 @@ export function DaySheet({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (day && !el.open) el.showModal();
-    if (!day && el.open) el.close();
-  }, [day]);
+    if (base && !el.open) el.showModal();
+    if (!base && el.open) el.close();
+  }, [base]);
+
+  // Se ajusta DURANTE el render y no en un efecto: es el patrón que
+  // documenta React para "resetear estado cuando cambia una prop", y
+  // el efecto además repintaba una vez de más — se veía el detalle
+  // del día anterior abierto durante un fotograma al saltar de día.
+  const [cryError, setCryError] = useState("");
+  // Las flechas ‹ › mueven la hoja por días sin volver al calendario.
+  // El desplazamiento vuelve a 0 cada vez que se abre en otro día.
+  const [offset, setOffset] = useState(0);
+  const [ultimaClave, setUltimaClave] = useState(base?.key);
+  if (base?.key !== ultimaClave) {
+    setUltimaClave(base?.key);
+    setOffset(0);
+    setCryError("");
+  }
+
+  const day: SheetDay | null = useMemo(() => {
+    if (!base) return null;
+    if (offset === 0) return base;
+    const key = vecino(base.key, offset);
+    return { key, date: fromKey(key), isToday: key === hoyKey, isFuture: key > hoyKey };
+  }, [base, offset, hoyKey]);
 
   const log = useLiveQuery(
     async () => (day ? ((await db.days.get(day.key)) ?? null) : null),
@@ -129,23 +117,6 @@ export function DaySheet({
         : 0,
     [day?.key, settings.pill.enabled],
   );
-
-  // El detalle empieza plegado SIEMPRE, también en un día que ya
-  // tiene cosas: para verlas está el resumen, y abrirlo de golpe
-  // devolvería la pared de controles que esto viene a quitar.
-  //
-  // Se ajusta DURANTE el render y no en un efecto: es el patrón que
-  // documenta React para "resetear estado cuando cambia una prop", y
-  // el efecto además repintaba una vez de más — se veía el detalle
-  // del día anterior abierto durante un fotograma al saltar de día.
-  const [abierto, setAbierto] = useState(false);
-  const [cryError, setCryError] = useState("");
-  const [ultimaClave, setUltimaClave] = useState(day?.key);
-  if (day?.key !== ultimaClave) {
-    setUltimaClave(day?.key);
-    setAbierto(false);
-    setCryError("");
-  }
 
   const resumen = useMemo(
     () => summarize(log ?? undefined, day?.key ?? "", cycles),
@@ -179,6 +150,9 @@ export function DaySheet({
     <dialog
       ref={ref}
       onClose={() => {
+        // Al volver a abrirla, siempre en el día que se tocó, no en el
+        // último al que se llegó con las flechas.
+        setOffset(0);
         onClose();
         if (empezoRegla.current) {
           empezoRegla.current = false;
@@ -198,24 +172,47 @@ export function DaySheet({
       aria-label={day ? format(day.date, "d 'de' MMMM", { locale: es }) : ""}
     >
       {day && (
-        <div className="sheet-panel flex flex-col gap-lg px-lg pt-md">
+        <div className="sheet-panel flex flex-col gap-md px-lg pt-md">
           <div
             aria-hidden="true"
             className="mx-auto h-1 w-10 rounded-full"
             style={{ background: "var(--border-strong)" }}
           />
 
-          <header>
-            <h2 className="font-display text-lg font-bold tracking-[-0.02em]">
-              {/* date-fns da los días en minúscula en es; en un título
-                  eso se lee como una errata. */}
-              {capitalize(format(day.date, "EEEE d 'de' MMMM", { locale: es }))}
-            </h2>
-            <p className="text-xs text-faint">
-              {[day.isToday ? "Hoy" : null, resumen.estado]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
+          <header className="flex items-start justify-between gap-md">
+            <div>
+              <h2 className="font-display text-lg font-bold tracking-[-0.02em]">
+                {/* date-fns da los días en minúscula en es; en un título
+                    eso se lee como una errata. */}
+                {day.isToday
+                  ? `Hoy, ${format(day.date, "EEEE d", { locale: es })}`
+                  : capitalize(format(day.date, "EEEE d 'de' MMMM", { locale: es }))}
+              </h2>
+              <p className="text-xs text-faint">{resumen.estado}</p>
+            </div>
+            <div className="-mr-2 flex shrink-0">
+              {[
+                { delta: -1, label: "Día anterior", d: "M14.5 5 L8 12 L14.5 19", off: false },
+                { delta: 1, label: "Día siguiente", d: "M9.5 5 L16 12 L9.5 19", off: day.key >= hoyKey },
+              ].map((b) => (
+                <button
+                  key={b.delta}
+                  type="button"
+                  aria-label={b.label}
+                  disabled={b.off}
+                  onClick={() => {
+                    haptic(6);
+                    setOffset((o) => o + b.delta);
+                  }}
+                  className="flex size-11 items-center justify-center rounded-full disabled:opacity-25"
+                  style={{ color: "var(--fg-muted)" }}
+                >
+                  <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d={b.d} />
+                  </svg>
+                </button>
+              ))}
+            </div>
           </header>
 
           {day.isFuture ? (
@@ -224,14 +221,11 @@ export function DaySheet({
             </p>
           ) : (
             <>
-              {/* ── Lo que pasó ese día ─────────────────────────
-                  Primero lo que hay, en frases. Antes esto abría con
-                  seis controles y para saber qué había apuntado
-                  tenías que ir leyendo qué botón estaba encendido en
-                  cada fila: la ficha contestaba "¿qué quieres
-                  cambiar?" cuando la pregunta al tocar un día es
-                  "¿qué pasó aquí?". */}
-              <Resumen resumen={resumen} />
+              {/* Todo a la vista y en el orden en que se piensa: cuánto
+                  sangras, cómo va el día, qué duele, cómo estás. Antes
+                  la mitad vivía detrás de "Añadir o cambiar detalles" y
+                  un resumen en frases repetía lo que ya dicen los
+                  botones encendidos. */}
 
               {!!log?.cryEvents?.length && (
                 <section aria-label="Episodios PAS" className="flex flex-col gap-2">
@@ -294,62 +288,14 @@ export function DaySheet({
                 endsPeriod={terminaLaRegla}
               />
 
-              <button
-                type="button"
-                onClick={() => {
-                  haptic(8);
-                  setAbierto((v) => !v);
-                }}
-                aria-expanded={abierto}
-                className="-ml-1 flex min-h-[44px] items-center gap-1.5 self-start px-1 text-sm"
-                style={{ color: "var(--fg-muted)" }}
-              >
-                {abierto ? "Ocultar el detalle" : "Añadir o cambiar detalles"}
-                <svg
-                  viewBox="0 0 24 24"
-                  className="size-4 transition-transform duration-150"
-                  style={{ transform: abierto ? "rotate(180deg)" : "none" }}
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M5 9l7 7 7-7" />
-                </svg>
-              </button>
             </>
           )}
 
-          {!day.isFuture && abierto && (
+          {!day.isFuture && (
             <>
               <MoodRow
                 value={log ?? undefined}
                 onChange={(patch) => void upsertDay(day.key, patch)}
-                dateKey={day.key}
-              />
-
-              {/* La pastilla va arriba del todo del detalle: es lo
-                  único de esta hoja que se pregunta TODOS los días,
-                  sangre o no, y enterrarla bajo diez síntomas la
-                  convertiría en algo que solo se rellena en marzo. */}
-              {settings.pill.enabled && (
-                <PillRow
-                  value={log?.pill}
-                  takenAt={log?.pillAt}
-                  streak={streak}
-                  onChange={(v) =>
-                    void setPill(day.key, v, day.isToday ? new Date() : undefined)
-                  }
-                  dateKey={day.key}
-                />
-              )}
-
-              <SexRow
-                log={log ?? undefined}
-                onSet={(v) => void setSex(day.key, v)}
-                onPatch={(patch) => void upsertDay(day.key, patch)}
                 dateKey={day.key}
               />
 
@@ -365,12 +311,45 @@ export function DaySheet({
               />
 
               <TagPicker
-                label="Cómo estás de ánimo"
+                label="Ánimo"
                 options={ANIMOS}
                 selected={log?.mood ?? []}
                 onToggle={(v) =>
                   void upsertDay(day.key, { mood: toggle(log?.mood, v) })
                 }
+              />
+
+              {/* Lo de cada día, uno al lado del otro: dos preguntas de
+                  sí o no no merecen dos filas a lo ancho. */}
+              <div
+                className="grid gap-3"
+                style={{ gridTemplateColumns: settings.pill.enabled ? "1fr 1fr" : "1fr" }}
+              >
+                {settings.pill.enabled && (
+                  <PillRow
+                    value={log?.pill}
+                    takenAt={log?.pillAt}
+                    streak={streak}
+                    onChange={(v) =>
+                      void setPill(day.key, v, day.isToday ? new Date() : undefined)
+                    }
+                    dateKey={day.key}
+                  />
+                )}
+                <SexRow
+                  only="answer"
+                  log={log ?? undefined}
+                  onSet={(v) => void setSex(day.key, v)}
+                  onPatch={(patch) => void upsertDay(day.key, patch)}
+                  dateKey={day.key}
+                />
+              </div>
+              <SexRow
+                only="detail"
+                log={log ?? undefined}
+                onSet={(v) => void setSex(day.key, v)}
+                onPatch={(patch) => void upsertDay(day.key, patch)}
+                dateKey={day.key}
               />
 
               <section>
@@ -381,6 +360,7 @@ export function DaySheet({
                   Nota
                 </label>
                 <textarea
+                  key={day.key}
                   id={`nota-${day.key}`}
                   defaultValue={log?.note ?? ""}
                   onBlur={(e) =>
@@ -391,34 +371,43 @@ export function DaySheet({
                   rows={2}
                   placeholder="Lo que quieras acordarte"
                   className="mt-2 w-full resize-none rounded-xl px-3 py-2.5 text-sm outline-none"
-                  style={{ background: "var(--bg)", boxShadow: "var(--depth-sm)" }}
+                  style={{ background: "var(--surface)", boxShadow: "inset 0 0 0 1.5px var(--border)" }}
                 />
               </section>
 
             </>
           )}
 
-          {/* "Guardar" y no "Cerrar", aunque no guarde nada: cada
-              toque ya escribe al momento, así que al llegar aquí el
-              día está guardado desde hace rato. La etiqueta no miente
-              —al pulsarla, está guardado— y evita la duda de si
-              cerrar se lleva por delante lo que acabas de marcar,
-              que es justo lo que un botón llamado "Cerrar" sugiere.
-
-              La nota es el único campo que escribe al perder el foco,
-              y el blur ocurre antes que el click, así que llega. */}
-          <button
-            type="button"
-            onClick={() => ref.current?.close()}
-            className="min-h-[52px] w-full rounded-full px-lg font-display text-base font-bold tracking-[-0.01em] transition-[transform,box-shadow] duration-150 active:scale-[0.98] active:translate-x-[1px] active:translate-y-[1px]"
+          {/* Cada toque escribe al momento, y ahora la hoja lo dice
+              junto al botón: antes "Guardar día" sugería que sin
+              pulsarlo se perdía lo marcado. La nota es lo único que
+              escribe al perder el foco, y el blur ocurre antes que el
+              click, así que llega. Pegado abajo para que "Listo" esté
+              siempre a mano aunque la hoja sea larga. */}
+          <div
+            className="sticky bottom-0 -mx-lg mt-auto flex items-center gap-md border-t border-line px-lg pt-sm"
             style={{
-              background: "var(--accent)",
-              color: "var(--on-accent)",
-              boxShadow: "3px 3px 0 0 var(--depth-shadow)",
+              background: "var(--surface)",
+              paddingBottom: "calc(var(--spacing-md) + env(safe-area-inset-bottom))",
+              marginBottom: "calc(-1 * (var(--spacing-lg) + env(safe-area-inset-bottom)))",
             }}
           >
-            Guardar día
-          </button>
+            <p className="flex-1 text-xs font-semibold" style={{ color: "var(--ok)" }}>
+              {day.isFuture ? "" : "✓ Se guarda al momento"}
+            </p>
+            <button
+              type="button"
+              onClick={() => ref.current?.close()}
+              className="min-h-[50px] rounded-full px-xl font-display text-base font-bold tracking-[-0.01em] transition-[transform,box-shadow] duration-150 active:scale-[0.98] active:translate-x-[1px] active:translate-y-[1px]"
+              style={{
+                background: "var(--accent)",
+                color: "var(--on-accent)",
+                boxShadow: "3px 3px 0 0 var(--depth-shadow)",
+              }}
+            >
+              Listo
+            </button>
+          </div>
         </div>
       )}
     </dialog>

@@ -1,6 +1,7 @@
 "use client";
 
 import { haptic } from "@/lib/use-lilaila";
+import { CHOICE_CLASS, choiceStyle } from "@/lib/choice";
 import type { DayLog, SexActivity, SexProtection } from "@/lib/db";
 import { TagPicker } from "./tag-picker";
 
@@ -47,7 +48,10 @@ export function SexRow({
   onSet,
   onPatch,
   dateKey,
+  only,
 }: {
+  /** Pintar solo el sí/no o solo el detalle, para colocarlos aparte */
+  only?: "answer" | "detail";
   log: DayLog | undefined;
   /** Sí/no. Va aparte porque al decir que no hay que limpiar el detalle. */
   onSet: (yes: boolean | undefined) => void;
@@ -57,7 +61,8 @@ export function SexRow({
   const yes = log?.sex === true;
 
   return (
-    <section aria-labelledby={`sexo-${dateKey}`} className="flex flex-col gap-md">
+    <section aria-labelledby={only === "detail" ? undefined : `sexo-${dateKey}`} aria-label={only === "detail" ? "Detalle del sexo" : undefined} className="flex flex-col gap-md">
+      {only !== "detail" && (
       <div>
         <h3
           id={`sexo-${dateKey}`}
@@ -81,14 +86,8 @@ export function SexRow({
                   haptic(active ? 6 : 12);
                   onSet(active ? undefined : opt.value);
                 }}
-                className="min-h-[46px] rounded-lg px-1 text-sm font-medium leading-[1.15] transition-[transform,box-shadow,color] duration-150 active:scale-[0.96] active:translate-x-[1px] active:translate-y-[1px]"
-                style={{
-                  background: active ? "var(--accent-soft)" : "var(--surface)",
-                  boxShadow: active
-                    ? "inset 0 0 0 1.5px var(--accent), 2px 2px 0 0 var(--depth-shadow)"
-                    : "var(--depth-sm)",
-                  color: active ? "var(--accent)" : "var(--fg-muted)",
-                }}
+                className={`min-h-[44px] rounded-xl px-1 text-sm font-medium leading-[1.15] ${CHOICE_CLASS}`}
+                style={choiceStyle(active)}
               >
                 {opt.label}
               </button>
@@ -96,8 +95,9 @@ export function SexRow({
           })}
         </div>
       </div>
+      )}
 
-      {yes && (
+      {yes && only !== "answer" && (
         <>
           <TagPicker
             label="Qué"
@@ -127,15 +127,8 @@ export function SexRow({
               haptic(log?.sexOrgasm ? 6 : 14);
               onPatch({ sexOrgasm: log?.sexOrgasm ? undefined : true });
             }}
-            className="min-h-[40px] self-start rounded-full px-3.5 text-sm transition-[transform,box-shadow,color] duration-150 active:scale-[0.95] active:translate-x-[1px] active:translate-y-[1px]"
-            style={{
-              background: log?.sexOrgasm ? "var(--accent-soft)" : "var(--surface)",
-              boxShadow: log?.sexOrgasm
-                ? "inset 0 0 0 1.5px var(--accent), 2px 2px 0 0 var(--depth-shadow)"
-                : "var(--depth-sm)",
-              color: log?.sexOrgasm ? "var(--accent)" : "var(--fg-muted)",
-              fontWeight: log?.sexOrgasm ? 600 : 400,
-            }}
+            className={`min-h-[40px] self-start rounded-full px-3.5 text-sm ${CHOICE_CLASS}`}
+            style={choiceStyle(log?.sexOrgasm === true)}
           >
             Me corrí
           </button>

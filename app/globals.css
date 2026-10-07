@@ -197,6 +197,55 @@
   }
 }
 
+/* Las cuatro fases a la vez, sin depender de [data-phase]. El anillo
+   de Hoy, el calendario y el historial pintan el ciclo ENTERO, no
+   solo la fase de hoy, y necesitan los cuatro tonos juntos. Son los
+   mismos valores que arriba, con nombre propio. */
+
+:root {
+  --ph-menstrual: oklch(51% 0.2 26);
+  --ph-menstrual-bg: oklch(93.5% 0.045 22);
+  --ph-folicular: oklch(48% 0.11 172);
+  --ph-folicular-bg: oklch(95% 0.026 172);
+  --ph-ovulacion: oklch(50% 0.18 350);
+  --ph-ovulacion-bg: oklch(94.5% 0.035 335);
+  --ph-lutea: oklch(50% 0.13 58);
+  --ph-lutea-bg: oklch(95.5% 0.045 80);
+  --ok: oklch(48% 0.11 172);
+  --ok-bg: oklch(95% 0.026 172);
+  --cookie: oklch(52% 0.11 240);
+}
+
+[data-theme="dark"] {
+  --ph-menstrual: oklch(66% 0.2 26);
+  --ph-menstrual-bg: oklch(24% 0.036 26);
+  --ph-folicular: oklch(74% 0.13 172);
+  --ph-folicular-bg: oklch(24% 0.03 172);
+  --ph-ovulacion: oklch(70% 0.17 350);
+  --ph-ovulacion-bg: oklch(24% 0.036 350);
+  --ph-lutea: oklch(76% 0.14 58);
+  --ph-lutea-bg: oklch(24% 0.033 58);
+  --ok: oklch(74% 0.13 172);
+  --cookie: oklch(74% 0.1 240);
+  --ok-bg: oklch(24% 0.03 172);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] {
+    --ph-menstrual: oklch(66% 0.2 26);
+    --ph-menstrual-bg: oklch(24% 0.036 26);
+    --ph-folicular: oklch(74% 0.13 172);
+    --ph-folicular-bg: oklch(24% 0.03 172);
+    --ph-ovulacion: oklch(70% 0.17 350);
+    --ph-ovulacion-bg: oklch(24% 0.036 350);
+    --ph-lutea: oklch(76% 0.14 58);
+    --ph-lutea-bg: oklch(24% 0.033 58);
+    --ok: oklch(74% 0.13 172);
+    --cookie: oklch(74% 0.1 240);
+    --ok-bg: oklch(24% 0.03 172);
+  }
+}
+
 /* ═══ Lilita ════════════════════════════════════════════════════
    Roja siempre. Sobre papel cálido el granate del contorno hace de
    línea de tinta y la silueta se lee sola. */
@@ -459,6 +508,23 @@ dialog.sheet::backdrop {
   &:active {
     box-shadow: var(--depth-phase-press);
     transform: translate(2px, 2px);
+  }
+}
+
+/* ═══ Tres niveles de peso ══════════════════════════════════════
+   1. sticker  → el protagonista de la pantalla. Uno, como mucho dos.
+   2. flat     → lo secundario: trazo fino del color de borde, sin
+                 sombra. Se ve que es tocable sin pedir atención.
+   3. texto    → todo lo demás, sin caja.
+   Antes todo era nivel 1 y nada destacaba. */
+
+@utility flat {
+  box-shadow: inset 0 0 0 1.5px var(--border);
+  transition:
+    box-shadow 150ms var(--ease-out-quart),
+    transform 150ms var(--ease-out-quart);
+  &:active {
+    transform: scale(0.98);
   }
 }
 

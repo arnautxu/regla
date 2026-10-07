@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { haptic } from "@/lib/use-lilaila";
 
 /** El gesto de Lídia: manda una única señal, sin compartir su diario. */
@@ -28,26 +28,41 @@ export function CookieMonsterButton() {
     }
   }
 
+  // Vuelve a su estado normal unos segundos después de avisar.
+  useEffect(() => {
+    if (state !== "sent" && state !== "error") return;
+    const t = setTimeout(() => {
+      setState("idle");
+      setMessage(null);
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [state]);
+
+  const label =
+    state === "sending"
+      ? "Mandando…"
+      : state === "sent"
+        ? "Aviso enviado"
+        : state === "error"
+          ? "No ha salido"
+          : "Alarma galletas";
+
   return (
-    <section
-      className="sticker rounded-2xl px-lg py-md"
-      style={{ background: "var(--surface)" }}
+    <button
+      type="button"
+      onClick={() => void activate()}
+      disabled={state === "sending"}
+      title={message ?? undefined}
+      className="flat flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-2xl px-3 text-sm font-semibold disabled:opacity-60"
+      style={{
+        background: "var(--surface)",
+        color: state === "error" ? "var(--accent)" : state === "sent" ? "var(--ok)" : "var(--cookie)",
+      }}
     >
-      <p className="text-sm text-muted">¿Necesitas activar la alarma de galletas?</p>
-      <button
-        type="button"
-        onClick={() => void activate()}
-        disabled={state === "sending"}
-        className="mt-3 w-full rounded-full px-lg py-3.5 font-display text-base font-bold transition-[transform,opacity] duration-150 active:scale-[0.975] disabled:opacity-55"
-        style={{ background: "#2f7eae", color: "#fffdf8", boxShadow: "3px 3px 0 0 #16496a" }}
-      >
-        {state === "sending" ? "Mandando aviso…" : "🍪 Cookie Monster"}
-      </button>
-      {message && (
-        <p className="mt-2 text-xs text-faint" role="status" aria-live="polite">
-          {message}
-        </p>
-      )}
-    </section>
+      <span aria-hidden="true">{state === "sent" ? "✓" : "🍪"}</span>
+      <span role="status" aria-live="polite">
+        {label}
+      </span>
+    </button>
   );
 }

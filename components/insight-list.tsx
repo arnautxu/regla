@@ -22,7 +22,7 @@ export function InsightList({ insights }: { insights: Insight[] }) {
         return (
           <li
             key={insight.id}
-            className="sticker-sm rounded-2xl px-lg py-4"
+            className="flat rounded-2xl px-md py-3"
             style={{
               background: mark.accent ? "var(--accent-soft)" : "var(--surface)",
             }}
