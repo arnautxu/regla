@@ -73,7 +73,14 @@ type Live = {
   next: number;
   running: boolean;
   done: boolean;
+  /** Cuándo avanzó por última vez el texto al ritmo de la voz */
+  stamp: number;
+  /** El texto ya no espera a la voz: se ha atascado y se enseña entero */
+  free: boolean;
 };
+
+/** Lo máximo que el texto espera a una voz que no avanza. */
+const PATIENCE_MS = 5000;
 
 /** Pide el audio de un texto y devuelve una URL lista para sonar. */
 async function synth(text: string): Promise<string> {
@@ -287,7 +294,12 @@ export function useVoice(): Voice {
         const show = (fraction: number) => {
           const now = heard(text, fraction);
           const all = before && now ? `${before} ${now}` : before || now;
-          setShown((s) => (s?.id === q.id && s.text === all ? s : { id: q.id, text: all }));
+          if (q.free) return;
+          setShown((s) => {
+            if (s?.id === q.id && s.text === all) return s;
+            q.stamp = Date.now();
+            return { id: q.id, text: all };
+          });
         };
         let frame = 0;
         const tick = () => {
@@ -329,7 +341,17 @@ export function useVoice(): Voice {
     if (q && q.id === id) return q;
     const mine = ++turn.current;
     audio.current?.pause();
-    const fresh: Live = { id, turn: mine, items: [], texts: [], next: 0, running: false, done: false };
+    const fresh: Live = {
+      id,
+      turn: mine,
+      items: [],
+      texts: [],
+      next: 0,
+      running: false,
+      done: false,
+      stamp: Date.now(),
+      free: false,
+    };
     live.current = fresh;
     setError(null);
     setPlaying(id);
@@ -361,6 +383,23 @@ export function useVoice(): Voice {
       setShown(null);
     }
   }, []);
+
+  /* El texto nunca se queda esperando a una voz atascada: si en unos
+     segundos no ha avanzado (ElevenLabs tarda, el móvil no deja sonar
+     o el audio no arranca), se enseña entero y la voz sigue a su aire
+     si llega. Mejor un texto sin sincronizar que una Lilita muda. */
+  useEffect(() => {
+    if (!shown) return;
+    const timer = setInterval(() => {
+      const q = live.current;
+      if (!q || q.id !== shown.id || q.free) return;
+      if (Date.now() - q.stamp > PATIENCE_MS) {
+        q.free = true;
+        setShown(null);
+      }
+    }, 500);
+    return () => clearInterval(timer);
+  }, [shown]);
 
   useEffect(
     () => () => {
