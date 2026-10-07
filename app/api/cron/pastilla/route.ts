@@ -1,5 +1,6 @@
 import { readDoc } from "@/lib/server/store";
-import { readPushDoc, sendToAll, writePushDoc } from "@/lib/server/push";
+import { localNow } from "@/lib/server/local-time";
+import { readPushDoc, sendToAll, wantsPill, writePushDoc } from "@/lib/server/push";
 import type { DayLog } from "@/lib/db";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -26,31 +27,6 @@ import type { DayLog } from "@/lib/db";
    ═══════════════════════════════════════════════════════════════ */
 
 export const dynamic = "force-dynamic";
-
-const TZ = process.env.LILAILA_TZ || "Europe/Madrid";
-
-/** Fecha y hora en el sitio donde vive ella, no donde corre esto. */
-function localNow(now: Date): { date: string; hour: number } {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: TZ,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      // h23 y no hour12:false: con hour12:false, medianoche sale como
-      // "24" en algunas versiones de ICU y la comparación se va al
-      // garete justo el día que el aviso cae de madrugada.
-      hour: "2-digit",
-      hourCycle: "h23",
-    })
-      .formatToParts(now)
-      .map((p) => [p.type, p.value]),
-  );
-  return {
-    date: `${parts.year}-${parts.month}-${parts.day}`,
-    hour: Number(parts.hour),
-  };
-}
 
 /* Varias frases para que no sea el mismo aviso 365 noches. Se elige
    por la fecha y no al azar: así el aviso es el mismo si por lo que
@@ -93,6 +69,11 @@ export async function GET(request: Request) {
 
   if (push.subs.length === 0) {
     return Response.json({ skipped: "sin dispositivos", date, hour });
+  }
+
+  // La suscripción puede estar solo por los avisos del ciclo.
+  if (!wantsPill(push)) {
+    return Response.json({ skipped: "sin aviso de pastilla", date, hour });
   }
 
   if (hour < (push.reminderHour ?? 22)) {

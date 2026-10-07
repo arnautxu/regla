@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { updateSettings, type PillSettings } from "@/lib/db";
-import { disable, enable, installed, status, type PushStatus } from "@/lib/push";
+import { updateSettings, type Settings } from "@/lib/db";
+import { installed, status, type PushStatus } from "@/lib/push";
+import { applyAlerts } from "@/lib/alerts";
 import { haptic } from "@/lib/use-lilaila";
 import { SwitchRow } from "./switch-row";
 
@@ -32,7 +33,8 @@ const EXPLICA: Record<PushStatus, string> = {
   encendido: "",
 };
 
-export function PillPanel({ pill }: { pill: PillSettings }) {
+export function PillPanel({ settings }: { settings: Settings }) {
+  const pill = settings.pill;
   const [push, setPush] = useState<PushStatus | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -53,15 +55,13 @@ export function PillPanel({ pill }: { pill: PillSettings }) {
     setOcupado(true);
     setAviso(null);
     try {
-      if (avisando) {
-        await disable();
-        await updateSettings({ pill: { ...pill, remind: false } });
-        setAviso("Vale, me callo.");
-      } else {
-        const res = await enable(pill.hour, "lidia");
-        setAviso(res.message);
-        if (res.ok) await updateSettings({ pill: { ...pill, remind: true } });
-      }
+      // La suscripción la comparten los avisos del ciclo: apagar este
+      // no puede dar de baja el móvil si queda otro encendido.
+      const res = await applyAlerts(settings, {
+        ...settings,
+        pill: { ...pill, remind: !avisando },
+      });
+      setAviso(res.ok ? (avisando ? "Vale, me callo." : "Listo. Te aviso.") : res.message);
       setPush(await status());
     } finally {
       setOcupado(false);
@@ -88,12 +88,11 @@ export function PillPanel({ pill }: { pill: PillSettings }) {
             haptic(10);
             void (async () => {
               const enabled = !pill.enabled;
+              const next = { ...pill, enabled, remind: enabled && pill.remind };
               // Apagar la cuenta apaga el aviso: seguir dando la brasa
               // por algo que ya no se apunta no tiene ningún sentido.
-              if (!enabled && avisando) await disable();
-              await updateSettings({
-                pill: { ...pill, enabled, remind: enabled && pill.remind },
-              });
+              if (!enabled && avisando) await applyAlerts(settings, { ...settings, pill: next });
+              else await updateSettings({ pill: next });
               setPush(await status());
             })();
           }}

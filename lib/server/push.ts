@@ -1,5 +1,6 @@
 import { get, put } from "@vercel/blob";
 import webpush from "web-push";
+import type { Forecast } from "@/lib/forecast";
 
 /* ═══════════════════════════════════════════════════════════════
    AVISOS
@@ -50,6 +51,31 @@ export interface PushDoc {
    * aviso sin que nadie se enterara hasta que no sonó.
    */
   reminderHour?: number;
+  /**
+   * Qué avisos quiere. Una suscripción ya no significa solo "la
+   * pastilla": también sirve para los del ciclo, así que apagar uno
+   * no puede dar de baja el móvil entero. Ausente = como antes de
+   * existir esto, cuando la suscripción era la pastilla y nada más.
+   */
+  prefs?: AlertPrefs;
+  /** La ficha del ciclo que sube su móvil (ver lib/forecast.ts) */
+  forecast?: Forecast;
+  /** Inicio del ciclo para el que ya salió cada aviso: uno por ciclo */
+  cycleNudges?: { period?: string; sensitive?: string; arnau?: string };
+}
+
+export interface AlertPrefs {
+  pill?: boolean;
+  period?: boolean;
+  sensitive?: boolean;
+  arnauHeadsUp?: boolean;
+  /** Arnau puede leer la fase y los días que faltan */
+  arnauView?: boolean;
+}
+
+/** ¿Quiere el aviso de la pastilla? Las suscripciones viejas, sí. */
+export function wantsPill(doc: PushDoc): boolean {
+  return doc.prefs?.pill ?? true;
 }
 
 const EMPTY: PushDoc = { version: 1, subs: [] };

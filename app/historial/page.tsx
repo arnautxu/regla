@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Lilita } from "@/components/lilita";
 import { CycleRings, CycleRingsLegend } from "@/components/cycle-rings";
@@ -16,7 +17,7 @@ import {
 import { computeStats, summarizeCycles } from "@/lib/history";
 import { computeInsights } from "@/lib/insights";
 import { phaseByDay } from "@/lib/cycle";
-import { db, fromKey } from "@/lib/db";
+import { db, fromKey, updateSettings } from "@/lib/db";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import type { CycleSummary } from "@/lib/history";
@@ -111,6 +112,7 @@ export default function Historial() {
   );
 
   const openSummary = summaries.find((s) => s.id === open);
+  const excluded = new Set(settings.excludedCycles);
 
   return (
     <div className="flex flex-1 flex-col gap-lg px-safe pt-safe pb-lg">
@@ -237,8 +239,26 @@ export default function Historial() {
                 <p className="mb-2 font-display text-sm font-bold">
                   Ciclo de {format(fromKey(openSummary.startKey), "MMMM", { locale: es })}
                   {openSummary.ongoing && <span className="font-normal text-faint"> · en curso</span>}
+                  {excluded.has(openSummary.startKey) && (
+                    <span className="font-normal text-faint"> · no cuenta</span>
+                  )}
                 </p>
                 {detail(openSummary)}
+                {/* Apartar un ciclo raro. Solo los cerrados: del que
+                    sigue en curso aún no se sabe cuánto va a durar,
+                    así que no hay nada que apartar todavía. */}
+                {!openSummary.ongoing && (
+                  <ExcludeToggle
+                    excluded={excluded.has(openSummary.startKey)}
+                    onToggle={() => {
+                      haptic(10);
+                      const next = new Set(excluded);
+                      if (next.has(openSummary.startKey)) next.delete(openSummary.startKey);
+                      else next.add(openSummary.startKey);
+                      void updateSettings({ excludedCycles: [...next].sort() });
+                    }}
+                  />
+                )}
               </div>
             ) : (
               <p className="text-center text-2xs text-faint">
@@ -271,6 +291,19 @@ export default function Historial() {
             )}
           </article>
 
+          <Link
+            href="/resumen"
+            onClick={() => haptic(8)}
+            className="flat flex items-center justify-between gap-md rounded-2xl px-md py-md"
+            style={{ background: "var(--surface)" }}
+          >
+            <span>
+              <span className="block font-display text-base font-bold">Resumen para la ginecóloga</span>
+              <span className="block text-xs text-muted">Seis ciclos en una hoja, para enseñar o guardar en PDF.</span>
+            </span>
+            <span aria-hidden="true" className="text-faint">›</span>
+          </Link>
+
           <p className="text-xs leading-relaxed text-faint">
             Todo esto sale de tus propios registros y se calcula en este móvil.
             Son patrones, no diagnósticos: Lilaila no es un dispositivo médico.
@@ -298,6 +331,39 @@ function Stat({
         {value}
       </dd>
       <dt className="mt-1 text-2xs text-muted">{label}</dt>
+    </div>
+  );
+}
+
+/* Un ciclo de 45 días por una gripe no dice nada de cómo es ella, y
+   arrastraría la predicción meses. Esto lo saca de las cuentas sin
+   borrar nada: los días siguen apuntados y el aro sigue pintado. */
+function ExcludeToggle({
+  excluded,
+  onToggle,
+}: {
+  excluded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="mt-3 flex items-center justify-between gap-md border-t border-line pt-3">
+      <p className="text-xs leading-snug text-muted">
+        {excluded
+          ? "No lo uso para predecir. Sigue aquí, pero no cuenta."
+          : "¿Fue un mes raro? Puedo no tenerlo en cuenta al predecir."}
+      </p>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="shrink-0 rounded-full px-3 py-2 text-xs font-bold"
+        style={
+          excluded
+            ? { background: "var(--accent-soft)", color: "var(--accent)" }
+            : { background: "var(--bg)", color: "var(--fg)", boxShadow: "inset 0 0 0 1.5px var(--border-strong)" }
+        }
+      >
+        {excluded ? "Volver a contarlo" : "Este no cuenta"}
+      </button>
     </div>
   );
 }

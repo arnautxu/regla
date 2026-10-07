@@ -14,8 +14,13 @@ import {
   setSex,
   toKey,
   upsertDay,
+  DEFAULT_STEP_ORDER,
   type Cycle,
   type DayLog,
+  addCustomTag,
+  type CustomTag,
+  type Settings,
+  type StepId,
 } from "@/lib/db";
 import { summarize } from "@/lib/day-summary";
 import {
@@ -204,7 +209,7 @@ function useSwipeToClose(
    sería castigar a quien ya lo había hecho.
    ═══════════════════════════════════════════════════════════════ */
 
-export type Paso = "flow" | "dia" | "duele" | "animo" | "pastilla" | "sexo" | "resumen";
+export type Paso = "flow" | StepId | "resumen";
 
 /** Lo que tarda en pasar a la siguiente pregunta tras un toque: lo
     justo para ver el botón encenderse y leer lo que contesta Lilita. */
@@ -220,6 +225,7 @@ const NOMBRE: Record<Paso, string> = {
   animo: "Ánimo",
   pastilla: "Pastilla",
   sexo: "Sexo",
+  propias: "Lo tuyo",
   resumen: "El día entero",
 };
 
@@ -254,6 +260,8 @@ function pregunta(
       return { titulo: hoy ? "¿Te has tomado la pastilla?" : "¿Te tomaste la pastilla?" };
     case "sexo":
       return { titulo: hoy ? "¿Ha habido sexo?" : "¿Hubo sexo?" };
+    case "propias":
+      return { titulo: "¿Algo de lo tuyo?", ayuda: "Tus etiquetas. Marca las que toquen." };
     case "resumen":
       return { titulo: "Así queda el día" };
   }
@@ -275,18 +283,44 @@ function contestadoEn(paso: Paso, log: DayLog | null | undefined): boolean {
       return log.pill !== undefined;
     case "sexo":
       return log.sex !== undefined;
+    case "propias":
+      return !!log.tags?.length;
     case "resumen":
       return false;
   }
+}
+
+/* ── Qué preguntas y en qué orden ───────────────────────────────
+   Las elige ella en Ajustes. El sangrado no se puede esconder, porque
+   de él sale el ciclo: con la regla va el primero, y el resto de días
+   detrás del ánimo. La pastilla solo si lleva la cuenta, y "lo tuyo"
+   solo si se ha inventado alguna etiqueta. */
+export function pasosDe(settings: Settings, sangradoPrimero: boolean): Paso[] {
+  const { order, hidden } = settings.steps;
+  const completo = [...order, ...DEFAULT_STEP_ORDER.filter((p) => !order.includes(p))];
+  const resto: Paso[] = completo.filter((p) => {
+    if (hidden.includes(p)) return false;
+    if (p === "pastilla") return settings.pill.enabled;
+    if (p === "propias") return settings.customTags.length > 0;
+    return true;
+  });
+  if (sangradoPrimero) return ["flow", ...resto, "resumen"];
+  // Detrás de la última de las tres preguntas de cómo estás.
+  const tras = Math.max(
+    ...(["dia", "duele", "animo"] as Paso[]).map((p) => resto.indexOf(p)),
+  );
+  resto.splice(tras + 1, 0, "flow");
+  return [...resto, "resumen"];
 }
 
 /** Dónde se abre: en la primera de las preguntas de cada día que
     falte, o en la lista si ya están. El sangrado solo cuenta como
     pregunta de cada día con la regla; el resto de días lo primero es
     cómo va el día, y el sangrado queda más abajo. */
-function pasoInicial(log: DayLog | null, sangradoPrimero: boolean): Paso {
-  if (sangradoPrimero && log?.flow === undefined) return "flow";
-  if (log?.painLevel === undefined) return "dia";
+function pasoInicial(log: DayLog | null, pasos: Paso[], sangradoPrimero: boolean): Paso {
+  const conDia = pasos.includes("dia");
+  if ((sangradoPrimero || !conDia) && log?.flow === undefined) return "flow";
+  if (conDia && log?.painLevel === undefined) return "dia";
   return "resumen";
 }
 
@@ -407,7 +441,8 @@ export function DaySheet({
   if (sangradoPrimero === null && day && log !== undefined) {
     const primero = enRegla(day.key, cycles, log);
     setSangradoPrimero(primero);
-    if (paso === null) setPaso(day.isFuture ? "resumen" : pasoInicial(log, primero));
+    if (paso === null)
+      setPaso(day.isFuture ? "resumen" : pasoInicial(log, pasosDe(settings, primero), primero));
   }
 
   // La racha necesita todos los días, así que solo se calcula con la
@@ -450,17 +485,8 @@ export function DaySheet({
   );
 
   const pasos: Paso[] = useMemo(
-    () => [
-      ...(sangradoPrimero ? (["flow"] as const) : []),
-      "dia",
-      "duele",
-      "animo",
-      ...(sangradoPrimero ? [] : (["flow"] as const)),
-      ...(settings.pill.enabled ? (["pastilla"] as const) : []),
-      "sexo",
-      "resumen",
-    ],
-    [settings.pill.enabled, sangradoPrimero],
+    () => pasosDe(settings, !!sangradoPrimero),
+    [settings, sangradoPrimero],
   );
   const actual = paso ?? null;
   // El panel solo existe cuando ya se sabe la pregunta (ver abajo), y
@@ -808,10 +834,26 @@ export function DaySheet({
                   </>
                 )}
 
+                {actual === "propias" && (
+                  <Propias
+                    tags={settings.customTags}
+                    selected={log?.tags ?? []}
+                    onToggle={(id) => {
+                      if (!log?.tags?.includes(id)) setReaccion({ cara: "flirty", texto: "Apuntado. Tú sabrás." });
+                      void upsertDay(day.key, { tags: toggle(log?.tags, id) });
+                    }}
+                    onCreate={async (label) => {
+                      const tag = await addCustomTag(label);
+                      if (tag) void upsertDay(day.key, { tags: [...(log?.tags ?? []), tag.id] });
+                    }}
+                  />
+                )}
+
                 {actual === "resumen" && (
                   <Resumen
                     log={log ?? undefined}
                     pasos={pasos}
+                    tags={settings.customTags}
                     acabaRegla={terminaLaRegla}
                     onEditar={(p) => {
                       haptic(8);
@@ -960,7 +1002,7 @@ export function DaySheet({
                 <span className="flex-1" />
                 {(() => {
                   const hecho = contestadoEn(actual, log);
-                  const multiple = actual === "duele" || actual === "animo";
+                  const multiple = actual === "duele" || actual === "animo" || actual === "propias";
                   const texto = volver
                     ? "Hecho"
                     : hecho
@@ -1030,11 +1072,13 @@ function PieBoton({
 function Resumen({
   log,
   pasos,
+  tags,
   acabaRegla,
   onEditar,
 }: {
   log: DayLog | undefined;
   pasos: Paso[];
+  tags: CustomTag[];
   acabaRegla: boolean;
   onEditar: (paso: Paso) => void;
 }) {
@@ -1065,6 +1109,13 @@ function Resumen({
           ...(log.sexOrgasm ? ["me corrí"] : []),
         ].join(" · ");
       }
+      case "propias":
+        return (
+          tags
+            .filter((t) => log.tags?.includes(t.id))
+            .map((t) => t.label)
+            .join(", ") || undefined
+        );
       case "resumen":
         return undefined;
     }
@@ -1109,5 +1160,61 @@ function Resumen({
           );
         })}
     </ul>
+  );
+}
+
+/* ── Lo tuyo ─────────────────────────────────────────────────────
+   Sus etiquetas, más un campo para inventarse otra sin salir de la
+   hoja: si tiene que ir a Ajustes a crear "resaca", no la crea. */
+function Propias({
+  tags,
+  selected,
+  onToggle,
+  onCreate,
+}: {
+  tags: CustomTag[];
+  selected: string[];
+  onToggle: (id: string) => void;
+  onCreate: (label: string) => Promise<void>;
+}) {
+  const [nueva, setNueva] = useState("");
+  return (
+    <div className="flex flex-col gap-md">
+      <TagPicker
+        bare
+        label="Lo tuyo"
+        options={tags.map((t) => ({ value: t.id, label: t.label }))}
+        selected={selected}
+        onToggle={onToggle}
+      />
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const label = nueva.trim();
+          if (!label) return;
+          haptic(10);
+          setNueva("");
+          void onCreate(label);
+        }}
+      >
+        <input
+          value={nueva}
+          onChange={(e) => setNueva(e.target.value)}
+          maxLength={24}
+          placeholder="Otra etiqueta…"
+          className="min-w-0 flex-1 rounded-full px-4 py-2 text-sm outline-none"
+          style={{ background: "var(--surface)", boxShadow: "inset 0 0 0 1.5px var(--border)" }}
+        />
+        <button
+          type="submit"
+          disabled={!nueva.trim()}
+          className="rounded-full px-4 text-sm font-bold disabled:opacity-40"
+          style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+        >
+          Añadir
+        </button>
+      </form>
+    </div>
   );
 }

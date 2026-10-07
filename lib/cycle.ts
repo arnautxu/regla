@@ -2,7 +2,10 @@ import { differenceInCalendarDays } from "date-fns";
 import { fromKey, todayKey, type Cycle, type Settings } from "./db";
 import { buildModel, cycleLengthsOf, type CycleModel } from "./predict";
 
-export type Phase = "menstrual" | "folicular" | "ovulacion" | "lutea";
+import type { Phase } from "./phase";
+
+export type { Phase } from "./phase";
+export { phaseByDay } from "./phase";
 
 export const PHASE_LABEL: Record<Phase, string> = {
   menstrual: "Regla",
@@ -135,22 +138,6 @@ export function computeCycleState(
     todayKey: today,
     model,
   };
-}
-
-/**
- * Fase a partir solo del día y la longitud del ciclo. La versión sin
- * contexto, para análisis sobre registros sueltos.
- */
-export function phaseByDay(
-  day: number,
-  length: number,
-  periodLength = 5,
-): Phase {
-  if (day <= periodLength) return "menstrual";
-  const ovulation = length - 14;
-  if (day >= ovulation - 4 && day <= ovulation + 1) return "ovulacion";
-  if (day < ovulation) return "folicular";
-  return "lutea";
 }
 
 function phaseFor(

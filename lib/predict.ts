@@ -63,13 +63,20 @@ function mad(xs: number[]): number {
   return median(xs.map((x) => Math.abs(x - m)));
 }
 
-/** Longitudes entre inicios consecutivos, de más antigua a más reciente. */
-export function cycleLengthsOf(cycles: Cycle[]): number[] {
+const NONE: ReadonlySet<string> = new Set();
+
+/** Longitudes entre inicios consecutivos, de más antigua a más reciente.
+    `excluded` son los inicios de ciclos que ella ha dicho que no cuentan. */
+export function cycleLengthsOf(
+  cycles: Cycle[],
+  excluded: ReadonlySet<string> = NONE,
+): number[] {
   const sorted = [...cycles].sort((a, b) =>
     a.startDate.localeCompare(b.startDate),
   );
   const out: number[] = [];
   for (let i = 1; i < sorted.length; i++) {
+    if (excluded.has(sorted[i - 1].startDate)) continue;
     const len = differenceInCalendarDays(
       fromKey(sorted[i].startDate),
       fromKey(sorted[i - 1].startDate),
@@ -80,9 +87,12 @@ export function cycleLengthsOf(cycles: Cycle[]): number[] {
 }
 
 /** Duraciones de regla realmente registradas (ciclos ya cerrados). */
-export function periodLengthsOf(cycles: Cycle[]): number[] {
+export function periodLengthsOf(
+  cycles: Cycle[],
+  excluded: ReadonlySet<string> = NONE,
+): number[] {
   return cycles
-    .filter((c) => c.endDate)
+    .filter((c) => c.endDate && !excluded.has(c.startDate))
     .map(
       (c) =>
         differenceInCalendarDays(fromKey(c.endDate!), fromKey(c.startDate)) + 1,
@@ -147,10 +157,15 @@ function slope(xs: number[]): number {
 }
 
 export function buildModel(cycles: Cycle[], settings: Settings): CycleModel {
-  const all = cycleLengthsOf(cycles);
+  // Los ciclos que ella ha apartado (una enfermedad, un viaje, la
+  // pastilla del día después) no entran. El filtro de atípicos ya
+  // aparta lo muy raro, pero solo a partir de cuatro ciclos y solo si
+  // es raro de verdad: ella sabe cosas del mes que los números no.
+  const excluded = new Set(settings.excludedCycles ?? []);
+  const all = cycleLengthsOf(cycles, excluded);
   const recent = all.slice(-WINDOW);
 
-  const periods = periodLengthsOf(cycles);
+  const periods = periodLengthsOf(cycles, excluded);
   // La duración de la regla se aprende de sus ciclos cerrados. El
   // valor de ajustes es solo la semilla de los primeros meses.
   const periodLength = periods.length

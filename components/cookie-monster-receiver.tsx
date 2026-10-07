@@ -2,6 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { enable, installed, status, type PushStatus } from "@/lib/push";
+import { PHASE_LABEL, type Phase } from "@/lib/cycle";
+
+interface Estado {
+  shared: boolean;
+  phase?: Phase;
+  dayOfCycle?: number;
+  daysUntil?: number;
+  monsterNow?: boolean;
+  monsterIn?: number;
+}
 
 const EXPLICA: Record<PushStatus, string> = {
   "sin-soporte": "Instala Lilaila en la pantalla de inicio para poder recibir avisos.",
@@ -24,8 +34,15 @@ export function CookieMonsterReceiver() {
   const [sendingPersonal, setSendingPersonal] = useState(false);
   const [personalMessage, setPersonalMessage] = useState<string | null>(null);
 
+  const [estado, setEstado] = useState<Estado | null>(null);
+
   useEffect(() => {
     void status().then(setPush);
+    // Solo si ella lo ha encendido en sus ajustes; si no, shared: false.
+    void fetch("/api/cookie-monster/estado")
+      .then((r) => (r.ok ? (r.json() as Promise<Estado>) : null))
+      .then(setEstado)
+      .catch(() => {});
   }, []);
 
   async function activate() {
@@ -93,9 +110,13 @@ export function CookieMonsterReceiver() {
         <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">Aviso privado</p>
         <h1 className="mt-2 font-display text-2xl font-bold tracking-[-0.04em]">🍪 Cookie Monster</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">
-          Activa este móvil como receptor. No descarga ni ve los datos de Lidia.
+          {estado?.shared
+            ? "Activa este móvil como receptor. De Lidia solo ves lo de aquí abajo, porque ella lo ha querido."
+            : "Activa este móvil como receptor. No descarga ni ve los datos de Lidia."}
         </p>
       </div>
+
+      {estado?.shared && estado.phase && <EstadoLidia estado={estado} />}
 
       <button
         type="button"
@@ -186,5 +207,45 @@ export function CookieMonsterReceiver() {
         )}
       </section>
     </div>
+  );
+}
+
+/* Lo que ella comparte: la fase, el día y cuánto falta. Con las
+   mismas palabras que su pantalla de Hoy, y nada que no salga de ahí. */
+function EstadoLidia({ estado }: { estado: Estado }) {
+  const d = estado.daysUntil ?? 0;
+  const regla =
+    estado.phase === "menstrual"
+      ? "Tiene la regla."
+      : d < 0
+        ? `La regla va ${-d} ${d === -1 ? "día" : "días"} tarde.`
+        : d === 0
+          ? "La regla puede bajar hoy."
+          : `Faltan unos ${d} ${d === 1 ? "día" : "días"} para la regla.`;
+  const monstruo = estado.monsterNow
+    ? "Zona Cookie Monster. Galletas y paciencia."
+    : estado.monsterIn !== undefined && estado.monsterIn <= 5
+      ? `Zona Cookie Monster en ${estado.monsterIn} ${estado.monsterIn === 1 ? "día" : "días"}.`
+      : null;
+
+  return (
+    <section
+      className="rounded-2xl px-md py-md"
+      style={{ background: "var(--surface)", boxShadow: "inset 0 0 0 1.5px var(--border-strong)" }}
+      aria-label="Cómo va Lidia"
+    >
+      <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
+        Lidia hoy · día {estado.dayOfCycle}
+      </p>
+      <p className="mt-1 font-display text-xl font-bold tracking-[-0.02em]">
+        {PHASE_LABEL[estado.phase!]}
+      </p>
+      <p className="mt-0.5 text-sm text-muted">{regla}</p>
+      {monstruo && (
+        <p className="mt-1 text-sm font-semibold" style={{ color: "#2f7eae" }}>
+          {monstruo}
+        </p>
+      )}
+    </section>
   );
 }

@@ -143,6 +143,8 @@ export interface DayLog {
   pillAt?: string;
   /** Marca manual de "hoy no estoy para bromas" */
   badDay?: boolean;
+  /** Etiquetas que se ha inventado ella (ids de settings.customTags) */
+  tags?: string[];
   updatedAt?: string;
 }
 
@@ -171,6 +173,51 @@ export interface ChatSettings {
   readsNotes: boolean;
 }
 
+/**
+ * Las preguntas del registro que se pueden mover o esconder. El
+ * sangrado no está: va siempre primero porque de él sale el ciclo
+ * entero, y sin él la app no sabe ni en qué día vives.
+ */
+export type StepId = "dia" | "duele" | "animo" | "pastilla" | "sexo" | "propias";
+
+export const DEFAULT_STEP_ORDER: StepId[] = [
+  "dia",
+  "duele",
+  "animo",
+  "pastilla",
+  "sexo",
+  "propias",
+];
+
+export interface StepSettings {
+  /** Orden en que salen. Las que falten se añaden al final. */
+  order: StepId[];
+  /** Las que no quiere ver */
+  hidden: StepId[];
+}
+
+/** Una etiqueta suya: "resaca", "exámenes", "gimnasio"… */
+export interface CustomTag {
+  id: string;
+  label: string;
+}
+
+/**
+ * Avisos del ciclo. Viven aquí para pintar los interruptores, pero
+ * quien manda es la copia que se guarda en el servidor junto a la
+ * suscripción (ver /api/avisos): ese documento no lo pisa nadie.
+ */
+export interface AlertSettings {
+  /** Dos días antes de la regla prevista */
+  period: boolean;
+  /** Al entrar en la semana sensible (si hay patrón de PAS) */
+  sensitive: boolean;
+  /** Arnau ve en su móvil la fase y cuánto falta, nada más */
+  arnauView: boolean;
+  /** A Arnau le llega un aviso antes de la zona Cookie Monster */
+  arnauHeadsUp: boolean;
+}
+
 export interface Settings {
   id: "singleton";
   name: string;
@@ -186,6 +233,11 @@ export interface Settings {
   chat: ChatSettings;
   theme: "auto" | "light" | "dark";
   onboarded: boolean;
+  /** Inicios ('YYYY-MM-DD') de ciclos que no cuentan para predecir */
+  excludedCycles: string[];
+  alerts: AlertSettings;
+  steps: StepSettings;
+  customTags: CustomTag[];
 }
 
 /* ── Lo que Lilita recuerda ──────────────────────────────────────
@@ -215,6 +267,10 @@ export const DEFAULT_SETTINGS: Settings = {
   chat: { remembers: true, readsNotes: true },
   theme: "light",
   onboarded: false,
+  excludedCycles: [],
+  alerts: { period: false, sensitive: false, arnauView: false, arnauHeadsUp: false },
+  steps: { order: DEFAULT_STEP_ORDER, hidden: [] },
+  customTags: [],
 };
 
 /**
@@ -237,6 +293,10 @@ export function withDefaults(stored: Partial<Settings> | null | undefined): Sett
     },
     pill: { ...DEFAULT_SETTINGS.pill, ...stored?.pill },
     chat: { ...DEFAULT_SETTINGS.chat, ...stored?.chat },
+    alerts: { ...DEFAULT_SETTINGS.alerts, ...stored?.alerts },
+    steps: { ...DEFAULT_SETTINGS.steps, ...stored?.steps },
+    excludedCycles: stored?.excludedCycles ?? [],
+    customTags: stored?.customTags ?? [],
     id: "singleton",
   };
 }
@@ -393,6 +453,30 @@ export async function updateSettings(patch: Partial<Settings>): Promise<void> {
   const current = await getSettings();
   await db.settings.put({ ...current, ...patch, id: "singleton" });
   touch();
+}
+
+/* ── Etiquetas suyas ─────────────────────────────────────────── */
+
+/** Crea una etiqueta. Si ya existe con ese nombre, devuelve esa. */
+export async function addCustomTag(label: string): Promise<CustomTag | null> {
+  const limpio = label.trim().slice(0, 24);
+  if (!limpio) return null;
+  const actual = (await getSettings()).customTags;
+  const ya = actual.find((t) => t.label.toLowerCase() === limpio.toLowerCase());
+  if (ya) return ya;
+  const tag: CustomTag = { id: crypto.randomUUID().slice(0, 8), label: limpio };
+  await updateSettings({ customTags: [...actual, tag] });
+  return tag;
+}
+
+/**
+ * Borra la etiqueta de la lista. Los días que la tenían no se tocan:
+ * su id se queda huérfano y simplemente deja de pintarse. Reescribir
+ * cientos de días por esto sería mucho riesgo para nada.
+ */
+export async function removeCustomTag(id: string): Promise<void> {
+  const actual = (await getSettings()).customTags;
+  await updateSettings({ customTags: actual.filter((t) => t.id !== id) });
 }
 
 /* Toda escritura sella la hora: es lo que permite fusionar dos
