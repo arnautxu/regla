@@ -10,12 +10,13 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 import { SESSION_COOKIE, requireSession } from "@/lib/server/auth";
 import {
-  resolveModel,
   aiConfigured,
   chatInstructions,
-  usingGemini,
+  modelChain,
+  type Candidate,
 } from "@/lib/server/lilita-prompt";
 import type { LilitaContext } from "@/lib/ai-context";
+import { firstThatAnswers } from "@/lib/server/first-answer";
 
 export const maxDuration = 30;
 
@@ -68,31 +69,39 @@ export async function POST(req: Request) {
       }
     : undefined;
 
-  const result = streamText({
-    model: resolveModel(),
-    instructions: chatInstructions(context),
-    messages: await convertToModelMessages(messages),
-    maxOutputTokens: 320,
-    temperature: 0.9,
-    // Gemini 3.6 Flash razona en nivel medio por defecto. Para las
-    // respuestas cortas de Lilita ese trabajo oculto solo retrasa el
-    // primer texto; "minimal" mantiene las herramientas y la calidad
-    // conversacional sin hacer una reflexión larga antes de contestar.
-    providerOptions: usingGemini()
-      ? {
-          google: {
-            thinkingConfig: {
-              thinkingLevel: "minimal",
-              includeThoughts: false,
-            },
-          } satisfies GoogleLanguageModelOptions,
-        }
-      : undefined,
-    tools,
-  });
+  const instructions = chatInstructions(context);
+  const modelMessages = await convertToModelMessages(messages);
+  const start = (c: Candidate, last: boolean) =>
+    streamText({
+      model: c.model,
+      instructions,
+      messages: modelMessages,
+      maxOutputTokens: 320,
+      temperature: 0.9,
+      // Si hay recambio, no se insiste: mejor otro modelo ya que el
+      // mismo dentro de unos segundos.
+      maxRetries: last ? 2 : 0,
+      // Gemini 3.6 Flash razona en nivel medio por defecto. Para las
+      // respuestas cortas de Lilita ese trabajo oculto solo retrasa el
+      // primer texto; "minimal" mantiene las herramientas y la calidad
+      // conversacional sin hacer una reflexión larga antes de contestar.
+      providerOptions: c.gemini
+        ? {
+            google: {
+              thinkingConfig: {
+                thinkingLevel: "minimal",
+                includeThoughts: false,
+              },
+            } satisfies GoogleLanguageModelOptions,
+          }
+        : undefined,
+      tools,
+    });
+
+  const stream = await firstThatAnswers(modelChain(), (c, last) => start(c, last).stream);
 
   return createUIMessageStreamResponse({
-    stream: toUIMessageStream({ stream: result.stream, onError: explain }),
+    stream: toUIMessageStream({ stream, onError: explain }),
   });
 }
 
