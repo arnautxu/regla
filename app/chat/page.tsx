@@ -125,23 +125,57 @@ export default function Chat() {
     });
   }, [messages, status]);
 
-  // Cuando Lilita termina de escribir, lo dice. Solo al ACABAR: leer
-  // a trozos mientras llega cortaría las frases por la mitad.
-  const prevStatus = useRef(status);
+  // Lilita habla mientras escribe: cada vez que acaba una frase (o
+  // unas cuantas, si son cortas) se manda a la voz, y lo que quede se
+  // manda al terminar. La primera va sola y corta para que empiece a
+  // sonar cuanto antes; las siguientes, más largas, para que la voz
+  // no suene a trompicones.
+  const awaitingVoice = useRef(false);
+  const liveVoice = useRef<{ id: string; pos: number } | null>(null);
   useEffect(() => {
-    const was = prevStatus.current;
-    prevStatus.current = status;
-    if (!voiceOn || status !== "ready" || was === "ready") return;
+    if (!voiceOn) return;
+    if (status === "error") {
+      awaitingVoice.current = false;
+      liveVoice.current = null;
+      return;
+    }
     const last = messages.at(-1);
     if (last?.role !== "assistant") return;
-    if (textOf(last)) void voice.speak(last.id, rawOf(last));
+    if (awaitingVoice.current && (status === "streaming" || status === "ready")) {
+      awaitingVoice.current = false;
+      liveVoice.current = { id: last.id, pos: 0 };
+    }
+    const lv = liveVoice.current;
+    if (!lv || lv.id !== last.id) return;
+
+    const raw = rawOf(last);
+    const boundary = /[.!?…]+["»)]*\s+/g;
+    boundary.lastIndex = lv.pos;
+    for (let m = boundary.exec(raw); m; m = boundary.exec(raw)) {
+      const cut = m.index + m[0].length;
+      const min = lv.pos === 0 ? 12 : 80;
+      const chunk = raw.slice(lv.pos, cut);
+      if (stripVoiceTags(chunk).length >= min) {
+        voice.enqueue(last.id, chunk);
+        lv.pos = cut;
+      }
+    }
+    if (status === "ready") {
+      const rest = raw.slice(lv.pos);
+      if (stripVoiceTags(rest)) voice.enqueue(last.id, rest);
+      voice.finish(last.id);
+      liveVoice.current = null;
+    }
   }, [status, messages, voiceOn, voice]);
 
   function send(text: string) {
     if (!text.trim() || status !== "ready") return;
     haptic(10);
     // Dentro del toque: es lo que deja sonar la respuesta en iOS.
-    if (voiceOn) voice.unlock();
+    if (voiceOn) {
+      voice.unlock();
+      awaitingVoice.current = true;
+    }
     void sendMessage({ text });
     setInput("");
   }
