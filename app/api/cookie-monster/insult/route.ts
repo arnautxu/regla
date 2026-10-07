@@ -40,6 +40,7 @@ export async function POST() {
     body,
     tag: "cookie-monster-pulla",
     url: "/",
+    registro: { tipo: "respuesta-monstruo", kind: "pulla" },
   });
 
   if (result.sent === 0) {

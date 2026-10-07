@@ -37,6 +37,7 @@ export async function POST() {
     body: ANIMOS[Math.floor(Math.random() * ANIMOS.length)],
     tag: "animos-de-arnau",
     url: "/",
+    registro: { tipo: "respuesta-monstruo", kind: "animos" },
   });
   if (result.sent === 0) {
     return Response.json({ error: "No he podido entregar el ánimo. Prueba otra vez." }, { status: 503 });

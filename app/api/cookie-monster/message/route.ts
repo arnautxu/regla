@@ -40,6 +40,7 @@ export async function POST(req: Request) {
     body: text,
     tag: "mensaje-de-arnau",
     url: "/",
+    registro: { tipo: "respuesta-monstruo", kind: "mensaje" },
   });
   if (result.sent === 0) {
     return Response.json({ error: "No he podido entregar el mensaje. Prueba otra vez." }, { status: 503 });

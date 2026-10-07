@@ -136,6 +136,12 @@ export interface Notice {
   /** A dónde lleva el toque */
   url: string;
   actions?: { action: string; title: string }[];
+  /**
+   * Lo que el móvil de Lídia apunta al recibirlo (lo hace el service
+   * worker). Solo el tipo de respuesta de Cookie Monster: nunca el
+   * texto, que ya va en la notificación y no hace falta guardarlo.
+   */
+  registro?: { tipo: "respuesta-monstruo"; kind: "animos" | "pulla" | "mensaje" };
 }
 
 /**

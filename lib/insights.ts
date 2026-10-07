@@ -33,7 +33,7 @@ export interface Insight {
 }
 
 /** A qué día de ciclo corresponde cada registro. */
-function withCycleDay(
+export function withCycleDay(
   days: DayLog[],
   cycles: Cycle[],
 ): { log: DayLog; cycleDay: number; cycleId: string }[] {

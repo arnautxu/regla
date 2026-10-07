@@ -26,6 +26,14 @@ export interface LineContext {
   painLevel?: number;
   badDay?: boolean;
   humorLevel: HumorLevel;
+  /** Hoy ha apuntado un PAS */
+  cryToday?: boolean;
+  /** Hay un enfado con Arnau abierto (Cookie Monster) */
+  angryNow?: boolean;
+  /** Hoy cae dentro de su semana sensible (patrón de PAS) */
+  sensitiveNow?: boolean;
+  /** Días hasta la zona monstruo (0 = ya dentro). Solo si hay patrón. */
+  monsterIn?: number;
 }
 
 export interface Line {
@@ -568,6 +576,46 @@ const SUAVE: Record<Phase | "sin-datos" | "retraso", Line[]> = {
 };
 
 /* ═══════════════════════════════════════════════════════════════
+   PAS Y COOKIE MONSTER
+
+   Si hoy ha llorado, nada de chistes: compañía, como el freno de
+   mano pero sin ponerse en modo enfermera. Si está enfadada con
+   Arnau, Lilita va de su lado, siempre. Y si los patrones dicen que
+   llega la semana sensible o la zona monstruo, avisa sin dramatizar.
+   ═══════════════════════════════════════════════════════════════ */
+
+const LLORADO: Line[] = [
+  { text: "Has llorado hoy. Está apuntado y ya está: no tienes que explicarle nada a nadie.", mood: "cuidando" },
+  { text: "Llorar también es registrar. Aquí no se juzga, solo se apunta.", mood: "cuidando" },
+  { text: "Hoy toca ir despacio. Agua, algo rico y el móvil boca abajo un rato.", mood: "cuidando" },
+  { text: "Ya está guardado. Si te apetece contarme qué ha pasado, aquí estoy.", mood: "cuidando" },
+];
+
+const ENFADADA: Line[] = [
+  { text: "Cookie Monster avisado. Que se lo curre.", mood: "gremlin" },
+  { text: "Estoy de tu lado. Siempre. Aunque no sepa qué ha hecho, seguro que algo ha hecho.", mood: "gremlin" },
+  { text: "Modo monstruo activado. Cuando se te pase, dale a «se me ha pasado» y que respire.", mood: "gremlin" },
+  { text: "Arnau ya lo sabe. Si te manda una pulla ahora, es valiente o tonto.", mood: "gremlin" },
+];
+
+const SEMANA_SENSIBLE: Line[] = [
+  { text: "Estás en tu semana sensible. Si hoy lloras, no estás rara: te pasa casi siempre por estas fechas.", mood: "cuidando" },
+  { text: "Según tus PAS, estos días se te remueve todo. Trátate como tratarías a una amiga.", mood: "cuidando" },
+  { text: "Semana sensible. No es drama, es estadística. Tuya.", mood: "neutral" },
+];
+
+const ZONA_MONSTRUO_PRONTO: Line[] = [
+  { text: "Zona monstruo a la vista. Arnau, ve comprando galletas de verdad.", mood: "gremlin" },
+  { text: "En nada empieza tu zona monstruo. Avisada quedas. Y Arnau, si lee esto, también.", mood: "gremlin" },
+];
+
+const ZONA_MONSTRUO: Line[] = [
+  { text: "Zona monstruo. Si alguien mastica fuerte cerca de ti, no respondo de tus actos.", mood: "gremlin" },
+  { text: "Estás en la zona donde más saltas con Arnau. No es que él sea peor estos días. Bueno, igual sí.", mood: "gremlin" },
+  { text: "Zona monstruo. Galletas a mano y paciencia ajena bajo mínimos. Normal.", mood: "gremlin" },
+];
+
+/* ═══════════════════════════════════════════════════════════════
    SELECCIÓN
 
    La frase es estable durante todo el día: se elige con una semilla
@@ -594,11 +642,18 @@ export function lilitaSays(ctx: LineContext, dateKey: string): Line {
     return { text: pick(CUIDADOS, dateKey + "cuidados"), mood: "cuidando" };
   }
 
+  // Ha llorado hoy: compañía antes que cualquier otra frase.
+  if (ctx.cryToday && ctx.humorLevel !== "off") {
+    return pick(LLORADO, dateKey + "llorado");
+  }
+
   if (ctx.humorLevel === "off") {
     return { text: factual(ctx), mood: "neutral" };
   }
 
   const soft = ctx.humorLevel === "suave";
+
+  if (ctx.angryNow && !soft) return pick(ENFADADA, dateKey + "enfado");
 
   if (ctx.cyclesLogged === 0 && ctx.dayOfCycle === undefined) {
     return soft
@@ -632,6 +687,15 @@ export function lilitaSays(ctx: LineContext, dateKey: string): Line {
   }
 
   if (ctx.cyclesLogged === 0) return pick(PRIMER_CICLO, dateKey);
+
+  // Patrones de PAS y enfados. Un día sí y otro no dentro de la zona,
+  // para no comerse las frases de la fase durante una semana entera.
+  const alterna = seedFrom(dateKey + "zona") % 2 === 0;
+  if (!soft && ctx.monsterIn !== undefined && ctx.monsterIn >= 1 && ctx.monsterIn <= 2) {
+    return pick(ZONA_MONSTRUO_PRONTO, dateKey);
+  }
+  if (ctx.sensitiveNow && alterna) return pick(SEMANA_SENSIBLE, dateKey);
+  if (!soft && ctx.monsterIn === 0 && !alterna) return pick(ZONA_MONSTRUO, dateKey);
 
   switch (ctx.phase) {
     case "folicular":

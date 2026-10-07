@@ -5,6 +5,8 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { Lilita } from "@/components/lilita";
 import { CycleBars, CycleBarsLegend } from "@/components/cycle-bars";
 import { InsightList } from "@/components/insight-list";
+import { EpisodeCard } from "@/components/episode-card";
+import { crossInsight, episodeReport } from "@/lib/episodes";
 import { computeStats, summarizeCycles } from "@/lib/history";
 import { computeInsights } from "@/lib/insights";
 import { phaseByDay } from "@/lib/cycle";
@@ -35,6 +37,16 @@ export default function Historial() {
     [cycles, days, settings, dateKey],
   );
 
+  // PAS y enfados, leídos igual que la regla. Todo en el móvil.
+  const episodes = useMemo(() => {
+    const all = days ?? [];
+    return {
+      pas: episodeReport("pas", all, cycles, settings, dateKey),
+      monster: episodeReport("monstruo", all, cycles, settings, dateKey),
+      cross: crossInsight(all),
+    };
+  }, [cycles, days, settings, dateKey]);
+
   const detail = (s: CycleSummary) => (
     <dl className="grid grid-cols-2 gap-x-md gap-y-3">
       <Fact
@@ -56,6 +68,10 @@ export default function Historial() {
       <Fact
         label="PAS · Llantos"
         value={s.cryEvents > 0 ? String(s.cryEvents) : "Ninguno"}
+      />
+      <Fact
+        label="Cookie Monster"
+        value={s.angerEvents > 0 ? String(s.angerEvents) : "Ninguno"}
       />
       {s.notes.length > 0 && (
         <div className="col-span-2">
@@ -213,6 +229,15 @@ export default function Historial() {
               {rest.length > 0 && <InsightList insights={rest} />}
             </section>
           )}
+
+          <section className="flex flex-col gap-sm">
+            <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
+              Llantos y enfados
+            </h2>
+            <EpisodeCard report={episodes.pas} />
+            <EpisodeCard report={episodes.monster} />
+            {episodes.cross && <InsightList insights={[episodes.cross]} />}
+          </section>
 
           <p className="text-xs leading-relaxed text-faint">
             Todo esto sale de tus propios registros y se calcula en este móvil.

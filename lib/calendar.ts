@@ -76,6 +76,8 @@ export interface DayCell {
    */
   pillSkipped: boolean;
   cryCount: number;
+  /** Enfados con Arnau (Cookie Monster) ese día */
+  angerCount: number;
 }
 
 const WEEK_OPTS = { weekStartsOn: 1 } as const; // lunes, que esto es España
@@ -244,11 +246,13 @@ function paint(cycles: Cycle[], days: DayLog[], settings: Settings, today: strin
             log.flow !== undefined ||
             !!log.note ||
             !!log.cryEvents?.length ||
+            !!log.angerEvents?.length ||
             !!log.mood?.length ||
             !!log.symptoms?.length ||
             log.sex === true),
         pillSkipped: log?.pill === false,
         cryCount: log?.cryEvents?.length ?? 0,
+        angerCount: log?.angerEvents?.length ?? 0,
       };
     });
 

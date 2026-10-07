@@ -1,8 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   db,
+  openAnger,
   pillStreak,
   todayKey,
   withDefaults,
@@ -13,6 +15,7 @@ import {
 import { computeCycleState, type CycleState } from "./cycle";
 import { bled, derivedCycles } from "./period-days";
 import { lilitaSays, type Line } from "./lilita/lines";
+import { episodeReport, inWindow, type EpisodeWindow } from "./episodes";
 
 export interface Lilaila {
   ready: boolean;
@@ -24,6 +27,10 @@ export interface Lilaila {
   dateKey: string;
   /** Días seguidos de pastilla hasta hoy incluido. 0 si hoy falta. */
   pillStreak: number;
+  /** Todos los días registrados (ya están en memoria para los ciclos). */
+  days: DayLog[];
+  /** Ventanas con patrón: semana sensible (PAS) y zona monstruo (enfados) */
+  windows: { sensitive?: EpisodeWindow; monster?: EpisodeWindow };
 }
 
 /**
@@ -52,6 +59,7 @@ export function useLilaila(): Lilaila {
   const derived = useLiveQuery(async () => {
     const days = await db.days.toArray();
     return {
+      days,
       cycles: derivedCycles(days, dateKey),
       streak: pillStreak(days, dateKey),
     };
@@ -85,6 +93,28 @@ export function useLilaila(): Lilaila {
       : bled(today),
   );
 
+  const allDays = derived?.days ?? NO_DAYS;
+  // Las ventanas de PAS y enfados, calculadas aquí, en el móvil.
+  const windows = useMemo(
+    () => ({
+      sensitive: episodeReport("pas", allDays, resolvedCycles, resolvedSettings, dateKey).window,
+      monster: episodeReport("monstruo", allDays, resolvedCycles, resolvedSettings, dateKey).window,
+    }),
+    // resolvedCycles/Settings se recrean en cada render; sus fuentes no.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allDays, cycles, settings, dateKey],
+  );
+  const angryNow = openAnger(allDays) !== undefined;
+  const dayOfCycle = state.dayOfCycle;
+  const monsterIn =
+    windows.monster && dayOfCycle !== undefined
+      ? inWindow(windows.monster, dayOfCycle)
+        ? 0
+        : windows.monster.from > dayOfCycle
+          ? windows.monster.from - dayOfCycle
+          : undefined
+      : undefined;
+
   const line = lilitaSays(
     {
       phase: state.phase,
@@ -101,6 +131,10 @@ export function useLilaila(): Lilaila {
       painLevel: today?.painLevel,
       badDay: today?.badDay,
       humorLevel: resolvedSettings.humorLevel,
+      cryToday: !!today?.cryEvents?.length,
+      angryNow,
+      sensitiveNow: inWindow(windows.sensitive, dayOfCycle),
+      monsterIn,
     },
     dateKey,
   );
@@ -114,8 +148,12 @@ export function useLilaila(): Lilaila {
     line,
     dateKey,
     pillStreak: derived?.streak ?? 0,
+    days: allDays,
+    windows,
   };
 }
+
+const NO_DAYS: DayLog[] = [];
 
 /** Vibración corta. iOS solo la da en PWA instalada; si no, no pasa nada. */
 export function haptic(pattern: number | number[] = 12) {

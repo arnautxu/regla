@@ -8,6 +8,7 @@ import {
   db,
   fromKey,
   pillStreak,
+  removeAngerEvent,
   removeCryEvent,
   setPill,
   setSex,
@@ -15,7 +16,8 @@ import {
   upsertDay,
 } from "@/lib/db";
 import { summarize } from "@/lib/day-summary";
-import { ANIMOS, CRY_INTENSITIES, CRY_REASONS, SINTOMAS, labelOf } from "@/lib/labels";
+import { ANGER_LEVELS, ANIMOS, CRY_INTENSITIES, CRY_REASONS, SINTOMAS, labelOf } from "@/lib/labels";
+import { formatMinutes } from "@/lib/episodes";
 import { capitalize } from "@/lib/format";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
 import { FlowRow } from "./flow-row";
@@ -278,6 +280,44 @@ export function DaySheet({
                     </div>
                   ))}
                   {cryError && <p className="text-xs" style={{ color: "var(--accent)" }} role="alert">{cryError}</p>}
+                </section>
+              )}
+
+              {!!log?.angerEvents?.length && (
+                <section aria-label="Cookie Monster" className="flex flex-col gap-2">
+                  {log.angerEvents.map((event) => (
+                    <div key={event.id} className="rounded-xl px-3 py-2.5 text-sm" style={{ background: "var(--cookie-bg)" }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-semibold" style={{ color: "var(--cookie)" }}>
+                          🍪 {labelOf(ANGER_LEVELS, event.level) ?? "Cookie Monster"}
+                          <span className="ml-2 font-normal text-faint">
+                            {new Date(event.at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </p>
+                        <button
+                          type="button"
+                          className="shrink-0 text-xs underline underline-offset-2"
+                          style={{ color: "var(--fg-muted)" }}
+                          aria-label="Eliminar este enfado"
+                          onClick={() => {
+                            if (!window.confirm("¿Eliminar este enfado?")) return;
+                            haptic(8);
+                            setCryError("");
+                            void removeAngerEvent(day.key, event.id).catch(() =>
+                              setCryError("No se ha podido eliminar este enfado."),
+                            );
+                          }}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                      <p className="mt-1 text-xs text-muted">
+                        {event.endedAt
+                          ? `Se pasó en ${formatMinutes(Math.max(1, (new Date(event.endedAt).getTime() - new Date(event.at).getTime()) / 60000))}`
+                          : "Sin cerrar con «se me ha pasado»"}
+                      </p>
+                    </div>
+                  ))}
                 </section>
               )}
 
