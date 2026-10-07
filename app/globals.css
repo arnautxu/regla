@@ -427,14 +427,13 @@ dialog.sheet::backdrop {
 .sheet-panel {
   width: 100%;
   max-width: 440px;
-  max-height: 88dvh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  /* Casi toda la pantalla: que lo de un día quepa sin desplazar. */
+  max-height: calc(100dvh - env(safe-area-inset-top) - 8px);
+  overflow: hidden;
   background: var(--surface);
   color: var(--fg);
   border-radius: 28px 28px 0 0;
   border-top: 1px solid var(--border);
-  padding-bottom: calc(var(--spacing-lg) + env(safe-area-inset-bottom));
   animation: sheet-up 300ms var(--ease-out-quart);
 }
 

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { haptic } from "@/lib/use-lilaila";
+import { motion } from "motion/react";
 import { Lilita } from "./lilita";
 
 /* Iconos dibujados a mano, con el mismo grosor de trazo que Lilita.
@@ -50,27 +51,43 @@ export function TabBar() {
       <ul className="grid grid-cols-5">
         {[...TABS.slice(0, 2), null, ...TABS.slice(2)].map((tab) => {
           if (!tab) {
+            const enChat = pathname.startsWith("/chat");
+            /* El hueco mide lo mismo que las demás pestañas y la
+               etiqueta cae en la misma línea que las otras; solo el
+               botón redondo sobresale por encima de la barra. Antes
+               era el hueco entero el que subía, y la etiqueta y el
+               círculo quedaban descolocados respecto al resto. */
             return (
-              <li key="lilita" className="flex justify-center">
+              <li key="lilita" className="relative">
                 <Link
                   href="/chat"
                   onClick={() => haptic(10)}
                   aria-label="Hablar con Lilita"
-                  className="-mt-5 flex flex-col items-center gap-1"
+                  aria-current={enChat ? "page" : undefined}
+                  className="flex min-h-[56px] flex-col items-center justify-center gap-1 pt-2 pb-1"
                 >
-                  <span
-                    className="sticker-sm flex size-[52px] items-end justify-center overflow-hidden rounded-full"
+                  <motion.span
+                    whileTap={{ scale: 0.88, y: 2 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 18 }}
+                    className="absolute left-1/2 -top-6 -ml-7 flex size-14 items-center justify-center rounded-full"
                     style={{
-                      background: "var(--accent-soft)",
-                      boxShadow:
-                        "inset 0 0 0 1.5px var(--accent), 2px 2px 0 0 var(--depth-shadow)",
+                      background: "radial-gradient(circle at 35% 30%, var(--accent-soft), var(--surface) 75%)",
+                      // Un aro del color del fondo lo separa de la barra,
+                      // y detrás la sombra dura de pegatina de toda la app.
+                      boxShadow: `inset 0 0 0 ${enChat ? 2.5 : 2}px var(--accent), 0 0 0 4px var(--bg), 3px 3px 0 4px var(--depth-shadow)`,
                     }}
                   >
-                    <span className="translate-y-[12px]">
-                      <Lilita mood="neutral" size={32} />
+                    <span className="mt-0.5">
+                      <Lilita mood={enChat ? "energica" : "neutral"} size={34} />
                     </span>
-                  </span>
-                  <span className="text-2xs font-semibold tracking-wide" style={{ color: "var(--accent)" }}>
+                  </motion.span>
+                  {/* Ocupa el sitio del icono de las otras pestañas,
+                      para que "Lilita" caiga en la misma línea. */}
+                  <span aria-hidden="true" className="size-6" />
+                  <span
+                    className="text-2xs tracking-wide"
+                    style={{ color: "var(--accent)", fontWeight: enChat ? 700 : 600 }}
+                  >
                     Lilita
                   </span>
                 </Link>
