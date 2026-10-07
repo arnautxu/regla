@@ -1,6 +1,6 @@
-/* Lo que comparten la voz leída (/api/voz) y la conversación en
-   directo (/api/voz/directo): la voz de Lilita y cómo contar los
-   errores de ElevenLabs. Solo servidor: aquí se usa la clave. */
+/* Lo que necesita la llamada en directo (/api/voz/directo): la voz
+   de Lilita y cómo contar los errores de ElevenLabs. Solo servidor:
+   aquí se usa la clave. */
 
 // Voz por defecto: una de las de la biblioteca de ElevenLabs que habla
 // español. Para la definitiva, elige o diseña una en elevenlabs.io y
@@ -15,7 +15,7 @@ export function voiceId(): string {
  * Traduce el error de ElevenLabs a algo que Arnau pueda arreglar.
  * Callarse aquí es lo peor: el altavoz no suena y nadie sabe por qué.
  */
-export function explain(status: number, raw: string, permiso = "Text to Speech"): string {
+export function explain(status: number, raw: string, permiso = "ElevenLabs Agents"): string {
   let code = "";
   let message = "";
   try {

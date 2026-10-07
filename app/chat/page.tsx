@@ -16,10 +16,9 @@ import { Lilita } from "@/components/lilita";
 import { buildContext } from "@/lib/ai-context";
 import { computeInsights } from "@/lib/insights";
 import { phaseByDay } from "@/lib/cycle";
-import { addMemory, db, removeMemory, updateSettings } from "@/lib/db";
+import { addMemory, db, removeMemory } from "@/lib/db";
 import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
-import { useVoice } from "@/lib/use-voice";
 
 // La librería de llamadas solo se descarga cuando Lídia llama.
 const LiveCall = dynamic(
@@ -60,10 +59,22 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [calling, setCalling] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
-  const voice = useVoice();
-  const voiceOn = voice.available && settings.chat.voice;
+  // Lilita solo habla en las llamadas: el teléfono sale si el
+  // servidor tiene ElevenLabs.
+  const [canCall, setCanCall] = useState(false);
 
   const memories = useLiveQuery(() => db.memories.toArray(), [], []);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/voz/directo")
+      .then((r) => (r.ok ? r.json() : { enabled: false }))
+      .then((d: { enabled?: boolean }) => alive && setCanCall(!!d.enabled))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const context = useMemo(() => {
     const insights = computeInsights(cycles, days ?? [], settings, dateKey, (d, len) =>
@@ -131,63 +142,11 @@ export default function Chat() {
       behavior: status === "streaming" ? "auto" : "smooth",
       block: "end",
     });
-  }, [messages, status, voice.shown?.text]);
-
-  // Lilita habla mientras escribe: cada vez que acaba una frase (o
-  // unas cuantas, si son cortas) se manda a la voz, y lo que quede se
-  // manda al terminar. La primera va sola y corta para que empiece a
-  // sonar cuanto antes; las siguientes, más largas, para que la voz
-  // no suene a trompicones.
-  const awaitingVoice = useRef(false);
-  const liveVoice = useRef<{ id: string; pos: number } | null>(null);
-  useEffect(() => {
-    if (!voiceOn) return;
-    if (status === "error") {
-      awaitingVoice.current = false;
-      if (liveVoice.current) voice.stop();
-      liveVoice.current = null;
-      return;
-    }
-    const last = messages.at(-1);
-    if (last?.role !== "assistant") return;
-    if (awaitingVoice.current && (status === "streaming" || status === "ready")) {
-      awaitingVoice.current = false;
-      liveVoice.current = { id: last.id, pos: 0 };
-      // Desde aquí su texto no se enseña de golpe: va saliendo según
-      // se oye la voz.
-      voice.begin(last.id);
-    }
-    const lv = liveVoice.current;
-    if (!lv || lv.id !== last.id) return;
-
-    const raw = rawOf(last);
-    const boundary = /[.!?…]+["»)]*\s+/g;
-    boundary.lastIndex = lv.pos;
-    for (let m = boundary.exec(raw); m; m = boundary.exec(raw)) {
-      const cut = m.index + m[0].length;
-      const min = lv.pos === 0 ? 12 : 80;
-      const chunk = raw.slice(lv.pos, cut);
-      if (stripVoiceTags(chunk).length >= min) {
-        voice.enqueue(last.id, chunk);
-        lv.pos = cut;
-      }
-    }
-    if (status === "ready") {
-      const rest = raw.slice(lv.pos);
-      if (stripVoiceTags(rest)) voice.enqueue(last.id, rest);
-      voice.finish(last.id);
-      liveVoice.current = null;
-    }
-  }, [status, messages, voiceOn, voice]);
+  }, [messages, status]);
 
   function send(text: string) {
     if (!text.trim() || status !== "ready") return;
     haptic(10);
-    // Dentro del toque: es lo que deja sonar la respuesta en iOS.
-    if (voiceOn) {
-      voice.unlock();
-      awaitingVoice.current = true;
-    }
     void sendMessage({ text });
     setInput("");
   }
@@ -208,41 +167,16 @@ export default function Chat() {
             <path d="M14.5 5 L8 12 L14.5 19" />
           </svg>
         </button>
-        <Lilita mood={line.mood} size={34} speaking={voice.talking} className="shrink-0" />
+        <Lilita mood={line.mood} size={34} className="shrink-0" />
         <h1 className="flex-1 font-display text-lg font-bold tracking-[-0.02em]">
           Lilita
         </h1>
-        {voice.available && (
-          <button
-            type="button"
-            role="switch"
-            aria-checked={settings.chat.voice}
-            aria-label="Lilita habla en voz alta"
-            onClick={() => {
-              haptic(8);
-              if (settings.chat.voice) voice.stop();
-              else voice.unlock();
-              void updateSettings({
-                chat: { ...settings.chat, voice: !settings.chat.voice },
-              });
-            }}
-            className="flat flex h-10 items-center gap-1.5 rounded-full px-3 text-xs font-semibold"
-            style={{
-              background: settings.chat.voice ? "var(--accent-soft)" : "var(--surface)",
-              color: settings.chat.voice ? "var(--accent)" : "var(--fg-faint)",
-            }}
-          >
-            <SpeakerIcon on={settings.chat.voice} />
-            {settings.chat.voice ? "Voz" : "Muda"}
-          </button>
-        )}
-        {voice.available && (
+        {canCall && (
           <button
             type="button"
             aria-label="Llamar a Lilita"
             onClick={() => {
               haptic(10);
-              voice.stop();
               setCalling(true);
             }}
             className="flex size-10 items-center justify-center rounded-full transition-transform active:scale-95"
@@ -271,7 +205,7 @@ export default function Chat() {
             className="flex flex-col items-center gap-md pt-lg"
           >
             <motion.div variants={ITEM}>
-              <Lilita mood={line.mood} size={116} speaking={voice.talking} />
+              <Lilita mood={line.mood} size={116} />
             </motion.div>
             <motion.p
               variants={ITEM}
@@ -300,10 +234,8 @@ export default function Chat() {
 
         {messages.map((m) => {
           const mine = m.role === "user";
-          // Si se está diciendo en directo, solo lo que ya se ha oído.
-          const text = voice.shown?.id === m.id ? voice.shown.text : textOf(m);
+          const text = textOf(m);
           if (!text) return null;
-          const sounding = voice.playing === m.id;
 
           return (
             <motion.div
@@ -311,7 +243,7 @@ export default function Chat() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: DURATION.standard, ease: EASE_OUT_QUART }}
-              className={mine ? "flex justify-end" : "flex flex-col items-start gap-1"}
+              className={mine ? "flex justify-end" : "flex justify-start"}
             >
               <p
                 className={
@@ -331,35 +263,11 @@ export default function Chat() {
               >
                 {text}
               </p>
-              {!mine && voice.available && (status === "ready" || m.id !== messages.at(-1)?.id) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    haptic(8);
-                    if (sounding) voice.stop();
-                    else {
-                      voice.unlock();
-                      void voice.speak(m.id, rawOf(m));
-                    }
-                  }}
-                  className="flex min-h-[32px] items-center gap-1.5 px-1 text-xs font-semibold"
-                  style={{ color: sounding ? "var(--accent)" : "var(--fg-faint)" }}
-                  aria-label={sounding ? "Parar la voz" : "Escuchar a Lilita"}
-                >
-                  <SpeakerIcon on={sounding} />
-                  {sounding ? "Hablando… toca para parar" : "Escuchar"}
-                </button>
-              )}
-              {!mine && voice.error?.id === m.id && (
-                <p role="alert" className="max-w-[92%] px-1 text-xs" style={{ color: "var(--accent)" }}>
-                  {voice.error.message}
-                </p>
-              )}
             </motion.div>
           );
         })}
 
-        {(status === "submitted" || voice.shown?.text === "") && (
+        {status === "submitted" && (
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -415,12 +323,6 @@ export default function Chat() {
   );
 }
 
-/** Lo que dice, tal cual: con las acotaciones para la voz. */
-function rawOf(m: UIMessage): string {
-  return m.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
-}
-
-/** Lo que se lee en pantalla: sin acotaciones. */
 /** El porqué del fallo, si vale la pena enseñarlo. */
 function whyFailed(error: Error): string {
   const raw = error.message ?? "";
@@ -433,19 +335,8 @@ function whyFailed(error: Error): string {
   return raw.slice(0, 200);
 }
 
+/** Lo que se lee en pantalla. Sin acotaciones de voz, por si queda
+    alguna de cuando el chat también hablaba. */
 function textOf(m: UIMessage): string {
-  return stripVoiceTags(rawOf(m));
-}
-
-function SpeakerIcon({ on }: { on: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" />
-      {on ? (
-        <path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" />
-      ) : (
-        <path d="M16 9.5l5 5M21 9.5l-5 5" />
-      )}
-    </svg>
-  );
+  return stripVoiceTags(m.parts.map((p) => (p.type === "text" ? p.text : "")).join(""));
 }

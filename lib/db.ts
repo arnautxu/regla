@@ -169,8 +169,6 @@ export interface ChatSettings {
   remembers: boolean;
   /** Puede leer las notas escritas en el diario */
   readsNotes: boolean;
-  /** Lee sus respuestas en voz alta (si el servidor tiene ElevenLabs) */
-  voice: boolean;
 }
 
 export interface Settings {
@@ -214,7 +212,7 @@ export const DEFAULT_SETTINGS: Settings = {
   humorLevel: "gamberro",
   notifications: { enabled: false, daysBefore: 2, hourOfDay: 9 },
   pill: { enabled: false, hour: 22, remind: false },
-  chat: { remembers: true, readsNotes: true, voice: true },
+  chat: { remembers: true, readsNotes: true },
   theme: "light",
   onboarded: false,
 };

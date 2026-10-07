@@ -27,8 +27,8 @@ export const maxDuration = 30;
 const API = "https://api.elevenlabs.io/v1/convai";
 const AGENT_NAME = "Lilaila · Lilita";
 
-// v3 conversacional entiende las mismas acotaciones ([sighs],
-// [laughs]…) que la voz del chat. Si la cuenta no lo admite, el
+// v3 conversacional entiende las acotaciones ([sighs], [laughs]…)
+// que Lilita pone al hablar. Si la cuenta no lo admite, el
 // agente se crea con Flash, que habla igual de rápido pero plano.
 const MODELS = ["eleven_v3_conversational", "eleven_flash_v2_5"];
 

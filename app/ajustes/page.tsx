@@ -4,10 +4,8 @@ import { Lilita } from "@/components/lilita";
 import { BackupPanel } from "@/components/backup-panel";
 import { MemoryPanel } from "@/components/memory-panel";
 import { PillPanel } from "@/components/pill-panel";
-import { SwitchRow } from "@/components/switch-row";
 import { updateSettings, type HumorLevel, type Settings } from "@/lib/db";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
-import { useVoice } from "@/lib/use-voice";
 
 const HUMOR: { value: HumorLevel; label: string; hint: string }[] = [
   {
@@ -31,7 +29,6 @@ const TEMAS: { value: Settings["theme"]; label: string }[] = [
 
 export default function Ajustes() {
   const { ready, settings } = useLilaila();
-  const voice = useVoice();
   if (!ready) return null;
 
   return (
@@ -62,27 +59,6 @@ export default function Ajustes() {
       </Group>
 
       <MemoryPanel chat={settings.chat} />
-
-      {/* Solo si el servidor tiene ElevenLabs: un interruptor que no
-          hace nada es peor que no tenerlo. */}
-      {voice.available && (
-        <Group
-          title="La voz de Lilita"
-          note="Solo se manda a la voz lo que contesta Lilita, nunca lo que escribes tú ni tu registro."
-        >
-          <SwitchRow
-            label="Lee sus respuestas en voz alta"
-            hint="En el chat. También se puede silenciar desde allí."
-            on={settings.chat.voice}
-            onToggle={() => {
-              haptic(10);
-              void updateSettings({
-                chat: { ...settings.chat, voice: !settings.chat.voice },
-              });
-            }}
-          />
-        </Group>
-      )}
 
       <PillPanel pill={settings.pill} />
 
