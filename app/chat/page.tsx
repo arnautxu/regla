@@ -162,8 +162,9 @@ export default function Chat() {
             <path d="M14.5 5 L8 12 L14.5 19" />
           </svg>
         </button>
+        <Lilita mood={line.mood} size={34} speaking={voice.talking} className="shrink-0" />
         <h1 className="flex-1 font-display text-lg font-bold tracking-[-0.02em]">
-          Pregúntale a Lilita
+          Lilita
         </h1>
         {voice.available && (
           <button
@@ -200,7 +201,7 @@ export default function Chat() {
             className="flex flex-col items-center gap-md pt-lg"
           >
             <motion.div variants={ITEM}>
-              <Lilita mood={line.mood} size={116} />
+              <Lilita mood={line.mood} size={116} speaking={voice.talking} />
             </motion.div>
             <motion.p
               variants={ITEM}

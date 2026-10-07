@@ -44,6 +44,8 @@ export type Voice = {
   available: boolean;
   /** Id del mensaje que está sonando, si alguno */
   playing: string | null;
+  /** El audio está sonando de verdad (no cargando): para mover la boca */
+  talking: boolean;
   /** Hay que llamarlo dentro de un toque, antes de la primera respuesta */
   unlock: () => void;
   speak: (id: string, text: string) => Promise<void>;
@@ -53,6 +55,7 @@ export type Voice = {
 export function useVoice(): Voice {
   const [available, setAvailable] = useState(false);
   const [playing, setPlaying] = useState<string | null>(null);
+  const [talking, setTalking] = useState(false);
   const audio = useRef<HTMLAudioElement | null>(null);
   const url = useRef<string | null>(null);
   // Cada petición lleva un turno: si llega tarde una voz vieja (porque
@@ -76,6 +79,10 @@ export function useVoice(): Voice {
       el.preload = "auto";
       el.addEventListener("ended", () => setPlaying(null));
       el.addEventListener("error", () => setPlaying(null));
+      // El silencio de desbloqueo también "suena": solo cuenta la voz.
+      el.addEventListener("playing", () => setTalking(el.src.startsWith("blob:")));
+      for (const ev of ["pause", "ended", "error", "emptied"])
+        el.addEventListener(ev, () => setTalking(false));
       audio.current = el;
     }
     return audio.current;
@@ -132,5 +139,5 @@ export function useVoice(): Voice {
     [],
   );
 
-  return { available, playing, unlock, speak, stop };
+  return { available, playing, talking, unlock, speak, stop };
 }
