@@ -150,6 +150,9 @@ export function DaySheet({
     <dialog
       ref={ref}
       onClose={() => {
+        // Al volver a abrirla, siempre en el día que se tocó, no en el
+        // último al que se llegó con las flechas.
+        setOffset(0);
         onClose();
         if (empezoRegla.current) {
           empezoRegla.current = false;
