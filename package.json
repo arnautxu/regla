@@ -13,6 +13,7 @@
   "dependencies": {
     "@ai-sdk/google": "^4.0.31",
     "@ai-sdk/react": "^4.0.51",
+    "@elevenlabs/react": "^1.17.0",
     "@vercel/blob": "^2.6.1",
     "ai": "^7.0.48",
     "date-fns": "^4.4.0",
