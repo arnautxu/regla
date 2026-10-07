@@ -50,7 +50,7 @@ export default function Hoy() {
   const latest = cycles[cycles.length - 1];
 
   const head = headline(state, bleeding, latest?.startDate);
-  const cta = mainAction(state, today?.flow);
+  const cta = mainAction(today);
 
   return (
     <div className="flex flex-1 flex-col gap-md px-safe pt-safe pb-md">
@@ -192,9 +192,8 @@ export default function Hoy() {
       </div>
 
       {/* ── Acción principal ──────────────────────────────────────
-          Siempre abajo, siempre a mano, y dice lo más probable de
-          este momento del ciclo: "Me ha bajado" cuando toca, "¿Cuánto
-          sangras?" con la regla, "Apuntar cómo voy" el resto. */}
+          Siempre abajo, siempre a mano: "Apuntar hoy", o "Ver lo de
+          hoy" si ya hay algo. */}
       <button
         type="button"
         onClick={() => openSheet()}
@@ -298,16 +297,13 @@ function dayFeeling(log: DayLog | undefined): string | undefined {
   return moodLabel(log);
 }
 
-/** La acción más probable ahora mismo. */
-function mainAction(state: CycleState, flowToday: number | undefined): string {
-  if (state.bleeding) {
-    return flowToday === undefined ? "¿Cuánto sangras hoy?" : "Apuntar cómo voy";
-  }
-  const d = state.daysUntilNext;
-  if (state.daysLate > 0 || (d !== undefined && d <= 3 && state.confidence !== "ninguna")) {
-    return "Me ha bajado";
-  }
-  return "Apuntar cómo voy";
+/** El botón grande. Siempre lo mismo: apuntar el día. Antes cambiaba
+    a "Me ha bajado" cerca de la fecha prevista, y registrar un día
+    empezaba por un sí o no sobre la regla. Ahora la regla se apunta
+    desde la propia ficha, en la pregunta del sangrado. */
+function mainAction(today: DayLog | undefined): string {
+  const hecho = today?.flow !== undefined || today?.painLevel !== undefined;
+  return hecho ? "Ver lo de hoy" : "Apuntar hoy";
 }
 
 /* ── Titular ─────────────────────────────────────────────────────
