@@ -116,13 +116,13 @@ export function CookieMonsterButton({ days }: { days: DayLog[] }) {
         type="button"
         onClick={() => void (open ? peace() : angry())}
         disabled={busy}
-        className="flat flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-2xl px-3 text-sm font-semibold disabled:opacity-60"
+        className="flat quick-btn disabled:opacity-60"
         style={{
           background: open ? "var(--cookie-bg)" : "var(--surface)",
           color: flash ? "var(--ok)" : "var(--cookie)",
         }}
       >
-        <span aria-hidden="true">{icon}</span>
+        <span aria-hidden="true" className="text-lg leading-none">{icon}</span>
         <span role="status" aria-live="polite">
           {label}
         </span>

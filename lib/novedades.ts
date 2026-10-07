@@ -20,6 +20,16 @@ export type Novedad = {
 
 export const NOVEDADES: Novedad[] = [
   {
+    id: "2026-10-07-b",
+    titulo: "He ordenado Hoy, que no cabías",
+    cambios: [
+      "Mi cara ahora es enorme y ocupa todo lo que sobra. De nada.",
+      "La pastilla, «He llorado» y Cookie Monster van juntos en una fila, a la vista y sin bajar.",
+      "El sangrado y cómo va el día te los pregunto al tocar «Apuntar hoy».",
+      "Para contestarme, toca mi bocadillo entero.",
+    ],
+  },
+  {
     id: "2026-10-07",
     titulo: "Me he puesto al día, guapa",
     cambios: [

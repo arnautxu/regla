@@ -98,7 +98,12 @@ export function CycleRing({
 }) {
   const total = Math.max(length, day);
   const c = size / 2;
-  const r = c - 24;
+  // Todo el trazo se dibujó para 244 px. Hoy el anillo crece hasta
+  // llenar el hueco libre de la pantalla, y con él crecen las cuentas,
+  // la chapa y las ventanas de fuera, para que no quede un aro fino
+  // perdido alrededor de una cara enorme.
+  const k = size / 244;
+  const r = c - 24 * k;
   const gap = 1.1 / r; // media raya entre cuentas, en radianes
 
   /* La chapa gira con CSS. Se guarda el ángulo SIN envolver para
@@ -163,7 +168,7 @@ export function CycleRing({
   if (range && day <= length) {
     predictedFrom = day + Math.max(range.earliest, 1);
     predictedTo = day + Math.max(range.latest, 1);
-    predicted = arc(angle(predictedFrom - 1), angle(predictedTo), r + 13);
+    predicted = arc(angle(predictedFrom - 1), angle(predictedTo), r + 13 * k);
   }
 
   /* ── Tocar y arrastrar ──────────────────────────────────────── */
@@ -171,11 +176,11 @@ export function CycleRing({
     const el = box.current;
     if (!el) return null;
     const rect = el.getBoundingClientRect();
-    const k = size / rect.width;
-    const x = (e.clientX - rect.left) * k - c;
-    const y = (e.clientY - rect.top) * k - c;
+    const px = size / rect.width;
+    const x = (e.clientX - rect.left) * px - c;
+    const y = (e.clientY - rect.top) * px - c;
     // El centro es de Lilita: tocarla no mueve la chapa.
-    if (strict && Math.hypot(x, y) < r - 32) return null;
+    if (strict && Math.hypot(x, y) < r - 32 * k) return null;
     let a = Math.atan2(y, x) + Math.PI / 2;
     if (a < 0) a += 2 * Math.PI;
     return Math.min(total, Math.floor((a / (2 * Math.PI)) * total) + 1);
@@ -225,7 +230,7 @@ export function CycleRing({
           : selSeg?.anger
             ? "enfadada"
             : PHASE_MOOD[selPhase];
-  const faceSize = Math.round((r - 13) * 2);
+  const faceSize = Math.round((r - 13 * k) * 2);
 
   return (
     <div className="flex flex-col items-center">
@@ -282,7 +287,7 @@ export function CycleRing({
               transform="translate(2 2)"
               fill="none"
               stroke="var(--depth-shadow)"
-              strokeWidth={d === day ? 18 : 13}
+              strokeWidth={(d === day ? 18 : 13) * k}
               className="ring-in"
               style={{ animationDelay: `${d * 16}ms` }}
             />
@@ -297,7 +302,7 @@ export function CycleRing({
               d={arc(angle(d - 1) + gap, angle(d) - gap)}
               fill="none"
               stroke={PHASE_VAR[phase]}
-              strokeWidth={d === day ? 18 : focus ? 17 : 13}
+              strokeWidth={(d === day ? 18 : focus ? 17 : 13) * k}
               opacity={d <= day ? 1 : focus ? 0.75 : 0.26}
               className="ring-in transition-[stroke-width,opacity] duration-150"
               style={{ animationDelay: `${Math.min(d, day + 3) * 16}ms` }}
@@ -308,7 +313,7 @@ export function CycleRing({
         {/* Ventanas con patrón: por fuera y en punteado, como todo lo calculado */}
         {sensitive && sensitive.from <= total && (
           <path
-            d={arc(angle(sensitive.from - 1) + gap, angle(Math.min(sensitive.to, total)) - gap, r + 13)}
+            d={arc(angle(sensitive.from - 1) + gap, angle(Math.min(sensitive.to, total)) - gap, r + 13 * k)}
             fill="none"
             stroke="var(--fg-faint)"
             strokeWidth="2.5"
@@ -318,7 +323,7 @@ export function CycleRing({
         )}
         {monster && monster.from <= total && (
           <path
-            d={arc(angle(monster.from - 1) + gap, angle(Math.min(monster.to, total)) - gap, r + 19)}
+            d={arc(angle(monster.from - 1) + gap, angle(Math.min(monster.to, total)) - gap, r + 19 * k)}
             fill="none"
             stroke="var(--cookie)"
             strokeWidth="2.5"
@@ -348,8 +353,8 @@ export function CycleRing({
           const cookie = at(angle(d - 0.5) + spread * Math.PI * 2);
           return (
             <g key={`m${d}`} className="ring-in" style={{ animationDelay: `${d * 16 + 200}ms` }}>
-              {pas > 0 && <Tear x={tear[0]} y={tear[1]} />}
-              {anger > 0 && <Cookie x={cookie[0]} y={cookie[1]} />}
+              {pas > 0 && <Tear x={tear[0]} y={tear[1]} k={k} />}
+              {anger > 0 && <Cookie x={cookie[0]} y={cookie[1]} k={k} />}
             </g>
           );
         })}
@@ -366,27 +371,27 @@ export function CycleRing({
             <circle
               cx={tx}
               cy={ty}
-              r="15"
+              r={15 * k}
               fill="none"
               stroke={PHASE_VAR[selPhase]}
               strokeWidth="2"
               className="ring-pulse"
             />
           )}
-          <circle cx={tx + 2} cy={ty + 2} r="15" fill="var(--depth-shadow)" />
+          <circle cx={tx + 2} cy={ty + 2} r={15 * k} fill="var(--depth-shadow)" />
           <circle
             cx={tx}
             cy={ty}
-            r="15"
+            r={15 * k}
             fill={sel === day ? "var(--surface)" : PHASE_VAR[selPhase]}
             stroke="var(--fg)"
             strokeWidth="2.5"
           />
           <text
             x={tx}
-            y={ty + 4.3}
+            y={ty + 4.3 * k}
             textAnchor="middle"
-            fontSize="12.5"
+            fontSize={12.5 * k}
             fontWeight="700"
             fill={sel === day ? "var(--fg)" : "var(--surface)"}
             className="tnum"
@@ -408,33 +413,37 @@ export function CycleRing({
       </div>
     </div>
 
-    {/* Debajo, lo que toque contar del día elegido */}
-    <div className="flex min-h-[78px] flex-col items-center text-center">
+    {/* Debajo, lo que toque contar del día elegido. Corto y en
+        horizontal: el número a la izquierda y dos líneas al lado. Antes
+        eran tres líneas apiladas que se comían la altura que ahora es
+        del anillo. */}
+    <div className="flex h-[50px] items-center justify-center text-center">
       {sel === day ? (
         children
       ) : (
-        <div className="flex flex-col items-center" aria-live="polite">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-faint">
-            {offset < 0
-              ? `Hace ${-offset} ${offset === -1 ? "día" : "días"}`
-              : `Dentro de ${offset} ${offset === 1 ? "día" : "días"}`}
+        <div className="flex items-center gap-2.5" aria-live="polite">
+          <p className="tnum font-display text-[40px] font-extrabold leading-none tracking-[-0.045em]">
+            {sel}
           </p>
-          <p className="tnum font-display text-[34px] font-extrabold leading-none tracking-[-0.04em]">
-            Día {sel}
-          </p>
-          <p className="mt-0.5 text-[12.5px] font-semibold">
-            <span style={{ color: PHASE_VAR[selPhase] }}>
-              {PHASE_LABEL[selPhase]} · {format(selDate, "d MMM", { locale: es }).replace(".", "")}
-            </span>
-          </p>
-          <DayFacts
-            log={offset <= 0 ? byKey.get(selKey) : undefined}
-            future={offset > 0}
-            predicted={sel >= predictedFrom && sel <= predictedTo}
-            sensitive={!!sensitive && sel >= sensitive.from && sel <= sensitive.to}
-            monster={!!monster && sel >= monster.from && sel <= monster.to}
-            onOpen={offset < 0 && onOpenDay ? () => onOpenDay(selKey) : undefined}
-          />
+          <div className="flex min-w-0 flex-col items-start text-left">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-faint">
+              {offset < 0
+                ? `Hace ${-offset} ${offset === -1 ? "día" : "días"}`
+                : `Dentro de ${offset} ${offset === 1 ? "día" : "días"}`}
+              {" · "}
+              <span style={{ color: PHASE_VAR[selPhase] }}>
+                {PHASE_LABEL[selPhase]} · {format(selDate, "d MMM", { locale: es }).replace(".", "")}
+              </span>
+            </p>
+            <DayFacts
+              log={offset <= 0 ? byKey.get(selKey) : undefined}
+              future={offset > 0}
+              predicted={sel >= predictedFrom && sel <= predictedTo}
+              sensitive={!!sensitive && sel >= sensitive.from && sel <= sensitive.to}
+              monster={!!monster && sel >= monster.from && sel <= monster.to}
+              onOpen={offset < 0 && onOpenDay ? () => onOpenDay(selKey) : undefined}
+            />
+          </div>
         </div>
       )}
     </div>
@@ -471,7 +480,7 @@ function DayFacts({
   }
   const text = facts.length ? facts.join(" · ") : future ? "Nada previsto" : "Nada apuntado";
   if (!onOpen) {
-    return <p className="mt-0.5 max-w-[30ch] text-[12px] leading-tight text-muted">{text}</p>;
+    return <p className="mt-0.5 max-w-[30ch] text-[13px] font-semibold leading-tight">{text}</p>;
   }
   // Tocar el resumen abre la ficha de ese día.
   return (
@@ -479,7 +488,7 @@ function DayFacts({
       type="button"
       onPointerDown={(e) => e.stopPropagation()}
       onClick={onOpen}
-      className="pointer-events-auto mt-0.5 max-w-[30ch] py-0.5 text-[12px] leading-tight text-muted"
+      className="pointer-events-auto mt-0.5 max-w-[30ch] py-0.5 text-left text-[13px] font-semibold leading-tight"
     >
       {facts.length > 0 && <>{facts.join(" · ")} · </>}
       <span className="font-semibold" style={{ color: "var(--accent)" }}>
@@ -489,9 +498,10 @@ function DayFacts({
   );
 }
 
-function Tear({ x, y }: { x: number; y: number }) {
+function Tear({ x, y, k }: { x: number; y: number; k: number }) {
   return (
     <path
+      transform={`translate(${x} ${y}) scale(${k}) translate(${-x} ${-y})`}
       d={`M${x} ${y - 4.6} C${x + 3.6} ${y - 0.4},${x + 3.2} ${y + 3.6},${x} ${y + 3.6} C${x - 3.2} ${y + 3.6},${x - 3.6} ${y - 0.4},${x} ${y - 4.6}Z`}
       fill="var(--surface)"
     />
@@ -499,9 +509,9 @@ function Tear({ x, y }: { x: number; y: number }) {
 }
 
 /** Una galleta diminuta: azul Cookie Monster con sus pepitas. */
-function Cookie({ x, y }: { x: number; y: number }) {
+function Cookie({ x, y, k }: { x: number; y: number; k: number }) {
   return (
-    <g>
+    <g transform={`translate(${x} ${y}) scale(${k}) translate(${-x} ${-y})`}>
       <circle cx={x} cy={y} r="4.4" fill="var(--cookie)" stroke="var(--surface)" strokeWidth="1.4" />
       <circle cx={x - 1.3} cy={y - 0.9} r="0.85" fill="var(--surface)" />
       <circle cx={x + 1.4} cy={y + 0.7} r="0.85" fill="var(--surface)" />

@@ -1,18 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { addDays, format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Lilita } from "@/components/lilita";
 import { PeriodStartFX } from "@/components/period-start-fx";
 import { DaySheet, type Paso } from "@/components/day-sheet";
-import { moodLabel } from "@/components/mood-row";
 import { CycleRing } from "@/components/cycle-ring";
 import { CookieMonsterButton } from "@/components/cookie-monster-button";
 import { PasButton } from "@/components/pas-button";
 import { PHASE_LABEL, type CycleState } from "@/lib/cycle";
-import { FLOW, labelOf } from "@/lib/labels";
 import { fromKey, setPill, type DayLog } from "@/lib/db";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
 import { lookAhead } from "@/lib/ahead";
@@ -57,12 +55,10 @@ export default function Hoy() {
   const latest = cycles[cycles.length - 1];
 
   const head = headline(state, bleeding, latest?.startDate);
-  // Si ha escondido "cómo va el día" del registro, tampoco sale aquí.
-  const diaVisible = !settings.steps.hidden.includes("dia");
   const cta = mainAction(today);
 
   return (
-    <div className="flex flex-1 flex-col gap-md px-safe pt-safe pb-md">
+    <div className="flex flex-1 flex-col gap-sm px-safe pt-safe pb-[34px]">
       <header className="flex items-center justify-between pt-sm">
         <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-faint">
           {format(fromKey(dateKey), "EEEE d 'de' MMMM", { locale: es })}
@@ -88,27 +84,32 @@ export default function Hoy() {
           dibujado, con Lilita en el centro: dónde estás y cuánto
           falta, en una sola mirada. */}
       {state.dayOfCycle !== undefined && latest ? (
-        <CycleRing
-          day={state.dayOfCycle}
-          length={state.avgLength}
-          periodLength={state.model.periodLength}
-          bleeding={bleeding}
-          range={state.predictionRange}
-          startKey={latest.startDate}
-          days={days}
-          sensitive={windows.sensitive}
-          monster={windows.monster}
-          mood={line.mood}
-          onOpenDay={(key) => {
-            haptic(12);
-            setStartAt(undefined);
-            setDetailing(key);
-          }}
-        >
-          <Big {...head} />
-        </CycleRing>
+        <RingFit>
+          {(size) => (
+            <CycleRing
+              size={size}
+              day={state.dayOfCycle!}
+              length={state.avgLength}
+              periodLength={state.model.periodLength}
+              bleeding={bleeding}
+              range={state.predictionRange}
+              startKey={latest.startDate}
+              days={days}
+              sensitive={windows.sensitive}
+              monster={windows.monster}
+              mood={line.mood}
+              onOpenDay={(key) => {
+                haptic(12);
+                setStartAt(undefined);
+                setDetailing(key);
+              }}
+            >
+              <Big {...head} />
+            </CycleRing>
+          )}
+        </RingFit>
       ) : (
-        <div className="flex justify-center py-lg">
+        <div className="flex flex-1 items-center justify-center py-lg">
           <Lilita mood={line.mood} size={124} />
         </div>
       )}
@@ -119,7 +120,8 @@ export default function Hoy() {
       <Link
         href="/chat"
         onClick={() => haptic(8)}
-        className="sticker-phase relative -mt-1 rounded-[22px] px-md pt-sm pb-sm"
+        aria-label={`${line.text} Contestar a Lilita`}
+        className="sticker-phase relative flex items-center gap-2 rounded-[20px] py-2.5 pr-3 pl-md"
         style={{ background: "var(--phase-bg)" }}
       >
         <span
@@ -131,87 +133,56 @@ export default function Hoy() {
             borderTop: "1.5px solid var(--phase)",
           }}
         />
-        <p className="text-balance font-display text-[15.5px] font-semibold leading-[1.25] tracking-[-0.01em]">
-          {line.text}
-        </p>
-        {/* Abajo, lo que suele tocar en los próximos días: los
-            patrones de Historial mirando hacia delante. Va en la misma
-            línea que "Contestar" para no robarle altura a la pantalla,
-            que tiene que caber entera sin desplazar. */}
-        <p className="mt-1 flex items-baseline justify-between gap-2 text-xs font-semibold">
-          <span style={{ color: "var(--phase)" }}>Contestar a Lilita ›</span>
+        <span className="min-w-0 flex-1">
+          <span className="line-clamp-3 text-pretty font-display text-[15px] font-semibold leading-[1.25] tracking-[-0.01em]">
+            {line.text}
+          </span>
+          {/* Lo que suele tocar en los próximos días: los patrones de
+              Historial mirando hacia delante. */}
           {ahead && (
             <span
-              className="min-w-0 truncate text-muted"
+              className="mt-0.5 block truncate text-xs font-semibold text-muted"
               aria-label={`${ahead.text}. Pasó en ${ahead.hits} de ${ahead.of} ciclos.`}
             >
               🔮 {ahead.short}
             </span>
           )}
-        </p>
+        </span>
+        {/* Antes había una línea entera de "Contestar a Lilita ›".
+            La flecha dice lo mismo sin gastar altura: todo el bocadillo
+            es el botón. */}
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          className="size-5 shrink-0"
+          fill="none"
+          stroke="var(--phase)"
+          strokeWidth="2.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M9 5l7 7-7 7" />
+        </svg>
       </Link>
 
-      {/* ── Hoy, de un vistazo ────────────────────────────────────
-          Lo que se pregunta cada día, en casillas. Verde = ya está.
-          La pastilla se marca aquí mismo de un toque; sangrado y
-          ánimo abren la ficha, porque tienen más de una respuesta. */}
-      <section aria-label="Hoy">
-        <h2 className="text-2xs font-semibold uppercase tracking-[0.16em] text-faint">
-          Hoy
-        </h2>
-        <div
-          className="mt-2 grid gap-2"
-          style={{
-            gridTemplateColumns: `repeat(${1 + (settings.pill.enabled ? 1 : 0) + (diaVisible ? 1 : 0)}, minmax(0, 1fr))`,
-          }}
-        >
-          {settings.pill.enabled && (
-            <Tile
-              label="Pastilla"
-              value={
-                today?.pill === true ? "Tomada" : today?.pill === false ? "Hoy no" : "¿Tomada?"
-              }
-              hint={
-                today?.pill === true
-                  ? pillStreak >= 3
-                    ? `${pillStreak} días seguidos`
-                    : "✓ apuntada"
-                  : today?.pill === false
-                    ? "apuntado"
-                    : "Toca y listo"
-              }
-              done={today?.pill !== undefined}
-              urgent={today?.pill === undefined}
-              onClick={() => {
-                haptic(today?.pill === true ? 6 : 14);
-                void setPill(
-                  dateKey,
-                  today?.pill === true ? undefined : true,
-                  new Date(),
-                );
-              }}
-            />
-          )}
-          <Tile
-            label="Sangrado"
-            value={labelOf(FLOW, today?.flow) ?? "—"}
-            hint={today?.flow !== undefined ? "✓ apuntado" : "sin contestar"}
-            done={today?.flow !== undefined}
-            onClick={() => openSheet("flow")}
-          />
-          {diaVisible && (
-            <Tile
-              label="Cómo va"
-              value={dayFeeling(today) ?? "—"}
-              hint={dayFeeling(today) ? "✓ apuntado" : "sin contestar"}
-              done={dayFeeling(today) !== undefined}
-              onClick={() => openSheet("dia")}
-            />
-          )}
-        </div>
-      </section>
-
+      {/* ── Lo de un toque ───────────────────────────────────────
+          Tres botones del mismo tamaño en una fila: la pastilla, el PAS
+          y Cookie Monster. Antes había tres casillas (pastilla, sangrado,
+          cómo va) y debajo otra fila con PAS y Cookie que se quedaba
+          escondida detrás del botón grande. Sangrado y cómo va ya los
+          pregunta "Apuntar hoy"; aquí solo queda lo que se hace sin
+          pensar. */}
       <div className="flex gap-2">
+        {settings.pill.enabled && (
+          <PillButton
+            taken={today?.pill}
+            streak={pillStreak}
+            onClick={() => {
+              haptic(today?.pill === true ? 6 : 14);
+              void setPill(dateKey, today?.pill === true ? undefined : true, new Date());
+            }}
+          />
+        )}
         <PasButton />
         <CookieMonsterButton days={days} />
       </div>
@@ -222,7 +193,7 @@ export default function Hoy() {
       <button
         type="button"
         onClick={() => openSheet()}
-        className="sticky z-30 mt-auto w-full rounded-full px-lg py-4 font-display text-base font-bold tracking-[-0.01em] transition-[transform,background-color,box-shadow] duration-150 ease-[var(--ease-out-quart)] active:scale-[0.975] active:translate-x-[1px] active:translate-y-[1px]"
+        className="sticky z-30 w-full rounded-full px-lg py-4 font-display text-base font-bold tracking-[-0.01em] transition-[transform,background-color,box-shadow] duration-150 ease-[var(--ease-out-quart)] active:scale-[0.975] active:translate-x-[1px] active:translate-y-[1px]"
         style={{
           // Pegado encima de la barra de pestañas: si la pantalla es
           // corta y hay que bajar, el botón no se va con el resto.
@@ -262,64 +233,82 @@ export default function Hoy() {
   }
 }
 
-/* ── Casilla de "Hoy" ───────────────────────────────────────────
-   Tres estados: pendiente y urgente (la pastilla, que es diaria),
-   pendiente sin más, y hecho (verde). El verde es el único color
-   semántico de la pantalla, y solo dice "esto ya está". */
+/* ── El anillo, tan grande como quepa ─────────────────────────
+   Se queda con todo el alto que sobra entre la cabecera y lo de
+   abajo, y el anillo es el cuadrado más grande que entra ahí (menos
+   la línea de debajo). En un iPhone grande crece; en uno pequeño
+   encoge en vez de empujar los botones fuera de la pantalla. */
 
-function Tile({
-  label,
-  value,
-  hint,
-  done,
-  urgent,
+const RING_BELOW = 50; // la línea de debajo del anillo (cycle-ring)
+
+function RingFit({ children }: { children: (size: number) => React.ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<number | null>(null);
+
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const fit = () => {
+      const { width, height } = el.getBoundingClientRect();
+      const s = Math.floor(Math.min(width - 8, height - RING_BELOW, 380));
+      setSize(Math.max(200, s));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div ref={box} className="relative min-h-[250px] flex-1">
+      <div className="absolute inset-0 flex items-center justify-center">
+        {size !== null && children(size)}
+      </div>
+    </div>
+  );
+}
+
+/* ── La pastilla, de un toque ───────────────────────────────────
+   Pendiente: pegatina con acento, que es lo único diario que se
+   olvida. Hecha: verde, el único color que dice "esto ya está". */
+
+function PillButton({
+  taken,
+  streak,
   onClick,
 }: {
-  label: string;
-  value: string;
-  hint: string;
-  done: boolean;
-  urgent?: boolean;
+  taken: boolean | undefined;
+  streak: number;
   onClick: () => void;
 }) {
+  const done = taken !== undefined;
+  const label = taken === true ? "Tomada" : taken === false ? "Hoy no" : "¿Pastilla?";
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`${urgent ? "sticker-sm" : "flat"} flex min-h-[76px] flex-col items-start rounded-2xl px-3 py-2 text-left`}
+      aria-pressed={taken === true}
+      aria-label={
+        taken === true
+          ? `Pastilla tomada${streak >= 3 ? `, ${streak} días seguidos` : ""}. Toca para desmarcar.`
+          : "Pastilla: toca para marcarla como tomada"
+      }
+      className={`${done ? "flat" : "sticker-sm"} quick-btn`}
       style={{
         background: done ? "var(--ok-bg)" : "var(--surface)",
         boxShadow: done ? "inset 0 0 0 1.5px var(--ok)" : undefined,
+        color: done ? "var(--ok)" : "var(--accent)",
       }}
     >
-      <span
-        className="text-[10px] font-semibold uppercase tracking-[0.14em]"
-        style={{ color: done ? "var(--ok)" : "var(--fg-faint)" }}
-      >
+      <span aria-hidden="true" className="text-lg leading-none">
+        {taken === true ? "✓" : "💊"}
+      </span>
+      <span>
         {label}
-      </span>
-      <span
-        className="mt-0.5 font-display text-base font-bold leading-tight"
-        style={{ color: done || urgent ? "var(--fg)" : "var(--fg-faint)" }}
-      >
-        {value}
-      </span>
-      <span
-        className="mt-auto text-2xs"
-        style={{
-          color: done ? "var(--ok)" : urgent ? "var(--accent)" : "var(--fg-faint)",
-          fontWeight: urgent ? 600 : 450,
-        }}
-      >
-        {hint}
+        {taken === true && streak >= 3 && <span className="font-normal"> · {streak}</span>}
       </span>
     </button>
   );
-}
-
-/** "Bien", "Regular"... con las mismas palabras que la ficha. */
-function dayFeeling(log: DayLog | undefined): string | undefined {
-  return moodLabel(log);
 }
 
 /** El botón grande. Siempre lo mismo: apuntar el día. Antes cambiaba
@@ -421,23 +410,23 @@ function shortRange(from: Date, to: Date): string {
 
 function Big({ label, value, unit, detail, caveat, alarm }: Head) {
   return (
-    <div className="mt-0.5 flex flex-col items-center">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-faint">
-        {label}
-      </p>
+    <div className="flex items-center gap-2.5">
       <p
-        className="tnum font-display text-[40px] font-extrabold leading-[0.95] tracking-[-0.045em]"
+        className="tnum font-display text-[40px] font-extrabold leading-none tracking-[-0.045em]"
         style={alarm ? { color: "var(--accent)" } : undefined}
       >
         {value}
         {unit && (
-          <span className="ml-1.5 font-sans text-base font-normal tracking-normal text-muted">
+          <span className="ml-1 font-sans text-base font-normal tracking-normal text-muted">
             {unit}
           </span>
         )}
       </p>
-      <p className="mt-0.5 max-w-[30ch] text-[13px] font-semibold leading-tight">{detail}</p>
-      {caveat && <p className="max-w-[30ch] text-2xs leading-snug text-faint">{caveat}</p>}
+      <div className="flex min-w-0 flex-col items-start text-left">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-faint">{label}</p>
+        <p className="mt-0.5 text-[13px] font-semibold leading-tight">{detail}</p>
+        {caveat && <p className="text-2xs leading-snug text-faint">{caveat}</p>}
+      </div>
     </div>
   );
 }
