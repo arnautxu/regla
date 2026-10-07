@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { format } from "date-fns";
@@ -11,12 +11,13 @@ import { computeInsights } from "@/lib/insights";
 import { phaseByDay } from "@/lib/cycle";
 import { SINTOMAS, labelOf } from "@/lib/labels";
 import { useLilaila } from "@/lib/use-lilaila";
+import { Pdf, compartirPdf } from "@/lib/pdf";
 
 /* ═══════════════════════════════════════════════════════════════
    RESUMEN PARA LA GINECÓLOGA
 
-   Una hoja para enseñar en la consulta o guardar en PDF desde el
-   botón de imprimir del móvil. Los últimos seis ciclos y lo que de
+   Una hoja para enseñar en la consulta o mandar en PDF (lib/pdf.ts:
+   en la app instalada del iPhone, imprimir no hace nada). Los últimos seis ciclos y lo que de
    verdad pregunta un médico: cuánto duran, cuánto dura la regla,
    cuánto duele y qué síntomas se repiten.
 
@@ -80,6 +81,79 @@ export default function Resumen() {
     (d) => desde && d.date >= desde && (d.painLevel ?? 0) >= 7,
   ).length;
 
+  const [generando, setGenerando] = useState(false);
+
+  // Las mismas frases para la pantalla y para el PDF.
+  const rango = desde
+    ? `Del ${fecha(desde)} al ${fecha(dateKey)} · ${ultimos.length} ${ultimos.length === 1 ? "ciclo" : "ciclos"}`
+    : "Todavía no hay ciclos registrados.";
+  const enResumen: [string, string][] = [
+    [
+      "Duración del ciclo",
+      stats.avgCycle
+        ? `${stats.avgCycle} días de media${stats.shortest && stats.longest ? ` (entre ${stats.shortest} y ${stats.longest})` : ""}`
+        : "sin datos suficientes",
+    ],
+    ["Duración de la regla", stats.avgPeriod ? `${stats.avgPeriod} días de media` : "sin datos suficientes"],
+    ["Días con dolor de 7 o más sobre 10", String(dolorFuerte)],
+  ];
+  const atipicos = settings.excludedCycles.length
+    ? `Ciclos que ella ha marcado como atípicos y no cuentan en las medias: ${settings.excludedCycles.map(fecha).join(", ")}.`
+    : null;
+  const filas = ultimos.map((s) => [
+    fecha(s.startKey),
+    `${s.cycleLength ? `${s.cycleLength} d` : "en curso"}${settings.excludedCycles.includes(s.startKey) ? " *" : ""}`,
+    s.periodLength ? `${s.periodLength} d` : "—",
+    s.maxPain !== undefined ? `${s.maxPain}/10` : "—",
+  ]);
+  const hayAtipicoEnTabla = ultimos.some((s) => settings.excludedCycles.includes(s.startKey));
+  const sintomasTxt = `${sintomas.map((s) => `${s.label} (${s.n} ${s.n === 1 ? "día" : "días"})`).join(", ")}.`;
+  const pastilla = settings.pill.enabled && desde ? pillLine(days ?? [], desde, dateKey) : null;
+  const pie = `Generado con Lilaila el ${fecha(dateKey)} a partir de lo que ella ha apuntado en su móvil. No es un informe médico.`;
+
+  async function exportar() {
+    if (generando) return;
+    setGenerando(true);
+    try {
+      const pdf = new Pdf();
+      const titulo = (t: string) => pdf.texto(t.toUpperCase(), { size: 8, bold: true, gris: 0.45, despues: 4 });
+      pdf.texto("RESUMEN DEL CICLO MENSTRUAL", { size: 8, bold: true, gris: 0.45, despues: 2 });
+      pdf.texto(settings.name, { size: 22, bold: true, despues: 2 });
+      pdf.texto(rango, { size: 10.5, gris: 0.35, despues: 18 });
+      if (desde) {
+        titulo("En resumen");
+        for (const [k, v] of enResumen) pdf.parrafo([{ t: `${k}: ` }, { t: v, bold: true }], { despues: 2 });
+        if (atipicos) pdf.texto(atipicos, { size: 10, gris: 0.35 });
+        pdf.espacio(16);
+        titulo("Ciclo a ciclo");
+        pdf.tabla(["Inicio", "Ciclo", "Regla", "Dolor máx."], filas, [0.34, 0.24, 0.2, 0.22]);
+        if (hayAtipicoEnTabla) pdf.texto("* Marcado por ella como atípico.", { size: 8.5, gris: 0.45 });
+        if (sintomas.length) {
+          pdf.espacio(16);
+          titulo("Síntomas más apuntados");
+          pdf.texto(sintomasTxt);
+        }
+        if (pastilla) {
+          pdf.espacio(16);
+          titulo("Anticonceptiva");
+          pdf.texto(pastilla);
+        }
+        if (avisos.length) {
+          pdf.espacio(16);
+          titulo("Para comentar");
+          for (const a of avisos) pdf.texto(`•  ${a.title}.`, { despues: 2 });
+        }
+      }
+      pdf.espacio(28);
+      pdf.texto(pie, { size: 8.5, gris: 0.45 });
+
+      const nombre = `resumen-ciclo-${dateKey}.pdf`;
+      await compartirPdf(pdf.bytes(`Resumen del ciclo · ${settings.name}`), nombre, "Resumen del ciclo");
+    } finally {
+      setGenerando(false);
+    }
+  }
+
   if (!ready) return null;
 
   return (
@@ -90,11 +164,12 @@ export default function Resumen() {
         </Link>
         <button
           type="button"
-          onClick={() => window.print()}
-          className="rounded-full px-md py-2 text-sm font-bold"
+          onClick={exportar}
+          disabled={generando}
+          className="rounded-full px-md py-2 text-sm font-bold disabled:opacity-60"
           style={{ background: "var(--accent)", color: "var(--on-accent)" }}
         >
-          Imprimir o guardar PDF
+          Compartir PDF
         </button>
       </div>
 
@@ -105,11 +180,7 @@ export default function Resumen() {
         <h1 className="mt-1 font-display text-2xl font-bold tracking-[-0.03em]">
           {settings.name}
         </h1>
-        <p className="text-sm text-muted">
-          {desde
-            ? `Del ${fecha(desde)} al ${fecha(dateKey)} · ${ultimos.length} ${ultimos.length === 1 ? "ciclo" : "ciclos"}`
-            : "Todavía no hay ciclos registrados."}
-        </p>
+        <p className="text-sm text-muted">{rango}</p>
       </header>
 
       {desde && (
@@ -117,26 +188,12 @@ export default function Resumen() {
           <section>
             <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">En resumen</h2>
             <ul className="mt-2 flex flex-col gap-1 text-sm">
-              <li>
-                Duración del ciclo:{" "}
-                <b>
-                  {stats.avgCycle
-                    ? `${stats.avgCycle} días de media${stats.shortest && stats.longest ? ` (entre ${stats.shortest} y ${stats.longest})` : ""}`
-                    : "sin datos suficientes"}
-                </b>
-              </li>
-              <li>
-                Duración de la regla: <b>{stats.avgPeriod ? `${stats.avgPeriod} días de media` : "sin datos suficientes"}</b>
-              </li>
-              <li>
-                Días con dolor de 7 o más sobre 10: <b>{dolorFuerte}</b>
-              </li>
-              {settings.excludedCycles.length > 0 && (
-                <li className="text-muted">
-                  Ciclos que ella ha marcado como atípicos y no cuentan en las medias:{" "}
-                  {settings.excludedCycles.map(fecha).join(", ")}.
+              {enResumen.map(([k, v]) => (
+                <li key={k}>
+                  {k}: <b>{v}</b>
                 </li>
-              )}
+              ))}
+              {atipicos && <li className="text-muted">{atipicos}</li>}
             </ul>
           </section>
 
@@ -152,20 +209,18 @@ export default function Resumen() {
                 </tr>
               </thead>
               <tbody>
-                {ultimos.map((s) => (
-                  <tr key={s.id} className="border-b border-line last:border-b-0">
-                    <td className="py-1.5 pr-2">{fecha(s.startKey)}</td>
-                    <td className="py-1.5 pr-2">
-                      {s.cycleLength ? `${s.cycleLength} d` : "en curso"}
-                      {settings.excludedCycles.includes(s.startKey) && " *"}
-                    </td>
-                    <td className="py-1.5 pr-2">{s.periodLength ? `${s.periodLength} d` : "—"}</td>
-                    <td className="py-1.5">{s.maxPain !== undefined ? `${s.maxPain}/10` : "—"}</td>
+                {filas.map((f, i) => (
+                  <tr key={ultimos[i].id} className="border-b border-line last:border-b-0">
+                    {f.map((c, j) => (
+                      <td key={j} className={j < f.length - 1 ? "py-1.5 pr-2" : "py-1.5"}>
+                        {c}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
             </table>
-            {ultimos.some((s) => settings.excludedCycles.includes(s.startKey)) && (
+            {hayAtipicoEnTabla && (
               <p className="mt-1 text-2xs text-faint">* Marcado por ella como atípico.</p>
             )}
           </section>
@@ -175,14 +230,15 @@ export default function Resumen() {
               <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
                 Síntomas más apuntados
               </h2>
-              <p className="mt-2 text-sm">
-                {sintomas.map((s) => `${s.label} (${s.n} ${s.n === 1 ? "día" : "días"})`).join(", ")}.
-              </p>
+              <p className="mt-2 text-sm">{sintomasTxt}</p>
             </section>
           )}
 
-          {settings.pill.enabled && (
-            <PillLine days={days ?? []} desde={desde} hasta={dateKey} />
+          {pastilla && (
+            <section>
+              <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">Anticonceptiva</h2>
+              <p className="mt-2 text-sm">{pastilla}</p>
+            </section>
           )}
 
           {avisos.length > 0 && (
@@ -200,26 +256,16 @@ export default function Resumen() {
         </>
       )}
 
-      <p className="mt-auto text-2xs leading-relaxed text-faint">
-        Generado con Lilaila el {fecha(dateKey)} a partir de lo que ella ha
-        apuntado en su móvil. No es un informe médico.
-      </p>
+      <p className="mt-auto text-2xs leading-relaxed text-faint">{pie}</p>
     </div>
   );
 }
 
-function PillLine({ days, desde, hasta }: { days: DayLog[]; desde: string; hasta: string }) {
+function pillLine(days: DayLog[], desde: string, hasta: string): string | null {
   const marcadas = days.filter((d) => d.date >= desde && d.date <= hasta && d.pill !== undefined);
   if (!marcadas.length) return null;
   const saltadas = marcadas.filter((d) => d.pill === false).length;
-  return (
-    <section>
-      <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">Anticonceptiva</h2>
-      <p className="mt-2 text-sm">
-        {saltadas === 0
-          ? `Tomada todos los días apuntados (${marcadas.length}).`
-          : `Saltada ${saltadas} de ${marcadas.length} días apuntados.`}
-      </p>
-    </section>
-  );
+  return saltadas === 0
+    ? `Tomada todos los días apuntados (${marcadas.length}).`
+    : `Saltada ${saltadas} de ${marcadas.length} días apuntados.`;
 }

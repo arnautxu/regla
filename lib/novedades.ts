@@ -20,6 +20,13 @@ export type Novedad = {
 
 export const NOVEDADES: Novedad[] = [
   {
+    id: "2026-10-07-c",
+    titulo: "El PDF para la gine ya sale, por fin",
+    cambios: [
+      "En el resumen para la ginecóloga, «Compartir PDF» te saca el documento de verdad y lo mandas por WhatsApp, Mail o lo guardas en Archivos.",
+    ],
+  },
+  {
     id: "2026-10-07-b",
     titulo: "He ordenado Hoy, que no cabías",
     cambios: [
