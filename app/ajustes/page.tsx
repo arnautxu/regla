@@ -5,6 +5,7 @@ import { CUENTAS_ACTIVAS, useCuenta } from "@/lib/cuenta";
 import { PLANS } from "@/lib/plans";
 import { Lilita } from "@/components/lilita";
 import { BackupPanel } from "@/components/backup-panel";
+import { ParejaPanel } from "@/components/pareja-panel";
 import { MemoryPanel } from "@/components/memory-panel";
 import { PillPanel } from "@/components/pill-panel";
 import { AlertsPanel } from "@/components/alerts-panel";
@@ -61,6 +62,8 @@ export default function Ajustes() {
           <span className="text-faint">›</span>
         </Link>
       )}
+
+      <ParejaPanel settings={settings} />
 
       <Group
         title="El humor de Lilita"

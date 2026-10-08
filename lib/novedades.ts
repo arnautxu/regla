@@ -19,6 +19,14 @@ export type Novedad = {
 };
 
 export const NOVEDADES: Novedad[] = [
+  {
+    id: "2026-10-08-b",
+    titulo: "Tu pareja ahora se configura, como un mueble de IKEA",
+    cambios: [
+      "En Ajustes tienes «Tu pareja»: le cambias el nombre o le das la patada, y yo me adapto.",
+      "Sin pareja apuntada, Cookie Monster se va a dormir y yo dejo de nombrar a nadie.",
+    ],
+  },
   ...(process.env.NEXT_PUBLIC_ACCOUNT_MODE === "true" ? [{
     id: "2026-10-08",
     titulo: "Tu diario ya tiene su propio sitio",

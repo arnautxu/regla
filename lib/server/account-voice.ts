@@ -1,4 +1,5 @@
 import "server-only";
+import { paraLaUsuaria } from "./prompt-persona";
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import { z } from "zod";
 import { currentUser, adminDb } from "./supabase";
@@ -22,7 +23,7 @@ export async function accountVoice(req: Request) {
   if (!voiceReady()) return privateJson({ error: "Las llamadas todavía no están disponibles." }, 503);
   const parsed = z.object({ context: contextSchema }).safeParse(await limitedJson(req, 32_000).catch(() => null));
   if (!parsed.success) return privateJson({ error: "No se ha podido preparar la llamada." }, 400);
-  const prompt = liveInstructions(parsed.data.context).replaceAll("Lídia", "la usuaria").replaceAll("Lidia", "la usuaria").replaceAll("Arnau", "su pareja");
+  const prompt = paraLaUsuaria(liveInstructions(parsed.data.context), parsed.data.context.pareja);
   if (Buffer.byteLength(prompt) > 12_000) return privateJson({ error: "Hay demasiados datos para esta llamada." }, 400);
   const reservation = await reserve(user.id, "voice");
   if (reservation.response) return reservation.response;

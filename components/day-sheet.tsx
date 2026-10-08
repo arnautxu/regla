@@ -1,5 +1,6 @@
 "use client";
 
+import { esMenor } from "@/lib/pareja";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { format } from "date-fns";
@@ -192,7 +193,7 @@ function contestadoEn(paso: Paso, log: DayLog | null | undefined): boolean {
    Las elige ella en Ajustes. El sangrado no se puede esconder, porque
    de él sale el ciclo: con la regla va el primero, y el resto de días
    detrás del ánimo. La pastilla solo si lleva la cuenta, y "lo tuyo"
-   solo si se ha inventado alguna etiqueta. */
+   solo si se ha inventado alguna etiqueta. El sexo, nunca a menores. */
 export function pasosDe(settings: Settings, sangradoPrimero: boolean): Paso[] {
   const { order, hidden } = settings.steps;
   const completo = [...order, ...DEFAULT_STEP_ORDER.filter((p) => !order.includes(p))];
@@ -200,6 +201,8 @@ export function pasosDe(settings: Settings, sangradoPrimero: boolean): Paso[] {
     if (hidden.includes(p)) return false;
     if (p === "pastilla") return settings.pill.enabled;
     if (p === "propias") return settings.customTags.length > 0;
+    // A menores no se les pregunta por el sexo.
+    if (p === "sexo") return !esMenor(settings);
     return true;
   });
   if (sangradoPrimero) return ["flow", ...resto, "resumen"];

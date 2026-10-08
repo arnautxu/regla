@@ -1,3 +1,4 @@
+import { conPareja, nombrePareja } from "./pareja";
 import { differenceInCalendarDays } from "date-fns";
 import { fromKey, type Cycle, type DayLog, type MonsterReplyKind, type Settings } from "./db";
 import { buildModel } from "./predict";
@@ -216,7 +217,7 @@ export function episodeReport(
       detail: `${window.count} de ${window.total} ${noun} cayeron ahí, en ${window.cycles} ciclos distintos. ${
         kind === "pas"
           ? "Es tu semana sensible: si lloras esos días, no es que estés rara."
-          : "Es tu zona monstruo: que Arnau vaya con cuidado esos días."
+          : "Es tu zona monstruo: que {pareja} vaya con cuidado esos días."
       }`,
       basis: window.total,
     });
@@ -330,7 +331,7 @@ export function episodeReport(
             id: "monstruo-respuesta",
             kind: "patron",
             title: `${REPLY_TITLE[best.kind]} lo arregla antes`,
-            detail: `Con ${REPLY_WORD[best.kind]} de Arnau se pasa en ${minutes(best.avg)}. Con ${REPLY_WORD[worst.kind]}, en ${minutes(worst.avg)}.`,
+            detail: `Con ${REPLY_WORD[best.kind]} de {pareja} se pasa en ${minutes(best.avg)}. Con ${REPLY_WORD[worst.kind]}, en ${minutes(worst.avg)}.`,
             basis: scored.reduce((a, s) => a + s.n, 0),
           });
         }
@@ -338,7 +339,12 @@ export function episodeReport(
     }
   }
 
-  report.insights = insights;
+  const pareja = nombrePareja(settings) ?? "tu pareja";
+  report.insights = insights.map((i) => ({
+    ...i,
+    title: conPareja(i.title, pareja),
+    detail: conPareja(i.detail, pareja),
+  }));
   return report;
 }
 

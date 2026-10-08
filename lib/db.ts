@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from "dexie";
 import { daysToFill, derivedCycles } from "./period-days";
+import { accountMode } from "./account-mode";
 
 /* ---------------------------------------------------------------
    Todo vive en el iPhone de Lidia. Nada de esto sale del dispositivo.
@@ -262,6 +263,12 @@ export interface Settings {
   alerts: AlertSettings;
   steps: StepSettings;
   customTags: CustomTag[];
+  /** Año de nacimiento. Sin él (instalaciones de antes) cuenta como adulta. */
+  birthYear?: number;
+  /** Solo si nació hace justo 18 años: ¿ya los ha cumplido este año? */
+  cumplidos18?: boolean;
+  /** Nombre de su pareja. null = no tiene o no lo quiere decir. */
+  partnerName: string | null;
 }
 
 /* ── Lo que Lilita recuerda ──────────────────────────────────────
@@ -295,6 +302,7 @@ export const DEFAULT_SETTINGS: Settings = {
   alerts: { period: false, sensitive: false, arnauView: false, arnauHeadsUp: false },
   steps: { order: DEFAULT_STEP_ORDER, hidden: [] },
   customTags: [],
+  partnerName: null,
 };
 
 /**
@@ -321,6 +329,11 @@ export function withDefaults(stored: Partial<Settings> | null | undefined): Sett
     steps: { ...DEFAULT_SETTINGS.steps, ...stored?.steps },
     excludedCycles: stored?.excludedCycles ?? [],
     customTags: stored?.customTags ?? [],
+    // Antes de poder elegirlo, la pareja era siempre Arnau: la app era
+    // un regalo para Lídia. Solo su instalación llega aquí sin el campo;
+    // quien hace el onboarding lo guarda (con nombre o con null).
+    // Antes la pareja era siempre Arnau: la instalación de Lídia lo conserva.
+    partnerName: stored?.partnerName !== undefined ? stored.partnerName : stored?.onboarded && !accountMode() ? "Arnau" : null,
     id: "singleton",
   };
 }

@@ -12,6 +12,8 @@ export const contextSchema = z.object({
   notas: z.array(z.object({ cuando: z.string().max(60), texto: z.string().max(240) })).max(12),
   memorias: z.array(z.object({ id: z.string().max(100), texto: z.string().max(500) })).max(1000),
   puedeRecordar: z.boolean(),
+  // Solo el nombre, sin saltos ni corchetes: va dentro del prompt.
+  pareja: z.string().max(40).regex(/^[^\n\r\[\]{}<>]*$/).nullable().optional(),
 }).transform(c => ({ ...c, notas: c.notas.slice(0, 3), memorias: c.memorias.slice(-8), patrones: c.patrones.slice(0, 5) }));
 
 export const chatSchema = z.object({

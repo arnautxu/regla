@@ -29,6 +29,8 @@ import { accountMode } from "./account-mode";
    ═══════════════════════════════════════════════════════════════ */
 
 export interface LilitaContext {
+  /** Nombre de su pareja; null si no tiene, no lo dice o es menor. */
+  pareja?: string | null;
   fase?: string;
   diaDelCiclo?: number;
   diaDeRegla?: number;
@@ -88,6 +90,7 @@ export function buildContext(
     days?: DayLog[];
     memories?: Memory[];
     chat?: ChatSettings;
+    pareja?: string | null;
   },
 ): LilitaContext {
   const dolorHoy = today?.painLevel;
@@ -111,6 +114,7 @@ export function buildContext(
       : [];
 
   return {
+    pareja: extra?.pareja ?? null,
     notas,
     memorias,
     puedeRecordar: extra?.chat?.remembers === true,

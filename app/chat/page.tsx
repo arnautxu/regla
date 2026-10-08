@@ -23,6 +23,7 @@ import { accountMode } from "@/lib/account-mode";
 import { LimiteCharlas, Planes } from "@/components/cuenta";
 import { CUENTAS_ACTIVAS, refrescarPlan, useCuenta } from "@/lib/cuenta";
 import { PLANS } from "@/lib/plans";
+import { nombrePareja } from "@/lib/pareja";
 
 // La librería de llamadas solo se descarga cuando Lídia llama.
 const LiveCall = dynamic(
@@ -96,6 +97,7 @@ export default function Chat() {
       days,
       memories,
       chat: settings.chat,
+      pareja: nombrePareja(settings),
     });
   }, [state, today, settings, cycles, days, memories, dateKey]);
 
