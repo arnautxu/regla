@@ -4,42 +4,45 @@ import Link from "next/link";
 import { CUENTAS_ACTIVAS, useCuenta } from "@/lib/cuenta";
 import { PLANS } from "@/lib/plans";
 import { Lilita } from "@/components/lilita";
-import { BackupPanel } from "@/components/backup-panel";
-import { ParejaPanel } from "@/components/pareja-panel";
-import { MemoryPanel } from "@/components/memory-panel";
-import { PillPanel } from "@/components/pill-panel";
-import { AlertsPanel } from "@/components/alerts-panel";
-import { StepsPanel } from "@/components/steps-panel";
-import { updateSettings, type HumorLevel, type Settings } from "@/lib/db";
+import { FilaIndice, HUMOR, Segmentos } from "@/components/ajustes-ui";
+import { DEFAULT_STEP_ORDER, updateSettings, type Settings } from "@/lib/db";
+import { esMenor, nombrePareja } from "@/lib/pareja";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
-
-const HUMOR: { value: HumorLevel; label: string; hint: string }[] = [
-  {
-    value: "gamberro",
-    label: "Gamberra",
-    hint: "Lilita dice lo que piensa, sin filtro.",
-  },
-  {
-    value: "suave",
-    label: "Suave",
-    hint: "Sigue estando, pero baja el volumen.",
-  },
-  { value: "off", label: "Callada", hint: "Solo los datos. Cero comentarios." },
-];
 
 const TEMAS: { value: Settings["theme"]; label: string }[] = [
   { value: "light", label: "Claro" },
   { value: "dark", label: "Oscuro" },
-  { value: "auto", label: "Automático" },
+  { value: "auto", label: "Auto" },
 ];
 
+/** Cuántas preguntas le salen al apuntar el día, sangrado incluido. */
+function preguntas(s: Settings) {
+  const visibles = DEFAULT_STEP_ORDER.filter(
+    (p) =>
+      !s.steps.hidden.includes(p) &&
+      !(p === "pastilla" && !s.pill.enabled) &&
+      !(p === "sexo" && esMenor(s)) &&
+      !(p === "propias" && s.customTags.length === 0),
+  );
+  return visibles.length + 1;
+}
+
+function resumenAvisos(s: Settings) {
+  if (s.pill.enabled && s.pill.remind) return `Pastilla ${String(s.pill.hour).padStart(2, "0")}:00`;
+  const n = [s.alerts.period, s.alerts.sensitive].filter(Boolean).length;
+  return n === 0 ? "Apagados" : n === 1 ? "1 activo" : `${n} activos`;
+}
+
 export default function Ajustes() {
-  const { ready, settings, windows } = useLilaila();
+  const { ready, settings } = useLilaila();
   const cuenta = useCuenta();
   if (!ready) return null;
 
+  const menor = esMenor(settings);
+  const pareja = nombrePareja(settings);
+
   return (
-    <div className="flex flex-1 flex-col gap-2xl px-safe pt-safe pb-xl">
+    <div className="flex flex-1 flex-col gap-lg px-safe pt-safe pb-xl">
       <div className="flex items-center gap-2 pt-lg">
         <Lilita mood="neutral" size={38} className="shrink-0" />
         <h1 className="font-display text-xl font-bold tracking-[-0.03em]">
@@ -50,147 +53,78 @@ export default function Ajustes() {
       {CUENTAS_ACTIVAS && cuenta && (
         <Link
           href="/ajustes/cuenta"
-          className="sticker flex min-h-[64px] items-center justify-between gap-md rounded-2xl px-lg py-3"
+          className="sticker flex min-h-[64px] items-center gap-md rounded-2xl px-lg py-3"
           style={{ background: "var(--surface)" }}
         >
-          <span className="min-w-0">
-            <span className="block text-base font-semibold">Tu cuenta</span>
+          <span
+            aria-hidden="true"
+            className="grid size-11 shrink-0 place-items-center rounded-full font-display text-lg font-bold uppercase"
+            style={{ background: "var(--accent)", color: "var(--on-accent)" }}
+          >
+            {(settings.name || cuenta.email).slice(0, 1)}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-base font-semibold">{settings.name || "Tu cuenta"}</span>
             <span className="mt-0.5 block truncate text-xs text-faint">
               {cuenta.email} · {cuenta.plan === "free" ? "Sin Plus" : PLANS[cuenta.plan].name}
             </span>
           </span>
-          <span className="text-faint">›</span>
+          <span aria-hidden="true" className="text-faint">›</span>
         </Link>
       )}
 
-      <ParejaPanel settings={settings} />
+      <Tarjeta>
+        <FilaIndice
+          href="/ajustes/lilita"
+          icono="💬"
+          label="Lilita"
+          valor={HUMOR.find((h) => h.value === settings.humorLevel)?.label}
+        />
+        <FilaIndice href="/ajustes/dia" icono="📝" label="Tu día" valor={`${preguntas(settings)} preguntas`} />
+        <FilaIndice href="/ajustes/avisos" icono="🔔" label="Avisos" valor={resumenAvisos(settings)} />
+        {!menor && (
+          <FilaIndice
+            href="/ajustes/pareja"
+            icono="🍪"
+            label={pareja ?? "Tu pareja"}
+            valor={!pareja ? "Añadir" : settings.alerts.arnauView ? "Ve tu fase" : undefined}
+          />
+        )}
+      </Tarjeta>
 
-      <Group
-        title="El humor de Lilita"
-        note="Al margen de esto, si marcas un día como «de mierda» o registras mucho dolor, se calla sola."
-      >
-        {HUMOR.map((opt) => (
-          <Choice
-            key={opt.value}
-            label={opt.label}
-            hint={opt.hint}
-            selected={settings.humorLevel === opt.value}
-            onSelect={() => {
+      <Tarjeta>
+        <FilaIndice href="/ajustes/datos" icono="🔒" label="Tus datos" valor="Copia y borrado" />
+      </Tarjeta>
+
+      <section>
+        <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">Aspecto</h2>
+        <div className="mt-sm">
+          <Segmentos
+            label="Aspecto"
+            opciones={TEMAS}
+            valor={settings.theme}
+            onChange={(theme) => {
               haptic(10);
-              void updateSettings({ humorLevel: opt.value });
+              void updateSettings({ theme });
             }}
           />
-        ))}
-      </Group>
-
-      <StepsPanel settings={settings} />
-
-      <MemoryPanel chat={settings.chat} />
-
-      <PillPanel settings={settings} />
-
-      <AlertsPanel
-        settings={settings}
-        hasSensitive={!!windows.sensitive}
-        hasMonster={!!windows.monster}
-      />
-
-      <Group title="Aspecto">
-        {TEMAS.map((opt) => (
-          <Choice
-            key={opt.value}
-            label={opt.label}
-            selected={settings.theme === opt.value}
-            onSelect={() => {
-              haptic(10);
-              void updateSettings({ theme: opt.value });
-            }}
-          />
-        ))}
-      </Group>
-
-      <BackupPanel />
+        </div>
+      </section>
 
       <p className="text-xs leading-relaxed text-faint">
-        Lo que registras vive en este móvil. Si has conectado tu cuenta, además se
-        guarda una copia privada. Lilaila no es un dispositivo médico ni un
-        método anticonceptivo.
+        Lilaila no es un dispositivo médico ni un método anticonceptivo.
       </p>
     </div>
   );
 }
 
-function Group({
-  title,
-  note,
-  children,
-}: {
-  title: string;
-  note?: string;
-  children: React.ReactNode;
-}) {
+function Tarjeta({ children }: { children: React.ReactNode }) {
   return (
-    <section>
-      <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
-        {title}
-      </h2>
-      <div
-        className="sticker mt-sm divide-y divide-[var(--border)] rounded-2xl px-lg"
-        style={{ background: "var(--surface)" }}
-      >
-        {children}
-      </div>
-      {note && (
-        <p className="mt-sm text-xs leading-relaxed text-faint">{note}</p>
-      )}
-    </section>
-  );
-}
-
-function Choice({
-  label,
-  hint,
-  selected,
-  onSelect,
-}: {
-  label: string;
-  hint?: string;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      onClick={onSelect}
-      className="flex min-h-[56px] w-full items-center justify-between gap-md py-3 text-left transition-colors duration-150"
+    <div
+      className="sticker divide-y divide-[var(--border)] rounded-2xl px-lg"
+      style={{ background: "var(--surface)" }}
     >
-      <span>
-        <span
-          className="block text-base"
-          style={{
-            color: selected ? "var(--accent)" : "var(--fg)",
-            fontWeight: selected ? 600 : 400,
-          }}
-        >
-          {label}
-        </span>
-        {hint && (
-          <span className="mt-0.5 block text-xs text-faint">{hint}</span>
-        )}
-      </span>
-
-      {/* Marca de selección: un punto del acento. Un check flotando en
-          un círculo gris es el mueble de IKEA de la UI. */}
-      <span
-        aria-hidden="true"
-        className="size-3 shrink-0 rounded-full transition-transform duration-150 ease-[var(--ease-out-quart)]"
-        style={{
-          background: selected ? "var(--accent)" : "var(--border-strong)",
-          transform: selected ? "scale(1)" : "scale(0.6)",
-        }}
-      />
-    </button>
+      {children}
+    </div>
   );
 }

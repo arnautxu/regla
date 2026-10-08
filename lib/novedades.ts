@@ -20,6 +20,15 @@ export type Novedad = {
 
 export const NOVEDADES: Novedad[] = [
   {
+    id: "2026-10-08-h",
+    titulo: "He ordenado Ajustes, que aquello era un cajón de sastre",
+    cambios: [
+      "Ahora Ajustes es una lista cortita y cada cosa tiene su pantalla: yo, tu día, avisos, tu pareja y tus datos.",
+      "Lo que le llega a tu pareja está en su apartado, no mezclado con tus avisos.",
+      "El tema claro u oscuro se cambia de un toque, sin bajar hasta el fondo.",
+    ],
+  },
+  {
     id: "2026-10-08-g",
     titulo: "El botón de Plus deja de hacerse el remolón",
     cambios: ["En el iPhone, al elegir Plus ya no me quedo pensando eternamente antes de abrir la compra de Apple."],
