@@ -9,6 +9,9 @@ import { useLilaila } from "@/lib/use-lilaila";
 import { useForecastSync } from "@/lib/alerts";
 import { Onboarding } from "./onboarding";
 import { Novedades } from "./novedades";
+import { Tour } from "./tour";
+import { useTourPendiente } from "@/lib/tour";
+import { nombrePareja } from "@/lib/pareja";
 import { marcarNovedadesVistas } from "@/lib/novedades";
 import { AccountGate } from "./account-gate";
 import { CUENTAS_ACTIVAS, marcarPlanesVistos, planesVistos, useCuenta } from "@/lib/cuenta";
@@ -53,6 +56,8 @@ function DiaryShell({ children }: { children: React.ReactNode }) {
   // próxima vez que abra la app. Además, se sella solo la primera vez
   // que lo detecta, para no depender de este cálculo para siempre.
   const needsOnboarding = ready && !settings.onboarded && cycles.length === 0;
+  // Justo después del onboarding, tres tarjetas antes de ver Hoy.
+  const tour = useTourPendiente() && ready && !needsOnboarding;
 
   // Con cuentas: al acabar el onboarding se enseñan los planes una
   // vez, en lugar de la hoja de novedades.
@@ -123,6 +128,8 @@ function DiaryShell({ children }: { children: React.ReactNode }) {
             children
           ) : needsOnboarding ? (
             <Onboarding />
+          ) : tour ? (
+            <Tour pareja={nombrePareja(settings)} />
           ) : (
             <>
               {/* Entra desde abajo al cambiar de pestaña: la salida no se
