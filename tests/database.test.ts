@@ -39,7 +39,9 @@ test("RLS and function privileges prevent another account spending or reading", 
 });
 test("AI starts disabled, reservations include pending calls and fail closed", async () => {
   assert.equal((await reserve()).error, "paused");
-  await db.exec("update ai_policy set enabled=true,monthly_micro_usd=6000");
+  await db.exec(`insert into billing_accounts(user_id,plan,status,paid_until) values
+    ('${a}','plus','active',now()+interval '1 month'),('${b}','plus','active',now()+interval '1 month');
+    update ai_policy set enabled=true,monthly_micro_usd=6000`);
   const first = await reserve(); assert.ok(first.id);
   assert.equal((await reserve()).error, "busy");
   assert.equal((await reserve(b)).error, "global_budget");
@@ -50,13 +52,20 @@ test("AI starts disabled, reservations include pending calls and fail closed", a
   assert.equal((await db.query<{ charged_micro_usd: number }>("select charged_micro_usd from ai_reservations where id=$1", [first.id])).rows[0].charged_micro_usd, 1000);
   await db.exec("update ai_policy set monthly_micro_usd=100000000");
 });
-test("free trial is lifetime, voice requires paid entitlement, expired plans lose access", async () => {
+test("free accounts have zero replies from the first request and expired plans lose access", async () => {
+  const free = "00000000-0000-0000-0000-000000000003";
+  await db.exec(`insert into auth.users values('${free}')`);
+  assert.equal((await reserve(free)).error, "plus_required");
+  assert.equal((await reserve(free, "voice")).error, "voice_plan");
+  assert.equal((await db.query("select * from ai_reservations where user_id=$1", [free])).rows.length, 0);
+  // Un historial previo o un mes nuevo no conceden respuestas gratuitas.
+  await db.exec(`update billing_accounts set paid_until=now()-interval '1 hour' where user_id='${a}';
+    update ai_reservations set created_at=now()-interval '2 minutes',period='2026-01-01' where user_id='${a}'`);
+  assert.equal((await reserve()).error, "plus_required");
+  await db.exec(`update billing_accounts set paid_until=now()+interval '1 month' where user_id='${a}';
+    update billing_accounts set plan='voice',paid_until=now()-interval '1 hour' where user_id='${b}'`);
   assert.equal((await reserve(b, "voice")).error, "voice_plan");
-  for (let i = 0; i < 9; i++) { const r = await reserve(); assert.ok(r.id); await rpc("settle_ai($1,10)", [r.id]); }
-  await db.exec("update ai_reservations set created_at=now()-interval '2 minutes', period='2026-01-01' where user_id='"+a+"'");
-  assert.equal((await reserve()).error, "messages");
-  await db.exec(`insert into billing_accounts(user_id,plan,status,paid_until) values('${b}','voice','active',now()-interval '1 hour')`);
-  assert.equal((await reserve(b, "voice")).error, "voice_plan");
+  assert.equal((await reserve(b)).error, "plus_required");
   await db.exec(`update billing_accounts set paid_until=now()+interval '1 month' where user_id='${b}'`);
   const r = await reserve(b, "voice"); assert.ok(r.id);
   await rpc("settle_ai($1,300000,120)", [r.id]);
@@ -119,6 +128,7 @@ test("short calls consume one included call; pending expired usage stays charged
 });
 
 test("checkout admission is atomic and concurrent attempts cannot both claim", async () => {
+  await db.exec(`update billing_accounts set status='inactive',plan='free',paid_until=null where user_id='${a}'`);
   const results = await Promise.all([rpc<boolean>("claim_checkout($1)", [a]), rpc<boolean>("claim_checkout($1)", [a])]);
   assert.equal(results.filter(Boolean).length, 1);
 });

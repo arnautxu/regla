@@ -3,7 +3,6 @@ import { activePlan, billingAccount, billingStore, priceId, stripeClient } from 
 import { privateJson, sameOrigin } from "@/lib/server/http";
 import { appleReady } from "@/lib/server/apple-billing";
 import { PLANS } from "@/lib/plans";
-import { voiceReady } from "@/lib/server/account-voice";
 export async function GET() {
   const user = await currentUser();
   if (!user) return privateJson({ authenticated: false }, 401);
@@ -19,13 +18,13 @@ export async function GET() {
     usedMessages: data.filter(r => r.kind === "chat").length,
     usedSeconds: data.reduce((n, r) => n + r.voice_seconds, 0),
     resetsAt: plan === "free" ? null : next.toISOString(),
-    billingReady: !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET && priceId("plus") && priceId("voice") && process.env.LILAILA_APP_URL),
+    billingReady: !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET && priceId("plus") && process.env.LILAILA_APP_URL),
     hasCustomer: billingStore(account) === "stripe",
     store: plan === "free" ? null : billingStore(account),
     paidUntil: plan === "free" ? null : account?.paid_until ?? null,
     annualReady: !!priceId("plus", "anual"),
     appleReady: appleReady(),
-    voiceReady: voiceReady(),
+    voiceReady: false,
   });
 }
 

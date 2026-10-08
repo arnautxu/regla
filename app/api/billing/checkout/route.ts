@@ -3,14 +3,13 @@ import { currentUser, adminDb } from "@/lib/server/supabase";
 import { limitedJson, privateJson, sameOrigin } from "@/lib/server/http";
 import { billingAccount, billingStore, priceId, stripeClient } from "@/lib/server/billing";
 import { PLANS, PLUS_ANUAL_EUROS } from "@/lib/plans";
-import { voiceReady } from "@/lib/server/account-voice";
 export async function POST(req: Request) {
   if (!sameOrigin(req)) return privateJson({ error: "Origen no permitido." }, 403);
   const user = await currentUser();
   if (!user) return privateJson({ error: "Entra en tu cuenta." }, 401);
   const body = z.object({ plan: z.enum(["plus", "voice"]), periodo: z.enum(["mensual", "anual"]).default("mensual") }).safeParse(await limitedJson(req, 1024).catch(() => null));
   if (!body.success) return privateJson({ error: "Elige un plan." }, 400);
-  if (body.data.plan === "voice" && !voiceReady()) return privateJson({ error: "El plan con llamadas aún no está abierto." }, 503);
+  if (body.data.plan === "voice") return privateJson({ error: "Plus con voz: próximamente. Todavía no se puede comprar." }, 403);
   const { plan, periodo } = body.data;
   const price = priceId(plan, periodo);
   const cents = Math.round((periodo === "anual" ? PLUS_ANUAL_EUROS : PLANS[plan].euros) * 100);

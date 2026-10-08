@@ -22,7 +22,6 @@ import { haptic, useLilaila } from "@/lib/use-lilaila";
 import { accountMode } from "@/lib/account-mode";
 import { LimiteCharlas, Planes } from "@/components/cuenta";
 import { CUENTAS_ACTIVAS, refrescarPlan, useCuenta } from "@/lib/cuenta";
-import { PLANS } from "@/lib/plans";
 import { nombrePareja } from "@/lib/pareja";
 
 // La librería de llamadas solo se descarga cuando Lídia llama.
@@ -122,12 +121,11 @@ export default function Chat() {
     // están todos, y ella sigue hablando como si nada.
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
 
-    // Se acabaron las respuestas de prueba: la hoja de Plus en vez de
-    // un error rojo.
+    // El servidor confirma que hace falta Plus, incluso si el plan local estaba desactualizado.
     onError(e) {
-      if (CUENTAS_ACTIVAS && /"code":"messages"/.test(e.message)) {
+      if (CUENTAS_ACTIVAS && /"code":"(?:messages|plus_required)"/.test(e.message)) {
         void refrescarPlan();
-        if (plan.current === "free") setLimite(true);
+        if (plan.current === "free" || /"code":"plus_required"/.test(e.message)) setLimite(true);
       }
     },
 
@@ -169,7 +167,7 @@ export default function Chat() {
 
   function send(text: string) {
     if (!text.trim() || status !== "ready") return;
-    if (CUENTAS_ACTIVAS && cuenta?.plan === "free" && (cuenta.uso?.mensajes ?? 0) >= PLANS.free.messages) {
+    if (CUENTAS_ACTIVAS && cuenta?.plan === "free") {
       haptic(8);
       setLimite(true);
       return;

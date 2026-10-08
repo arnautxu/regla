@@ -20,6 +20,14 @@ export type Novedad = {
 
 export const NOVEDADES: Novedad[] = [
   {
+    id: "2026-10-08-d",
+    titulo: "El diario va por mi cuenta; la charla, con Plus",
+    cambios: [
+      "Tu diario sigue gratis, pero para que te conteste necesitas Plus desde el primer mensaje.",
+      "Plus con voz pone «Próximamente»: todavía no se compra, que no te voy a cobrar por una promesa.",
+    ],
+  },
+  {
     id: "2026-10-08-c",
     titulo: "Plus se viene al iPhone, guapa",
     cambios: [

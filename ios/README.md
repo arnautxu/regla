@@ -29,6 +29,10 @@ Time Sensitive Notifications solo habilita la capacidad: no registra el disposit
 
 ## Verificación sin cobros ni publicación
 
+El plan gratuito conserva el diario, con **0 respuestas de Lilita**. El cliente muestra Plus desde el primer intento y `reserve` lo rechaza antes de reservar consumo, incluso con la cuota antigua en la base de datos. La migración `20261008120000_free_diary_without_chat.sql` deja también el límite de `reserve_ai` a cero; queda preparada en el repositorio, sin aplicar a Supabase.
+
+**Plus con voz** permanece en los datos del plan, pero se muestra como «Próximamente», sin precio ni selección de compra, en iPhone y web. Tanto el cliente como el checkout web rechazan comprarlo; su disponibilidad no depende de activar las llamadas. Las suscripciones Plus y los derechos ya existentes conservan su gestión.
+
 `npm test`, `npm run lint` y `npm run build` comprueban la lógica y la web. `npx cap sync ios` sincroniza los dos complementos nativos sin subir una build. La revisión del código de acceso confirma `clientId: "app.lilaila"`, nonce y `signInWithIdToken({ provider: "apple" })`; no puede confirmar que el proveedor esté activado en el panel de Supabase.
 
 Antes de aceptar la integración en dispositivo quedan las pruebas de compra/restauración con Sandbox y la recepción del webhook, sin compras reales ni envío a revisión. Esta tarea no configura Supabase, APNs ni los secretos del servidor.

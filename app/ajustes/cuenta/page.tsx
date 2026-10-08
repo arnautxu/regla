@@ -115,7 +115,7 @@ export default function TuCuenta() {
         note={
           cuenta.uso?.renueva
             ? `Se renueva el ${fecha(cuenta.uso.renueva)}. Si llegas al tope, paro: nunca se cobra de más.`
-            : "Las respuestas de prueba no se renuevan. Tu diario sigue gratis, siempre."
+            : PLANS.free.description
         }
       >
         <Row label="Respuestas de Lilita" value={`${restantes} de ${plan.messages}`} />

@@ -14,7 +14,7 @@ if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SECRET_KEY) {
 if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PLUS_PRICE_ID) {
  try {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-  for (const [key,amount,interval] of [['STRIPE_PLUS_PRICE_ID',699,'month'],['STRIPE_PLUS_YEAR_PRICE_ID',4999,'year'],['STRIPE_VOICE_PRICE_ID',1299,'month']]) {
+  for (const [key,amount,interval] of [['STRIPE_PLUS_PRICE_ID',699,'month'],['STRIPE_PLUS_YEAR_PRICE_ID',4999,'year']]) {
    if(!process.env[key]) continue;
    const p = await stripe.prices.retrieve(process.env[key]);
    check(p.active && p.currency==='eur' && p.unit_amount===amount && p.recurring?.interval===interval && p.recurring?.interval_count===1, `${key} matches published offer`);
@@ -22,6 +22,6 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PLUS_PRICE_ID) {
  } catch { check(false, 'Stripe connection'); }
 }
 for (const key of ['REVENUECAT_SECRET_KEY','REVENUECAT_WEBHOOK_SECRET','NEXT_PUBLIC_REVENUECAT_IOS_KEY']) check(!!process.env[key], `${key} (compras de Apple)`);
-if (process.env.LILAILA_VOICE_ENABLED === 'true') for (const key of ['ELEVENLABS_API_KEY','ELEVENLABS_WEBHOOK_SECRET','STRIPE_VOICE_PRICE_ID']) check(!!process.env[key], key);
+if (process.env.LILAILA_VOICE_ENABLED === 'true') for (const key of ['ELEVENLABS_API_KEY','ELEVENLABS_WEBHOOK_SECRET']) check(!!process.env[key], key);
 console.log('Also required: SMTP delivery, privacy/consent review, signed webhook delivery, paid/refund/cancel tests, real-device voice/push, offsite backup restore. See docs/market-launch.md.');
 process.exitCode = failures ? 1 : 0;

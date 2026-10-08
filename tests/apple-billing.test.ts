@@ -10,6 +10,8 @@ const entitlement = (product_identifier: string, expires_date: string | null = e
 const subscriber = (entitlements: Record<string, ReturnType<typeof entitlement>>) => ({ subscriber: { entitlements } });
 
 test("Plus keeps the configured monthly and annual euro prices", () => {
+  assert.equal(PLANS.free.messages, 0);
+  assert.match(PLANS.free.description, /no incluye respuestas de Lilita/);
   assert.equal(PLANS.plus.euros, 6.99);
   assert.equal(PLUS_ANUAL_EUROS, 49.99);
 });

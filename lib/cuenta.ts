@@ -141,7 +141,7 @@ function cuentaDemo(metodo: Metodo, email: string): Cuenta {
     tienda: null,
     hasta: null,
     uso: { mensajes: 0, segundos: 0, renueva: null },
-    venta: { web: true, anual: true, voz: true, apple: true },
+    venta: { web: true, anual: true, voz: false, apple: true },
   };
 }
 
@@ -277,6 +277,7 @@ export class SinCompras extends Error {}
 
 /** Contrata una opción. En la web, se va a pagar y vuelve. */
 export async function contratar(id: OpcionId) {
+  if (id === "voz") throw new SinCompras("Plus con voz: próximamente. Todavía no se puede comprar.");
   const c = actual;
   if (!c) return;
   const o = OPCIONES[id];
@@ -286,7 +287,6 @@ export async function contratar(id: OpcionId) {
     return fijar({ ...c, plan: o.plan, tienda: "apple", hasta: hasta.toISOString() });
   }
   if (PAGA_CON_APPLE) {
-    if (id === "voz") throw new SinCompras("Este plan no está a la venta ahora mismo.");
     if (!comprasDisponibles() || !c.venta?.apple) throw new SinCompras("Las compras del iPhone abren muy pronto.");
     await iniciarCompras(c.id);
     const paquete = (await paquetes())[id];
@@ -295,7 +295,7 @@ export async function contratar(id: OpcionId) {
     await enviar("/api/billing/apple", undefined, "PUT");
     return refrescarPlan();
   }
-  if (!c.venta?.web || (id === "anual" && !c.venta.anual) || (id === "voz" && !c.venta.voz))
+  if (!c.venta?.web || (id === "anual" && !c.venta.anual))
     throw new SinCompras("Este plan todavía no está a la venta.");
   const { url } = await enviar("/api/billing/checkout", { plan: o.plan, periodo: o.periodo });
   if (typeof url === "string") location.assign(url);

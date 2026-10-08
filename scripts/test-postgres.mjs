@@ -25,6 +25,7 @@ try {
  for (const name of (await readdir(dir)).filter(n=>n.endsWith('.sql')).sort()) await sql(await readFile(new URL(name,dir),'utf8'));
  const users = Array.from({length:12},()=>crypto.randomUUID());
  await sql(`insert into auth.users values ${users.map(id=>`('${id}')`).join(',')}; update ai_policy set enabled=true,monthly_micro_usd=6000;`);
+ await sql(`insert into billing_accounts(user_id,plan,status,paid_until) values ${users.map(id=>`('${id}','plus','active',now()+interval '1 month')`).join(',')}`);
  // Twelve independent Postgres connections compete for the last reservation.
  const answers = await Promise.all(users.map(user=>sql(`select reserve_ai('${user}','${crypto.randomUUID()}','chat')`)));
  const results = answers.map(JSON.parse);
@@ -32,6 +33,7 @@ try {
  assert.equal(results.filter(r=>r.error==='global_budget').length,11);
  assert.equal(await sql('select sum(reserved_micro_usd) from ai_reservations'),'6000');
  console.log('PASS: 12 independent PostgreSQL connections, one reservation, no budget overspend.');
+ await sql(`update billing_accounts set plan='free',status='inactive',paid_until=null where user_id='${users[0]}'`);
  const checkouts = await Promise.all(Array.from({length:8},()=>sql(`select claim_checkout('${users[0]}')`)));
  assert.equal(checkouts.filter(x=>x==='t').length,1);
  console.log('PASS: 8 simultaneous checkout requests, exactly one admitted.');

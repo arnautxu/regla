@@ -21,7 +21,6 @@ import {
   enviarCodigo,
   preciosDeApple,
   restaurarCompras,
-  useCuenta,
   verificarCodigo,
 } from "@/lib/cuenta";
 import type { OpcionId } from "@/lib/compras";
@@ -47,8 +46,8 @@ export function queHaPasado(e: unknown): string {
 
    Antes de las tres preguntas de siempre: bienvenida, la promesa de
    privacidad y la cuenta (obligatoria en la App Store). Al acabar el
-   onboarding, una vez, los planes. Y cuando se acaban las respuestas
-   de prueba, la hoja que ofrece Plus en el momento en que lo quiere,
+   onboarding, una vez, los planes. Y al intentar hablar sin Plus,
+   la hoja que lo ofrece en el momento en que lo quiere,
    no antes.
    ═══════════════════════════════════════════════════════════════ */
 
@@ -465,10 +464,8 @@ function Codigo({
 /* ─── Planes ─────────────────────────────────────────────────── */
 
 export function Planes({ onCerrar, inicial = "anual" }: { onCerrar: () => void; inicial?: OpcionId }) {
-  const cuenta = useCuenta();
-  const conVoz = !PAGA_CON_APPLE && !!cuenta?.venta?.voz;
-  const ids: OpcionId[] = conVoz ? ["anual", "mensual", "voz"] : ["anual", "mensual"];
-  const [opcion, setOpcion] = useState<OpcionId>(inicial === "voz" && !conVoz ? "anual" : inicial);
+  const ids = ["anual", "mensual"] as const;
+  const [opcion, setOpcion] = useState<"anual" | "mensual">(inicial === "voz" ? "anual" : inicial);
   const [precios, setPrecios] = useState<Partial<Record<OpcionId, string>>>({});
   const [ocupada, setOcupada] = useState(false);
   const [aviso, setAviso] = useState("");
@@ -592,6 +589,17 @@ export function Planes({ onCerrar, inicial = "anual" }: { onCerrar: () => void; 
           );
         })}
 
+        <div
+          className="rounded-2xl px-lg py-3.5 text-left"
+          style={{ background: "var(--surface)", boxShadow: "inset 0 0 0 1.5px var(--border)" }}
+        >
+          <span className="flex items-baseline justify-between gap-2">
+            <span className="font-display text-base font-bold">{PLANS.voice.name}</span>
+            <span className="text-xs font-semibold text-faint">Próximamente</span>
+          </span>
+          <span className="mt-0.5 block text-xs text-muted">{OPCIONES.voz.detalle}</span>
+        </div>
+
         <button
           type="button"
           disabled={ocupada}
@@ -622,7 +630,7 @@ export function Planes({ onCerrar, inicial = "anual" }: { onCerrar: () => void; 
   );
 }
 
-/* ─── Hoja: se acabaron las respuestas de prueba ─────────────── */
+/* ─── Hoja: el chat requiere Plus ───────────────────────────── */
 
 export function LimiteCharlas({
   abierta,
@@ -646,7 +654,7 @@ export function LimiteCharlas({
     <dialog
       ref={ref}
       className="sheet"
-      aria-label="Respuestas de prueba agotadas"
+      aria-label="Hablar con Lilita requiere Plus"
       onClose={onCerrar}
       onPointerDown={(e) => {
         if (e.target === ref.current) ref.current?.close();
@@ -658,10 +666,10 @@ export function LimiteCharlas({
           <Lilita mood="exhausta" size={96} />
           <div className="text-balance">
             <h2 className="font-display text-lg font-bold leading-[1.15] tracking-[-0.02em]">
-              Ya me has gastado las {PLANS.free.messages} respuestas de prueba.
+              Para hablar conmigo, elige Plus.
             </h2>
             <p className="mx-auto mt-2 max-w-[300px] text-sm text-muted">
-              Tu diario sigue igual, gratis. Para seguir hablando conmigo, Plus: {PLANS.plus.messages} respuestas al mes.
+              Tu diario sigue gratis. El plan gratuito no incluye respuestas de Lilita. Con Plus tienes {PLANS.plus.messages} respuestas al mes.
             </p>
           </div>
           <button type="button" onClick={onPlus} className={BTN} style={ACCENT}>
