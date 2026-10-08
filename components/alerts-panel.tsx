@@ -21,12 +21,15 @@ export function AlertsPanel({
   settings,
   hasSensitive,
   hasMonster,
+  solo,
 }: {
   settings: Settings;
   /** Hay patrón de semana sensible (PAS) con que avisar */
   hasSensitive: boolean;
   /** Hay patrón de zona Cookie Monster */
   hasMonster: boolean;
+  /** Ajustes los separa: los avisos para ella y lo que le llega a su pareja */
+  solo?: "ciclo" | "pareja";
 }) {
   const [push, setPush] = useState<PushStatus | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -56,6 +59,7 @@ export function AlertsPanel({
 
   return (
     <>
+      {solo !== "pareja" && (
       <section>
         <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
           Avisos del ciclo
@@ -94,11 +98,12 @@ export function AlertsPanel({
           </p>
         )}
       </section>
+      )}
 
-      {pareja && (
+      {pareja && solo !== "ciclo" && (
       <section>
         <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
-          {pareja}
+          {solo === "pareja" ? "Qué le llega" : pareja}
         </h2>
         <div
           className="sticker mt-sm divide-y divide-[var(--border)] rounded-2xl px-lg"
