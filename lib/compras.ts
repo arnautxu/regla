@@ -24,7 +24,8 @@ export function comprasDisponibles(): boolean {
   return Capacitor.getPlatform() === "ios" && API_KEY.startsWith("appl_");
 }
 
-let listo: Promise<typeof import("@revenuecat/purchases-capacitor")["Purchases"]> | null = null;
+type ComprasIniciadas = { purchases: typeof import("@revenuecat/purchases-capacitor")["Purchases"] };
+let listo: Promise<ComprasIniciadas> | null = null;
 let configurado = false;
 
 /** Configura RevenueCat con el id de la cuenta, para que la
@@ -40,7 +41,10 @@ export function iniciarCompras(userId: string) {
     } else if ((await Purchases.getAppUserID()).appUserID !== userId) {
       await Purchases.logIn({ appUserID: userId });
     }
-    return Purchases;
+    // Capacitor fabrica también un método `then` en su proxy. Resolver una
+    // Promise con ese proxy la deja esperando para siempre: envolverlo evita
+    // que JavaScript lo trate como otra Promise.
+    return { purchases: Purchases };
   });
   return listo;
 }
@@ -53,17 +57,17 @@ async function rc() {
 /** Los paquetes de la oferta actual, con el precio que pone Apple en
     la moneda de cada país. */
 export async function paquetes(): Promise<Partial<Record<AppleOption, PurchasesPackage>>> {
-  const { current } = await (await rc()).getOfferings();
+  const { current } = await (await rc()).purchases.getOfferings();
   return applePackages(current?.availablePackages ?? []);
 }
 
 export async function comprar(p: PurchasesPackage) {
   if (!isAppleProduct(p.product.identifier)) throw new Error("Este producto no está disponible en el iPhone.");
-  await (await rc()).purchasePackage({ aPackage: p });
+  await (await rc()).purchases.purchasePackage({ aPackage: p });
 }
 
 export async function restaurar() {
-  await (await rc()).restorePurchases();
+  await (await rc()).purchases.restorePurchases();
 }
 
 /** Cambiar o cancelar se hace en los ajustes de Apple: es la regla. */

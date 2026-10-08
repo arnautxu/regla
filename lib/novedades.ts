@@ -20,6 +20,11 @@ export type Novedad = {
 
 export const NOVEDADES: Novedad[] = [
   {
+    id: "2026-10-08-g",
+    titulo: "El botón de Plus deja de hacerse el remolón",
+    cambios: ["En el iPhone, al elegir Plus ya no me quedo pensando eternamente antes de abrir la compra de Apple."],
+  },
+  {
     id: "2026-10-08-f",
     titulo: "Tu cuenta, tu diario y yo al otro lado",
     cambios: [

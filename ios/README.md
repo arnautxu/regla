@@ -35,6 +35,8 @@ El interruptor general `ai_policy.enabled` se activó el 2026-10-08 por indicaci
 
 **Plus con voz** permanece en los datos del plan, pero se muestra como «Próximamente», sin precio ni selección de compra, en iPhone y web. Tanto el cliente como el checkout web rechazan comprarlo; su disponibilidad no depende de activar las llamadas. Las suscripciones Plus y los derechos ya existentes conservan su gestión.
 
-`npm test`, `npm run lint` y `npm run build` comprueban la lógica y la web. `npx cap sync ios` sincroniza los dos complementos nativos sin subir una build. La revisión del código de acceso confirma `clientId: "app.lilaila"`, nonce y `signInWithIdToken({ provider: "apple" })`. El panel de Supabase confirma el proveedor Apple activado con ese identificador; queda pendiente probar el inicio de sesión en un iPhone.
+`npm test`, `npm run lint` y `npm run build` comprueban la lógica y la web. `npx cap sync ios` sincroniza los dos complementos nativos sin subir una build. El 2026-10-08 se compiló e instaló una build Debug en el iPhone con el equipo de Iratxe (`53KAF5V263`), sin subirla a Apple. El inicio de sesión nativo con Apple quedó verificado tanto en el dispositivo como en Supabase.
 
-Antes de aceptar la integración en dispositivo quedan las pruebas de compra/restauración con Sandbox y la recepción del webhook, sin compras reales ni envío a revisión. Las claves de RevenueCat están configuradas en Vercel Production. APNs sigue pendiente.
+En producción se verificaron el acceso con un código sintético, la sesión, el bloqueo gratuito con `plus_required`, la sincronización autenticada con RevenueCat y una respuesta real con un Plus temporal de prueba. Se eliminó la cuenta sintética al terminar; el consumo quedó liquidado en el registro de presupuesto. Dos eventos enviados desde el panel de RevenueCat recibieron `200 {"received":true}`, incluido el enviado después de activar las cuentas.
+
+Antes de aceptar la integración en dispositivo quedan las pruebas de compra/restauración con Sandbox, sin compras reales ni envío a revisión. Las claves de RevenueCat están configuradas en Vercel Production. APNs sigue pendiente.

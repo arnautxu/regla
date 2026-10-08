@@ -5,6 +5,7 @@ import ts from "typescript";
 import { z } from "zod";
 import { PLANS, PLUS_ANUAL_EUROS } from "../lib/plans";
 import { NextRequest, NextResponse } from "next/server";
+import * as appleProducts from "../lib/apple-products";
 
 /** Ejecuta los módulos reales con servicios dobles: ninguna petición sale
  * hacia Supabase, Stripe o RevenueCat. Cada carga tiene estado aislado. */
@@ -27,6 +28,32 @@ const http = {
   sameOrigin: () => true,
   limitedJson: (req: Request) => req.json(),
 };
+
+test("RevenueCat initialization resolves despite Capacitor exposing a then method", async () => {
+  const calls: string[] = [];
+  let user = "";
+  const sdk = new Proxy({
+    configure: async ({ appUserID }: { appUserID: string }) => { user = appUserID; calls.push("configure"); },
+    getAppUserID: async () => ({ appUserID: user }),
+    logIn: async ({ appUserID }: { appUserID: string }) => { user = appUserID; calls.push(`login:${user}`); },
+    getOfferings: async () => { calls.push("offerings"); return { current: { availablePackages: [] } }; },
+  }, { get: (target, prop) => prop === "then" ? () => { calls.push("unexpected then"); } : Reflect.get(target, prop) });
+  const compras = isolatedModule<typeof import("../lib/compras")>("../lib/compras.ts", {
+    "@capacitor/core": { Capacitor: { getPlatform: () => "ios" } },
+    "@revenuecat/purchases-capacitor": { Purchases: sdk }, "./apple-products": appleProducts,
+  }, { process: { env: { NEXT_PUBLIC_REVENUECAT_IOS_KEY: "appl_test" } } });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      (async () => {
+        await Promise.all([compras.iniciarCompras("first"), compras.iniciarCompras("second")]);
+        assert.deepEqual(await compras.paquetes(), { mensual: undefined, anual: undefined });
+      })(),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("RevenueCat initialization never resolved")), 1000); }),
+    ]);
+  } finally { clearTimeout(timer); }
+  assert.deepEqual(calls, ["configure", "login:second", "offerings"]);
+});
 
 test("Apple webhook reaches its authentication without Origin while account writes remain protected", () => {
   const { proxy } = isolatedModule<typeof import("../proxy")>("../proxy.ts", {
