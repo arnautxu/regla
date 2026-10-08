@@ -48,7 +48,7 @@ export const OPCIONES: Record<
     nombre: "Plus anual",
     precio: euros(PLUS_ANUAL_EUROS),
     cada: "año",
-    detalle: `${euros(Math.floor((PLUS_ANUAL_EUROS / 12) * 100) / 100)} al mes · te ahorras un 40 %`,
+    detalle: `${euros(Math.round((PLUS_ANUAL_EUROS / 12) * 100) / 100)} al mes · te ahorras un 40 %`,
   },
   mensual: {
     plan: "plus",
