@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { CUENTAS_ACTIVAS, useCuenta } from "@/lib/cuenta";
+import { useState } from "react";
+import { CUENTAS_ACTIVAS, salir, useCuenta } from "@/lib/cuenta";
+import { despedirse } from "@/lib/despedirse";
 import { PLANS } from "@/lib/plans";
 import { Lilita } from "@/components/lilita";
 import { FilaIndice, HUMOR, Segmentos } from "@/components/ajustes-ui";
@@ -36,6 +38,7 @@ function resumenAvisos(s: Settings) {
 export default function Ajustes() {
   const { ready, settings } = useLilaila();
   const cuenta = useCuenta();
+  const [saliendo, setSaliendo] = useState(false);
   if (!ready) return null;
 
   const menor = esMenor(settings);
@@ -110,6 +113,33 @@ export default function Ajustes() {
           />
         </div>
       </section>
+
+      {CUENTAS_ACTIVAS && cuenta && (
+        <Tarjeta>
+          <button
+            type="button"
+            disabled={saliendo}
+            onClick={() => {
+              if (!window.confirm("¿Cierras sesión en este móvil? Tu diario sigue en tu cuenta.")) return;
+              haptic(10);
+              setSaliendo(true);
+              void despedirse(salir).catch(() => setSaliendo(false));
+            }}
+            className="flex min-h-[58px] w-full items-center gap-3 py-2.5 text-left disabled:opacity-40"
+          >
+            <span
+              aria-hidden="true"
+              className="grid size-9 shrink-0 place-items-center rounded-xl text-lg"
+              style={{ background: "var(--accent-soft)" }}
+            >
+              👋
+            </span>
+            <span className="flex-1 text-base font-semibold text-accent">
+              {saliendo ? "Cerrando sesión…" : "Cerrar sesión"}
+            </span>
+          </button>
+        </Tarjeta>
+      )}
 
       <p className="text-xs leading-relaxed text-faint">
         Lilaila no es un dispositivo médico ni un método anticonceptivo.
