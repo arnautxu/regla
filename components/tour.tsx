@@ -11,9 +11,9 @@ import { cerrarTour } from "@/lib/tour";
 /* ═══════════════════════════════════════════════════════════════
    TOUR
 
-   Tres tarjetas a pantalla completa entre el onboarding y la primera
-   vez en Hoy: el anillo, cómo se apunta y qué saca Lilita de todo
-   eso. Se pasa con el botón o deslizando, y se puede saltar entero.
+   Cuatro tarjetas a pantalla completa entre el onboarding y la
+   primera vez en Hoy: el anillo, cómo se apunta, los botones de un
+   toque y qué saca Lilita de todo eso. Se pasa con el botón o deslizando, y se puede saltar entero.
    ═══════════════════════════════════════════════════════════════ */
 
 /* Los mismos colores que el anillo de Hoy, sin depender de la fase
@@ -45,10 +45,17 @@ export function Tour({ pareja }: { pareja: string | null }) {
     },
     {
       mood: "flirty",
-      titulo: "Un botón y me lo cuentas",
+      titulo: "Me lo cuentas en un momento",
+      texto:
+        "«Apuntar hoy» te hace una pregunta cada vez: cómo va el día, qué te duele, si has manchado. Treinta segundos y te dejo en paz.",
+      dibujo: <Apuntar />,
+    },
+    {
+      mood: "cuidando",
+      titulo: "Para los días chungos",
       texto: pareja
-        ? `«Apuntar hoy» te hace una pregunta cada vez. Y si lloras o ${pareja} la lía, un toque y listo.`
-        : "«Apuntar hoy» te hace una pregunta cada vez. Y si lloras, un toque y listo.",
+        ? "Dos botones de un toque, sin rellenar nada. Luego te digo si caen siempre en los mismos días del ciclo."
+        : "Un botón de un toque, sin rellenar nada. Luego te digo si los llantos caen siempre en los mismos días del ciclo.",
       dibujo: <Botones pareja={pareja} />,
     },
     {
@@ -174,27 +181,69 @@ function Anillo() {
   );
 }
 
-function Botones({ pareja }: { pareja: string | null }) {
+function Apuntar() {
   return (
-    <div className="flex w-[230px] flex-col gap-sm" aria-hidden="true">
-      <div className="flex gap-sm">
-        <div className="sticker-sm flex flex-1 flex-col items-center rounded-2xl py-sm text-sm font-semibold" style={{ background: "var(--surface)" }}>
-          <span className="text-xl">💧</span>
-          He llorado
+    <div className="flex w-[240px] flex-col gap-sm" aria-hidden="true">
+      <div className="sticker rounded-[20px] px-md py-md" style={{ background: "var(--surface)" }}>
+        <p className="font-display text-base font-bold">¿Cómo va el día?</p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {["Bien", "Regular", "De mierda"].map((o, j) => (
+            <span
+              key={o}
+              className="rounded-full px-3 py-1.5 text-xs font-semibold"
+              style={
+                j === 0
+                  ? { background: "var(--accent)", color: "var(--on-accent)" }
+                  : { boxShadow: "inset 0 0 0 1.5px var(--border-strong)" }
+              }
+            >
+              {o}
+            </span>
+          ))}
         </div>
-        {pareja && (
-          <div
-            className="sticker-sm flex flex-1 flex-col items-center rounded-2xl py-sm text-sm font-semibold"
-            style={{ background: "var(--surface)", color: "oklch(50% 0.12 240)" }}
-          >
-            <span className="text-xl">🍪</span>
-            Cookie
-          </div>
-        )}
       </div>
       <div className="rounded-full py-3 text-center font-display text-base font-bold" style={{ background: "var(--accent)", color: "var(--on-accent)" }}>
         Apuntar hoy
       </div>
+    </div>
+  );
+}
+
+/* Qué hace cada botón, dicho al lado del botón: «Cookie Monster» no
+   significa nada para quien no es de casa, y «He llorado» a secas no
+   dice que es secreto. */
+function Botones({ pareja }: { pareja: string | null }) {
+  const filas = [
+    {
+      emoji: "💧",
+      nombre: "He llorado",
+      color: "var(--fg)",
+      que: pareja ? `Lo apunto en secreto. No se entera nadie, ni ${pareja}.` : "Lo apunto en secreto. No se entera nadie.",
+    },
+    ...(pareja
+      ? [
+          {
+            emoji: "🍪",
+            nombre: "Cookie Monster",
+            color: "oklch(50% 0.12 240)",
+            que: `¿${pareja} te saca de quicio? Le llega un aviso al móvil.`,
+          },
+        ]
+      : []),
+  ];
+  return (
+    <div className="flex w-[290px] flex-col gap-sm" aria-hidden="true">
+      {filas.map((f) => (
+        <div key={f.nombre} className="sticker-sm flex items-center gap-md rounded-2xl px-md py-sm" style={{ background: "var(--surface)" }}>
+          <span className="text-2xl">{f.emoji}</span>
+          <span className="min-w-0 text-left">
+            <span className="block text-sm font-bold" style={{ color: f.color }}>
+              {f.nombre}
+            </span>
+            <span className="block text-xs leading-snug text-muted">{f.que}</span>
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

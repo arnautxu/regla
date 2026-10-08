@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react";
 /* ═══════════════════════════════════════════════════════════════
    TOUR DE BIENVENIDA
 
-   Tres tarjetas justo después del onboarding, y nunca más. Lo marca
+   Cuatro tarjetas justo después del onboarding, y nunca más. Lo marca
    el propio onboarding al terminar: quien ya usaba la app (Lídia,
    con meses de datos) nunca pasa por ahí, así que no le sale.
    ═══════════════════════════════════════════════════════════════ */
