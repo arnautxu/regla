@@ -1,5 +1,7 @@
 import { google } from "@ai-sdk/google";
 import type { LilitaContext } from "../ai-context";
+import { accountMode } from "../account-mode";
+import { lineaPareja, paraLaUsuaria } from "./prompt-persona";
 
 /* ═══════════════════════════════════════════════════════════════
    LA BIBLIA DE LILITA, EN FORMA DE INSTRUCCIONES
@@ -38,7 +40,7 @@ LÍMITES QUE NO SE CRUZAN
 `.trim();
 
 function contexto(c: LilitaContext): string {
-  const l: string[] = [];
+  const l: string[] = [lineaPareja(c.pareja)];
   if (c.fase) l.push(`Fase actual: ${c.fase}`);
   if (c.diaDelCiclo) l.push(`Día del ciclo: ${c.diaDelCiclo}`);
   if (c.sangrando && c.diaDeRegla) l.push(`Está sangrando, día ${c.diaDeRegla} de regla`);
@@ -175,7 +177,7 @@ export function chatInstructions(
   c: LilitaContext,
   { tools = true, hablada = false } = {},
 ): string {
-  return [
+  const prompt = [
     PERSONAJE,
     tono(c),
     hablada ? voz(c) : "",
@@ -200,6 +202,8 @@ le pasa. Tienes sus datos delante.
   ]
     .filter(Boolean)
     .join("\n\n");
+  // Con cuentas, cada persona es «la usuaria»; sin cuentas, es Lídia.
+  return paraLaUsuaria(prompt, c.pareja, accountMode() ? "la usuaria" : "Lídia");
 }
 
 /* La llamada en directo. Mismo personaje y mismos datos que el chat,

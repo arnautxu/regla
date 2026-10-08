@@ -4,7 +4,6 @@ import { currentUser } from "./supabase";
 import { limitedJson, privateJson, sameOrigin } from "./http";
 import { chatSchema } from "./chat-input";
 import { chatInstructions } from "./lilita-prompt";
-import { paraLaUsuaria } from "./prompt-persona";
 import { reserve, settle } from "./ai-budget";
 import { CHAT_MODEL, MAX_INPUT_BYTES, MAX_OUTPUT_TOKENS, textCost } from "@/lib/ai-limits";
 
@@ -17,7 +16,7 @@ export async function accountChat(req: Request) {
   if (!parsed.success) return privateJson({ error: "El mensaje es demasiado largo o no tiene un formato válido." }, 400);
   const messages = parsed.data.messages.map(m => ({ role: m.role, content: m.parts.map(p => p.text).join("\n") }));
   if (messages.at(-1)?.role !== "user") return privateJson({ error: "Escribe un mensaje para continuar." }, 400);
-  const instructions = paraLaUsuaria(chatInstructions(parsed.data.context, { tools: false }), parsed.data.context.pareja);
+  const instructions = chatInstructions(parsed.data.context, { tools: false });
   // UTF-8 bytes conservatively bound tokenizer input; reserve includes protocol overhead.
   if (Buffer.byteLength(JSON.stringify({ instructions, messages }), "utf8") > MAX_INPUT_BYTES) {
     return privateJson({ error: "Esta conversación ocupa demasiado. Empieza un chat nuevo o acorta el mensaje." }, 400);
