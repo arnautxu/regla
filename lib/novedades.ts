@@ -20,6 +20,11 @@ export type Novedad = {
 
 export const NOVEDADES: Novedad[] = [
   {
+    id: "2026-10-08-j",
+    titulo: "Ya te puedes ir cuando quieras",
+    cambios: ["Cerrar sesión está abajo del todo en Ajustes, sin tener que buscarlo dentro de tu cuenta."],
+  },
+  {
     id: "2026-10-08-i",
     titulo: "Ahora tu historial habla, y bastante",
     cambios: [
