@@ -22,17 +22,19 @@ Time Sensitive Notifications solo habilita la capacidad: no registra el disposit
   - Tras comprar o restaurar, la app llama a `PUT /api/billing/apple` con la sesión de Supabase. El webhook llama a `POST` en la misma ruta. Ambos consultan el estado a RevenueCat, sin fiarse del plan que diga el móvil o el aviso. Una suscripción web activa conserva la prioridad.
 - **Supabase** (proyecto «Lilaila»), en Authentication:
   - Email: la plantilla del correo tiene que llevar `{{ .Token }}` (el código de 6 cifras), no solo el enlace.
-  - Apple: activar el proveedor con el bundle id `app.lilaila` (y el Services ID si se quiere en la web).
+  - Apple: proveedor activado y configuración guardada verificada el 2026-10-08, con `app.lilaila` para el acceso nativo del iPhone. El acceso OAuth desde la web requiere configurar por separado un Services ID y su secreto.
   - Google: activar con un client ID de Google (solo web por ahora).
   - URL de redirección: el dominio de producción.
   - Un SMTP propio (Resend, Postmark…): el de Supabase solo manda unos pocos correos por hora.
 
 ## Verificación sin cobros ni publicación
 
-El plan gratuito conserva el diario, con **0 respuestas de Lilita**. El cliente muestra Plus desde el primer intento y `reserve` lo rechaza antes de reservar consumo, incluso con la cuota antigua en la base de datos. La migración `20261008120000_free_diary_without_chat.sql` deja también el límite de `reserve_ai` a cero; queda preparada en el repositorio, sin aplicar a Supabase.
+El plan gratuito conserva el diario, con **0 respuestas de Lilita**. El cliente muestra Plus desde el primer intento y `reserve` lo rechaza antes de reservar consumo. La migración `20261008113950_free_diary_without_chat.sql` está aplicada en Supabase (proyecto «Lilaila») y deja también el límite de `reserve_ai` a cero. El 2026-10-08 se comprobó que devuelve `plus_required` sin crear reservas, mediante una prueba transaccional revertida, y que solo `service_role` conserva permiso para ejecutarla.
+
+El interruptor general `ai_policy.enabled` permanece en `false`, como estaba antes del despliegue: las respuestas de Lilita siguen desactivadas también para cuentas de pago.
 
 **Plus con voz** permanece en los datos del plan, pero se muestra como «Próximamente», sin precio ni selección de compra, en iPhone y web. Tanto el cliente como el checkout web rechazan comprarlo; su disponibilidad no depende de activar las llamadas. Las suscripciones Plus y los derechos ya existentes conservan su gestión.
 
-`npm test`, `npm run lint` y `npm run build` comprueban la lógica y la web. `npx cap sync ios` sincroniza los dos complementos nativos sin subir una build. La revisión del código de acceso confirma `clientId: "app.lilaila"`, nonce y `signInWithIdToken({ provider: "apple" })`; no puede confirmar que el proveedor esté activado en el panel de Supabase.
+`npm test`, `npm run lint` y `npm run build` comprueban la lógica y la web. `npx cap sync ios` sincroniza los dos complementos nativos sin subir una build. La revisión del código de acceso confirma `clientId: "app.lilaila"`, nonce y `signInWithIdToken({ provider: "apple" })`. El panel de Supabase confirma el proveedor Apple activado con ese identificador; queda pendiente probar el inicio de sesión en un iPhone.
 
-Antes de aceptar la integración en dispositivo quedan las pruebas de compra/restauración con Sandbox y la recepción del webhook, sin compras reales ni envío a revisión. Esta tarea no configura Supabase, APNs ni los secretos del servidor.
+Antes de aceptar la integración en dispositivo quedan las pruebas de compra/restauración con Sandbox y la recepción del webhook, sin compras reales ni envío a revisión. APNs y los secretos del servidor no se han configurado en esta tarea.
