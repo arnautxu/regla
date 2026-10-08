@@ -20,6 +20,13 @@ export type Novedad = {
 
 export const NOVEDADES: Novedad[] = [
   {
+    id: "2026-10-08-c",
+    titulo: "Ya me sé el nombre de tu pareja, prometido",
+    cambios: [
+      "Si en Ajustes le has puesto nombre a tu pareja, ahora lo sé de verdad y no me invento a otro.",
+    ],
+  },
+  {
     id: "2026-10-08-b",
     titulo: "Tu pareja ahora se configura, como un mueble de IKEA",
     cambios: [
