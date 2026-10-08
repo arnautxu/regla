@@ -9,7 +9,6 @@ import type { FaceMood } from "@/components/lilita-face";
 import { episodeReport } from "@/lib/episodes";
 import {
   FILTERS,
-  FILTER_LABEL,
   conclusion,
   crossings,
   type Filter,
@@ -22,6 +21,10 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import type { CycleSummary } from "@/lib/history";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
+import { aciertos, cicloActual, hallazgos, mesTipo } from "@/lib/analisis";
+import { AnalisisPlus, Aciertos, Conclusiones, EsteCiclo, MesTipo } from "@/components/analisis";
+import { Planes } from "@/components/cuenta";
+import { CUENTAS_ACTIVAS, useCuenta } from "@/lib/cuenta";
 
 export default function Historial() {
   const { ready, settings, cycles, dateKey, state } = useLilaila();
@@ -60,6 +63,28 @@ export default function Historial() {
     () => conclusion(on, insights, crossings(on, days ?? [], cycles, episodes), episodes),
     [on, insights, days, cycles, episodes],
   );
+  // Lo de leer la regla es de Plus. La app de Lídia, sin cuentas, lo
+  // tiene todo; con cuentas, mientras no se sabe el plan no se pinta
+  // nada, para no enseñar el candado a quien sí paga.
+  const cuenta = useCuenta();
+  const conPlus = !CUENTAS_ACTIVAS || (!!cuenta && cuenta.plan !== "free");
+  const sinSaber = CUENTAS_ACTIVAS && cuenta === undefined;
+  const [planes, setPlanes] = useState(false);
+
+  const analisis = useMemo(() => {
+    const all = days ?? [];
+    const mt = mesTipo(cycles, all, settings, episodes);
+    return {
+      mt,
+      ahora: cicloActual(summaries, all, cycles, settings, dateKey, mt.marcas),
+      acierto: aciertos(cycles, settings),
+    };
+  }, [cycles, days, settings, episodes, summaries, dateKey]);
+  const todo = useMemo(
+    () => hallazgos(on, insights, crossings(on, days ?? [], cycles, episodes), episodes),
+    [on, insights, days, cycles, episodes],
+  );
+
   const face: FaceMood = said.aviso
     ? "cuidando"
     : said.over.includes("monstruo")
@@ -188,6 +213,18 @@ export default function Historial() {
             )
           )}
 
+          {sinSaber ? null : conPlus ? (
+            <>
+              {analisis.ahora && <EsteCiclo c={analisis.ahora} hoy={fromKey(dateKey)} />}
+              <MesTipo length={analisis.mt.length} marcas={analisis.mt.marcas} hoy={analisis.ahora?.dia} />
+            </>
+          ) : (
+            <AnalisisPlus
+              onPlus={() => setPlanes(true)}
+              fondo={<MesTipo length={analisis.mt.length} marcas={analisis.mt.marcas} hoy={analisis.ahora?.dia} />}
+            />
+          )}
+
           {/* Filtros: qué se pinta en los anillos y de qué se concluye */}
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Qué enseñar">
             {FILTERS.map((f) => {
@@ -267,29 +304,23 @@ export default function Historial() {
             )}
           </section>
 
-          {/* La conclusión: una, y cambia con los filtros */}
-          <article
-            aria-live="polite"
-            className="sticker rounded-[20px] px-md py-md"
-            style={{ background: said.aviso ? "var(--accent-soft)" : "var(--surface)" }}
-          >
-            <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
-              {said.aviso
-                ? "Coméntalo con un médico"
-                : said.over.length
-                  ? said.over.map((f) => FILTER_LABEL[f]).join(" + ")
-                  : "Conclusión"}
-            </p>
-            <h2 className="mt-1 font-display text-lg font-bold leading-tight tracking-[-0.015em]">
-              {said.title}
-            </h2>
-            <p className="mt-1 text-sm leading-relaxed text-muted">{said.detail}</p>
-            {said.basis > 0 && (
-              <p className="mt-1 text-xs text-faint">
-                Sobre {said.basis} {said.basis === 1 ? "registro" : "registros"}
-              </p>
-            )}
-          </article>
+          {/* Las conclusiones: todas las que dan los filtros, una cada vez */}
+          {conPlus && !sinSaber && (
+            <>
+              {todo.length > 0 ? (
+                <Conclusiones key={[...on].sort().join()} items={todo} />
+              ) : (
+                <article className="sticker rounded-[20px] px-md py-md" style={{ background: "var(--surface)" }}>
+                  <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">Conclusión</p>
+                  <h2 className="mt-1 font-display text-lg font-bold leading-tight tracking-[-0.015em]">
+                    {said.title}
+                  </h2>
+                  <p className="mt-1 text-sm leading-relaxed text-muted">{said.detail}</p>
+                </article>
+              )}
+              {analisis.acierto.lista.length >= 2 && <Aciertos {...analisis.acierto} />}
+            </>
+          )}
 
           <Link
             href="/resumen"
@@ -310,6 +341,7 @@ export default function Historial() {
           </p>
         </>
       )}
+      {planes && <Planes inicial="anual" onCerrar={() => setPlanes(false)} />}
     </div>
   );
 }
