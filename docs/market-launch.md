@@ -36,8 +36,8 @@ El cos de cada dia és JSONB per conservar tots els camps del producte actual; u
 | Pla | Preu mensual proposat | Ús inclòs | Reserva màxima d'IA segons tarifes configurades |
 | --- | ---: | --- | ---: |
 | Gratis | 0 € | Diari local/privat i 10 respostes de prova no renovables | 0,06 USD per compte |
-| Plus | 9,99 € | 300 respostes al mes | 1,80 USD/mes |
-| Plus amb veu | 14,99 € | 300 respostes + 10 trucades de fins a 2 minuts | 4,80 USD/mes |
+| Plus | 6,99 € (o 49,99 €/any) | 300 respostes al mes | 1,80 USD/mes |
+| Plus amb veu | 12,99 € | 300 respostes + 10 trucades de fins a 2 minuts | 4,80 USD/mes |
 
 No es factura cap petició a l'usuari ni hi ha sobrecostos automàtics. Una trucada consumeix una de les deu incloses encara que acabi abans de dos minuts. Els límits d'ús mensual es renoven el dia 1 a les 00:00 UTC; la subscripció es cobra en el seu aniversari. És una decisió explícita d'aquesta primera versió, mostrada a Ajustes.
 
@@ -62,7 +62,7 @@ La veu necessita una prova facturada i conciliació de tarifa/crèdits abans d'a
 
 1. Desa claus en `.env.local` (ignorat per Git) i a l'entorn del desplegament. Copia els noms de `.env.example`. La clau pública és `sb_publishable_...`; la clau de servidor és `sb_secret_...`. Cap clau privada duu `NEXT_PUBLIC_`.
 2. Configura Supabase Auth: URL del lloc i redirect exacte `/auth/callback`, proveïdor de correu propi i plantilles. El flux accepta l'enllaç PKCE al mateix navegador i codis numèrics si la plantilla mostra `{{ .Token }}`. Verifica lliurament amb dues adreces reals i els límits antiabús; el correu de prova de Supabase no és un servei de producció.
-3. Configura Stripe en **test primer**: dos preus recurrents mensuals en EUR (999 i 1499 cèntims), Portal amb cancel·lació habilitada i sense canvis a productes aliens. La ruta valida preu/import/periodicitat. No s'activa Stripe Tax sense configurar-ne abans les obligacions fiscals. Decideix explícitament si els preus mostrats inclouen impostos abans de vendre.
+3. Configura Stripe en **test primer**: tres preus recurrents en EUR (Plus 699/mes, Plus 4999/any i veu 1299/mes), Portal amb cancel·lació habilitada i sense canvis a productes aliens. La ruta valida preu/import/periodicitat. No s'activa Stripe Tax sense configurar-ne abans les obligacions fiscals. Decideix explícitament si els preus mostrats inclouen impostos abans de vendre.
 4. Webhook Stripe a `/api/billing/webhook`: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`, `charge.refunded`, `charge.dispute.created`. Desa la clau de signatura al servidor. El retorn de Checkout no dóna accés: ho fa un webhook amb factura pagada i propietat validada.
 5. Webhook ElevenLabs `post_call_transcription` a `/api/voz/webhook`, amb signatura. La clau necessita Agents; confirma que l'agent privat hereta el webhook. `LILAILA_VOICE_ENABLED=false` fins a provar-ne la durada, el reús del token i la factura. La neteja només elimina els agents creats per aquesta app i vinculats al registre.
 6. Activa `CRON_SECRET`, claus VAPID i el calendari de `vercel.json`. Els crons d'avisos inicials segueixen Europe/Madrid i les hores actuals; no es garanteixen horaris arbitraris ni qualsevol zona. Per molts usuaris, passa'ls a lots en cua abans d'excedir el temps màxim de la funció.

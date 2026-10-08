@@ -20,6 +20,9 @@ import { addMemory, db, removeMemory } from "@/lib/db";
 import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
 import { accountMode } from "@/lib/account-mode";
+import { LimiteCharlas, Planes } from "@/components/cuenta";
+import { CUENTAS_ACTIVAS, refrescarPlan, useCuenta } from "@/lib/cuenta";
+import { PLANS } from "@/lib/plans";
 
 // La librería de llamadas solo se descarga cuando Lídia llama.
 const LiveCall = dynamic(
@@ -59,6 +62,14 @@ export default function Chat() {
   const days = useLiveQuery(() => db.days.toArray(), [], []);
   const [input, setInput] = useState("");
   const [calling, setCalling] = useState(false);
+  const cuenta = useCuenta();
+  const [limite, setLimite] = useState(false);
+  const [planes, setPlanes] = useState<null | "anual" | "voz">(null);
+  // El onError de useChat se queda con el primer render: el plan, por ref.
+  const plan = useRef(cuenta?.plan);
+  useEffect(() => {
+    plan.current = cuenta?.plan;
+  }, [cuenta?.plan]);
   const bottom = useRef<HTMLDivElement>(null);
   // Lilita solo habla en las llamadas: el teléfono sale si el
   // servidor tiene ElevenLabs.
@@ -109,6 +120,15 @@ export default function Chat() {
     // están todos, y ella sigue hablando como si nada.
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
 
+    // Se acabaron las respuestas de prueba: la hoja de Plus en vez de
+    // un error rojo.
+    onError(e) {
+      if (CUENTAS_ACTIVAS && /"code":"messages"/.test(e.message)) {
+        void refrescarPlan();
+        if (plan.current === "free") setLimite(true);
+      }
+    },
+
     async onToolCall({ toolCall }) {
       // El guardia de `dynamic` primero: sin él, TypeScript no sabe
       // estrechar `toolName` a los dos nombres que conocemos.
@@ -147,6 +167,11 @@ export default function Chat() {
 
   function send(text: string) {
     if (!text.trim() || status !== "ready") return;
+    if (CUENTAS_ACTIVAS && cuenta?.plan === "free" && (cuenta.uso?.mensajes ?? 0) >= PLANS.free.messages) {
+      haptic(8);
+      setLimite(true);
+      return;
+    }
     haptic(10);
     void sendMessage({ text });
     setInput("");
@@ -178,7 +203,9 @@ export default function Chat() {
             aria-label="Llamar a Lilita"
             onClick={() => {
               haptic(10);
-              setCalling(true);
+              // Las llamadas son de Plus con voz.
+              if (CUENTAS_ACTIVAS && cuenta?.plan !== "voice") setPlanes("voz");
+              else setCalling(true);
             }}
             className="flex size-10 items-center justify-center rounded-full transition-transform active:scale-95"
             style={{
@@ -193,6 +220,15 @@ export default function Chat() {
           </button>
         )}
       </header>
+      <LimiteCharlas
+        abierta={limite}
+        onCerrar={() => setLimite(false)}
+        onPlus={() => {
+          setLimite(false);
+          setPlanes("anual");
+        }}
+      />
+      {planes && <Planes inicial={planes} onCerrar={() => setPlanes(null)} />}
       {calling && (
         <LiveCall context={context} mood={line.mood} onClose={() => setCalling(false)} />
       )}

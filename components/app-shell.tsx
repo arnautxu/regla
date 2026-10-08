@@ -11,7 +11,8 @@ import { Onboarding } from "./onboarding";
 import { Novedades } from "./novedades";
 import { marcarNovedadesVistas } from "@/lib/novedades";
 import { AccountGate } from "./account-gate";
-import { accountMode } from "@/lib/account-mode";
+import { CUENTAS_ACTIVAS, marcarPlanesVistos, planesVistos, useCuenta } from "@/lib/cuenta";
+import { Planes } from "./cuenta";
 import { Fragment } from "react";
 import { PinGate } from "./pin-gate";
 import { CookieMonsterGate } from "./cookie-monster-gate";
@@ -29,7 +30,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 }
 
 function DiaryShell({ children }: { children: React.ReactNode }) {
-  const Gate = accountMode() ? Fragment : PinGate;
+  const Gate = CUENTAS_ACTIVAS ? Fragment : PinGate;
   const lilaila = useLilaila();
   const { ready, state, settings, cycles } = lilaila;
   const pathname = usePathname();
@@ -52,6 +53,11 @@ function DiaryShell({ children }: { children: React.ReactNode }) {
   // próxima vez que abra la app. Además, se sella solo la primera vez
   // que lo detecta, para no depender de este cálculo para siempre.
   const needsOnboarding = ready && !settings.onboarded && cycles.length === 0;
+
+  // Con cuentas: al acabar el onboarding se enseñan los planes una
+  // vez, en lugar de la hoja de novedades.
+  const cuenta = useCuenta();
+  const ofrecerPlanes = !!cuenta && cuenta.plan === "free" && !planesVistos(cuenta);
 
   useEffect(() => {
     if (ready && !settings.onboarded && cycles.length > 0) {
@@ -135,7 +141,8 @@ function DiaryShell({ children }: { children: React.ReactNode }) {
                 {children}
               </motion.main>
               {!fullscreen && <TabBar />}
-              {ready && <Novedades />}
+              {ready && !ofrecerPlanes && <Novedades />}
+              {ready && ofrecerPlanes && <Planes onCerrar={marcarPlanesVistos} />}
             </>
           )}
           <ServiceWorker />

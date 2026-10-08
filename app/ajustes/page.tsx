@@ -1,6 +1,8 @@
 "use client";
 
-import { AccountPanel } from "@/components/account-panel";
+import Link from "next/link";
+import { CUENTAS_ACTIVAS, useCuenta } from "@/lib/cuenta";
+import { PLANS } from "@/lib/plans";
 import { Lilita } from "@/components/lilita";
 import { BackupPanel } from "@/components/backup-panel";
 import { MemoryPanel } from "@/components/memory-panel";
@@ -32,6 +34,7 @@ const TEMAS: { value: Settings["theme"]; label: string }[] = [
 
 export default function Ajustes() {
   const { ready, settings, windows } = useLilaila();
+  const cuenta = useCuenta();
   if (!ready) return null;
 
   return (
@@ -42,6 +45,22 @@ export default function Ajustes() {
           Ajustes
         </h1>
       </div>
+
+      {CUENTAS_ACTIVAS && cuenta && (
+        <Link
+          href="/ajustes/cuenta"
+          className="sticker flex min-h-[64px] items-center justify-between gap-md rounded-2xl px-lg py-3"
+          style={{ background: "var(--surface)" }}
+        >
+          <span className="min-w-0">
+            <span className="block text-base font-semibold">Tu cuenta</span>
+            <span className="mt-0.5 block truncate text-xs text-faint">
+              {cuenta.email} · {cuenta.plan === "free" ? "Sin Plus" : PLANS[cuenta.plan].name}
+            </span>
+          </span>
+          <span className="text-faint">›</span>
+        </Link>
+      )}
 
       <Group
         title="El humor de Lilita"
@@ -60,8 +79,6 @@ export default function Ajustes() {
           />
         ))}
       </Group>
-
-      <AccountPanel />
 
       <StepsPanel settings={settings} />
 

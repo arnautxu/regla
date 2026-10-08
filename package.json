@@ -16,8 +16,12 @@
   "dependencies": {
     "@ai-sdk/google": "^4.0.31",
     "@ai-sdk/react": "^4.0.51",
+    "@capacitor-community/apple-sign-in": "^7.1.0",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/ios": "^8.5.3",
     "@elevenlabs/elevenlabs-js": "2.71.0",
     "@elevenlabs/react": "^1.17.0",
+    "@revenuecat/purchases-capacitor": "^13.7.1",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.117.3",
     "@vercel/blob": "^2.6.1",
@@ -36,6 +40,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
     "@electric-sql/pglite": "0.5.8",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",

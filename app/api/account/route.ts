@@ -1,6 +1,7 @@
 import { currentUser, adminDb } from "@/lib/server/supabase";
-import { activePlan, billingAccount, priceId } from "@/lib/server/billing";
-import { privateJson } from "@/lib/server/http";
+import { activePlan, billingAccount, billingStore, priceId, stripeClient } from "@/lib/server/billing";
+import { privateJson, sameOrigin } from "@/lib/server/http";
+import { appleReady } from "@/lib/server/apple-billing";
 import { PLANS } from "@/lib/plans";
 import { voiceReady } from "@/lib/server/account-voice";
 export async function GET() {
@@ -19,7 +20,36 @@ export async function GET() {
     usedSeconds: data.reduce((n, r) => n + r.voice_seconds, 0),
     resetsAt: plan === "free" ? null : next.toISOString(),
     billingReady: !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET && priceId("plus") && priceId("voice") && process.env.LILAILA_APP_URL),
-    hasCustomer: !!account?.customer_id,
+    hasCustomer: billingStore(account) === "stripe",
+    store: plan === "free" ? null : billingStore(account),
+    paidUntil: plan === "free" ? null : account?.paid_until ?? null,
+    annualReady: !!priceId("plus", "anual"),
+    appleReady: appleReady(),
     voiceReady: voiceReady(),
   });
+}
+
+/**
+ * Borrar la cuenta entera, como pide Apple: diario, pareja, avisos y la
+ * propia cuenta. Una suscripción web se cancela aquí; la de Apple solo
+ * la puede cancelar ella desde el iPhone, y se lo decimos antes.
+ */
+export async function DELETE(req: Request) {
+  if (!sameOrigin(req)) return privateJson({ error: "Origen no permitido." }, 403);
+  const user = await currentUser();
+  if (!user) return privateJson({ error: "Entra en tu cuenta." }, 401);
+  try {
+    const account = await billingAccount(user.id);
+    if (billingStore(account) === "stripe" && account?.subscription_id) {
+      const stripe = stripeClient();
+      const sub = await stripe.subscriptions.retrieve(account.subscription_id);
+      if (!["canceled", "incomplete_expired"].includes(sub.status)) await stripe.subscriptions.cancel(sub.id);
+    }
+    const db = adminDb();
+    const { error: eraseError } = await db.rpc("erase_diary", { p_user: user.id });
+    if (eraseError) throw eraseError;
+    const { error } = await db.auth.admin.deleteUser(user.id);
+    if (error) throw error;
+    return privateJson({ deleted: true });
+  } catch { return privateJson({ error: "No he podido borrar la cuenta. Prueba otra vez o escríbenos." }, 503); }
 }

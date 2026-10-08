@@ -48,9 +48,33 @@ async function renderMaskable(size, out) {
   console.log(`  ${out}  ${size}×${size} (maskable)`);
 }
 
+/* La App Store rechaza iconos con transparencia: se aplana sobre el
+   fondo. Y la pantalla de arranque es el icono sobre su mismo fondo. */
+async function renderIos() {
+  const ios = join(root, "ios", "App", "App", "Assets.xcassets");
+  const icon = await sharp(svg, { density: 800 })
+    .resize(1024, 1024)
+    .flatten({ background: BG })
+    .png()
+    .toBuffer();
+  await writeFile(join(ios, "AppIcon.appiconset", "AppIcon-512@2x.png"), icon);
+  const lilita = await sharp(svg, { density: 800 }).resize(640, 640).png().toBuffer();
+  const splash = await sharp({
+    create: { width: 2732, height: 2732, channels: 3, background: BG },
+  })
+    .composite([{ input: lilita, gravity: "center" }])
+    .png()
+    .toBuffer();
+  for (const f of ["splash-2732x2732.png", "splash-2732x2732-1.png", "splash-2732x2732-2.png"]) {
+    await writeFile(join(ios, "Splash.imageset", f), splash);
+  }
+  console.log("  iOS: AppIcon 1024×1024 y splash 2732×2732");
+}
+
 console.log("Generando iconos…");
 await render(192, "icon-192.png");
 await render(512, "icon-512.png");
 await render(180, "apple-touch-icon.png");
 await renderMaskable(512, "icon-maskable-512.png");
+await renderIos();
 console.log("Listo.");
