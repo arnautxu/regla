@@ -10,6 +10,7 @@ import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import { haptic } from "@/lib/use-lilaila";
 import { capitalize } from "@/lib/format";
 import { esMenor } from "@/lib/pareja";
+import { marcarTourPendiente } from "@/lib/tour";
 
 /* Un paso entra por donde se fue el anterior: hacia delante viene de
    la derecha, hacia atrás de la izquierda — el mismo lenguaje que
@@ -83,6 +84,9 @@ export function Onboarding() {
     if (saving) return;
     setSaving(true);
     haptic([18, 40, 26]);
+    // Antes de guardar: en cuanto "onboarded" pasa a true el shell
+    // deja de pintar esto, y tiene que encontrarse el tour ya pedido.
+    marcarTourPendiente();
     await updateSettings({
       name: name.trim() || "Lidia",
       avgCycleLength: avgLength,
