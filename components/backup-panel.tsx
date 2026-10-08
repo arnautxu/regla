@@ -6,9 +6,12 @@ import { es } from "date-fns/locale";
 import {
   pushNow,
   subscribeBackup,
+  eraseCloudDiary,
+  restoreCloudDiary,
   type BackupState,
 } from "@/lib/backup";
-import { exportBackup, importBackup, wipeEverything } from "@/lib/db";
+import { exportBackup, importBackup, wipeEverything, localOwner } from "@/lib/db";
+import { accountMode } from "@/lib/account-mode";
 import { haptic } from "@/lib/use-lilaila";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -129,6 +132,9 @@ export function BackupPanel() {
         )}
         <Boton onClick={() => void exportar()}>Exportar a un fichero</Boton>
         <Boton onClick={() => fichero.current?.click()}>Restaurar</Boton>
+        {accountMode() && localOwner !== "guest" && state.status === "error" && <Boton onClick={() => {
+          void exportar().then(() => restoreCloudDiary()).catch(e => setAviso(e instanceof Error ? e.message : "No se ha podido restaurar."));
+        }}>Exportar este móvil y recuperar la copia privada</Boton>}
       </div>
 
       <input
@@ -163,21 +169,22 @@ export function BackupPanel() {
             onClick={() => setConfirmando(true)}
             className="flex min-h-[44px] items-center text-xs text-faint underline underline-offset-4"
           >
-            Borrar todos mis datos
+            Borrar mi diario
           </button>
         ) : (
           <div className="flex flex-col gap-2">
             <p className="text-sm" style={{ color: "var(--accent)" }}>
-              Esto borra todo y no se puede deshacer. ¿Seguro?
+              Esto borra el diario de este móvil{accountMode() && localOwner !== "guest" ? " y su copia privada, y desconecta los avisos y a tu pareja. Tu cuenta y tu suscripción se mantienen" : ""}. No se puede deshacer. ¿Seguro?
             </p>
             <div className="flex gap-2">
               <Boton
                 onClick={() => {
                   haptic([40, 60, 40]);
-                  void wipeEverything().then(() => {
+                  void eraseCloudDiary().then(() => wipeEverything()).then(() => {
                     setConfirmando(false);
                     setAviso("Borrado. Empezamos de cero.");
-                  });
+                    if (accountMode()) location.reload();
+                  }).catch(e => setAviso(e instanceof Error ? e.message : "No se ha podido borrar."));
                 }}
                 danger
               >

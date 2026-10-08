@@ -1,3 +1,5 @@
+import { accountMode } from "@/lib/account-mode";
+import { partnerOwner } from "@/lib/server/supabase";
 import { cookies } from "next/headers";
 import {
   COOKIE_MONSTER_SESSION_COOKIE,
@@ -19,14 +21,15 @@ const PULLAS = [
 
 export async function POST() {
   const jar = await cookies();
-  if (!verifyCookieMonsterSession(jar.get(COOKIE_MONSTER_SESSION_COOKIE)?.value)) {
+  if (!await verifyCookieMonsterSession(jar.get(COOKIE_MONSTER_SESSION_COOKIE)?.value)) {
     return Response.json({ error: "No autorizado." }, { status: 401 });
   }
   if (!pushConfigured()) {
     return Response.json({ error: "El servidor no tiene los avisos configurados." }, { status: 501 });
   }
 
-  const push = await readPushDoc();
+  const owner = accountMode() ? (await partnerOwner())! : undefined;
+  const push = await readPushDoc(owner);
   if (!push.subs.some((sub) => sub.audience === "lidia")) {
     return Response.json(
       { error: "Lidia aún no tiene los avisos activados en su móvil." },
@@ -41,7 +44,7 @@ export async function POST() {
     tag: "cookie-monster-pulla",
     url: "/",
     registro: { tipo: "respuesta-monstruo", kind: "pulla" },
-  });
+  }, owner);
 
   if (result.sent === 0) {
     return Response.json({ error: "No he podido entregar la pulla. Prueba otra vez." }, { status: 503 });

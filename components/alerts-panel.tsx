@@ -1,5 +1,6 @@
 "use client";
 
+import { nombrePareja } from "@/lib/pareja";
 import { useEffect, useState } from "react";
 import type { AlertSettings, Settings } from "@/lib/db";
 import { status, type PushStatus } from "@/lib/push";
@@ -36,6 +37,7 @@ export function AlertsPanel({
   }, []);
 
   const a = settings.alerts;
+  const pareja = nombrePareja(settings);
   const puedeSonar = push === "apagado" || push === "encendido";
 
   async function cambiar(key: keyof AlertSettings) {
@@ -93,9 +95,10 @@ export function AlertsPanel({
         )}
       </section>
 
+      {pareja && (
       <section>
         <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
-          Arnau
+          {pareja}
         </h2>
         <div
           className="sticker mt-sm divide-y divide-[var(--border)] rounded-2xl px-lg"
@@ -125,6 +128,7 @@ export function AlertsPanel({
           durar. Ni síntomas, ni notas, ni PAS.
         </p>
       </section>
+      )}
     </>
   );
 }

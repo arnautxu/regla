@@ -10,6 +10,10 @@ import { useForecastSync } from "@/lib/alerts";
 import { Onboarding } from "./onboarding";
 import { Novedades } from "./novedades";
 import { marcarNovedadesVistas } from "@/lib/novedades";
+import { AccountGate } from "./account-gate";
+import { CUENTAS_ACTIVAS, marcarPlanesVistos, planesVistos, useCuenta } from "@/lib/cuenta";
+import { Planes } from "./cuenta";
+import { Fragment } from "react";
 import { PinGate } from "./pin-gate";
 import { CookieMonsterGate } from "./cookie-monster-gate";
 import { ServiceWorker } from "./service-worker";
@@ -22,6 +26,11 @@ import { TabBar } from "./tab-bar";
  * la barra de estado de iOS.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
+  return <AccountGate><DiaryShell>{children}</DiaryShell></AccountGate>;
+}
+
+function DiaryShell({ children }: { children: React.ReactNode }) {
+  const Gate = CUENTAS_ACTIVAS ? Fragment : PinGate;
   const lilaila = useLilaila();
   const { ready, state, settings, cycles } = lilaila;
   const pathname = usePathname();
@@ -44,6 +53,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // próxima vez que abra la app. Además, se sella solo la primera vez
   // que lo detecta, para no depender de este cálculo para siempre.
   const needsOnboarding = ready && !settings.onboarded && cycles.length === 0;
+
+  // Con cuentas: al acabar el onboarding se enseñan los planes una
+  // vez, en lugar de la hoja de novedades.
+  const cuenta = useCuenta();
+  const ofrecerPlanes = !!cuenta && cuenta.plan === "free" && !planesVistos(cuenta);
 
   useEffect(() => {
     if (ready && !settings.onboarded && cycles.length > 0) {
@@ -103,7 +117,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </CookieMonsterGate>
       ) : (
-      <PinGate startBackup={!cookieMonsterReceiver}>
+      <Gate>
         <div className="mx-auto flex min-h-dvh w-full max-w-[440px] flex-col">
           {cookieMonsterReceiver ? (
             children
@@ -127,12 +141,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {children}
               </motion.main>
               {!fullscreen && <TabBar />}
-              {ready && <Novedades />}
+              {ready && !ofrecerPlanes && <Novedades />}
+              {ready && ofrecerPlanes && <Planes onCerrar={marcarPlanesVistos} />}
             </>
           )}
           <ServiceWorker />
         </div>
-      </PinGate>
+      </Gate>
       )}
     </MotionConfig>
   );

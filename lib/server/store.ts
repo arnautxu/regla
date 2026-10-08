@@ -1,3 +1,5 @@
+import { accountMode } from "@/lib/account-mode";
+import { readAccountDiary } from "./account-diary";
 import { get, put } from "@vercel/blob";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -32,7 +34,8 @@ const EMPTY: StoredDoc = {
   memories: [],
 };
 
-export async function readDoc(): Promise<StoredDoc> {
+export async function readDoc(owner?: string): Promise<StoredDoc> {
+  if (accountMode()) return readAccountDiary(owner);
   try {
     const result = await get(PATH, { access: "private" });
     // get() ya trae el cuerpo: no hay que ir a buscar la URL aparte,

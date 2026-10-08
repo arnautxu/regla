@@ -6,6 +6,7 @@ import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   db,
+  addMemory,
   removeMemory,
   updateSettings,
   wipeMemories,
@@ -13,6 +14,7 @@ import {
 } from "@/lib/db";
 import { haptic } from "@/lib/use-lilaila";
 import { SwitchRow } from "./switch-row";
+import { accountMode } from "@/lib/account-mode";
 
 /* ═══════════════════════════════════════════════════════════════
    LO QUE LILITA RECUERDA
@@ -31,6 +33,7 @@ import { SwitchRow } from "./switch-row";
 export function MemoryPanel({ chat }: { chat: ChatSettings }) {
   const memories = useLiveQuery(() => db.memories.toArray(), [], []);
   const [confirmando, setConfirmando] = useState(false);
+  const [note, setNote] = useState("");
 
   // Más nuevas primero: lo último que le has contado es lo que más
   // probablemente quieras revisar o quitar.
@@ -49,8 +52,8 @@ export function MemoryPanel({ chat }: { chat: ChatSettings }) {
         style={{ background: "var(--surface)" }}
       >
         <SwitchRow
-          label="Que se acuerde de ti"
-          hint="Guarda lo que le cuentas y lo usa en las siguientes charlas."
+          label={accountMode() ? "Usar mis recuerdos" : "Que se acuerde de ti"}
+          hint={accountMode() ? "Usa los recuerdos que guardas aquí en las siguientes charlas." : "Guarda lo que le cuentas y lo usa en las siguientes charlas."}
           on={chat.remembers}
           onToggle={() => {
             haptic(10);
@@ -75,6 +78,16 @@ export function MemoryPanel({ chat }: { chat: ChatSettings }) {
           }}
         />
       </div>
+
+      {accountMode() && <form className="mt-4 flex flex-col gap-2" onSubmit={e => {
+        e.preventDefault();
+        if (note.trim()) void addMemory(note.trim()).then(() => setNote(""));
+      }}>
+        <label className="text-sm" htmlFor="memory-note">Qué quieres que recuerde de ti</label>
+        <input id="memory-note" className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3" value={note} onChange={e => setNote(e.target.value)} maxLength={500} placeholder="Algo que quieras tener presente en las charlas" />
+        <button className="min-h-11 self-start px-3 underline disabled:opacity-40" disabled={!note.trim() || lista.length >= 1000}>Guardar recuerdo</button>
+        <p className="text-xs text-muted">Lilita usa hasta los ocho recuerdos más recientes. No guarda recuerdos nuevos de las conversaciones automáticamente.</p>
+      </form>}
 
       {lista.length > 0 && (
         <>
@@ -159,7 +172,7 @@ export function MemoryPanel({ chat }: { chat: ChatSettings }) {
       )}
 
       <p className="mt-sm text-xs leading-relaxed text-faint">
-        {chat.remembers
+        {accountMode() ? "Puedes borrar cada recuerdo cuando quieras; desactivar su uso no borra lo que ya guardaste." : chat.remembers
           ? "Lo apunta ella sola mientras habláis, y solo cosas que sigan valiendo dentro de un mes. Nunca el dato de hoy."
           : "Ahora mismo no apunta nada nuevo. Lo que ya sabe sigue ahí hasta que lo borres."}
       </p>

@@ -29,6 +29,7 @@ function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; 
   const [error, setError] = useState("");
   const [said, setSaid] = useState("");
   const [muted, setMuted] = useState(false);
+  const [remaining, setRemaining] = useState<number | null>(null);
 
   const call = useConversation({
     micMuted: muted,
@@ -72,7 +73,7 @@ function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; 
         return;
       }
       const data = (await res.json().catch(() => null)) as
-        | { token?: string; prompt?: string; voiceId?: string; error?: string }
+        | { token?: string; prompt?: string; voiceId?: string; limited?: boolean; maxSeconds?: number; error?: string }
         | null;
       if (!res.ok || !data?.token) {
         setError(
@@ -84,10 +85,11 @@ function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; 
         return;
       }
       if (cancelled) return;
-      startSession({
+      setRemaining(data.maxSeconds ?? null);
+      try { startSession({
         conversationToken: data.token,
         connectionType: "webrtc",
-        overrides: {
+        overrides: data.limited ? undefined : {
           agent: {
             prompt: { prompt: data.prompt },
             firstMessage: saludo(ctx.current),
@@ -95,7 +97,7 @@ function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; 
           },
           tts: { voiceId: data.voiceId },
         },
-      });
+      }); } catch { if (!cancelled) setError("No se ha podido conectar la llamada. Puedes seguir por escrito."); }
     })();
     return () => {
       cancelled = true;
@@ -105,6 +107,13 @@ function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; 
   // Al salir de la pantalla, se cuelga sí o sí: un micro abierto que
   // nadie ve sería lo peor que podría hacer esta app.
   useEffect(() => () => endSession(), [endSession]);
+
+  useEffect(() => {
+    if (call.status !== "connected" || remaining === null) return;
+    if (remaining === 0) { void endSession(); return; }
+    const timer = setTimeout(() => setRemaining(n => n === null ? null : Math.max(0, n - 1)), 1000);
+    return () => clearTimeout(timer);
+  }, [call.status, remaining, endSession]);
 
   const hangUp = () => {
     haptic(12);
@@ -134,6 +143,7 @@ function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; 
     >
       <p className="mt-xl text-2xs font-semibold uppercase tracking-[0.14em] text-faint" aria-live="polite">
         {estado}
+        {remaining !== null && <span className="mt-2 block normal-case tracking-normal">{Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")} · tiempo máximo de esta llamada</span>}
       </p>
 
       <div className="flex flex-col items-center gap-lg">

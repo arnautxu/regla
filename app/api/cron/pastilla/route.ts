@@ -1,3 +1,5 @@
+import { accountMode } from "@/lib/account-mode";
+import { runAccountsCron } from "@/lib/server/account-push";
 import { readDoc } from "@/lib/server/store";
 import { localNow } from "@/lib/server/local-time";
 import { readPushDoc, sendToAll, wantsPill, writePushDoc } from "@/lib/server/push";
@@ -49,6 +51,10 @@ export async function GET(request: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
 
+  return accountMode() ? runAccountsCron(runForAccount) : runForAccount();
+}
+
+async function runForAccount(owner?: string) {
   const { date, hour } = localNow(new Date());
 
   /* Quién manda aquí: LA SUSCRIPCIÓN, no los ajustes.
@@ -65,7 +71,7 @@ export async function GET(request: Request) {
      de intención que un ajuste — una suscripción no existe si no ha
      dado permiso a mano en el móvil, que es exactamente la pregunta
      ("¿quiere que le avise?") a la que hay que contestar aquí. */
-  const push = await readPushDoc();
+  const push = await readPushDoc(owner);
 
   if (push.subs.length === 0) {
     return Response.json({ skipped: "sin dispositivos", date, hour });
@@ -88,12 +94,12 @@ export async function GET(request: Request) {
   // sola unos segundos después de tocar el botón, así que a las diez
   // de la noche esto suele estar al día; si no lo estuviera, el peor
   // caso es un aviso de más, no uno de menos.
-  const doc = await readDoc();
+  const doc = await readDoc(owner);
   const days = (doc.days ?? []) as DayLog[];
   if (days.find((d) => d.date === date)?.pill === true) {
     // Se marca igualmente el día como avisado: no hay nada más que
     // hacer hoy, y así el segundo disparo ni lee.
-    await writePushDoc({ ...push, lastPillNudge: date });
+    await writePushDoc({ ...push, lastPillNudge: date }, owner);
     return Response.json({ skipped: "ya tomada", date, hour });
   }
 
@@ -107,7 +113,7 @@ export async function GET(request: Request) {
     // desde la propia notificación, sin abrir la app. Si hubiera que
     // abrirla, la mitad de las noches el aviso se descarta y ya.
     actions: [{ action: "pastilla-tomada", title: "Ya me la he tomado" }],
-  });
+  }, owner);
 
   // Solo se sella si ha salido de verdad. Sellar tras un fallo de red
   // significaría perder el aviso de esa noche entera; así, el segundo
@@ -117,8 +123,8 @@ export async function GET(request: Request) {
   // suscripciones muertas, y guardar aquí la copia de hace un momento
   // las resucitaría a todas para volver a fallar mañana.
   if (sent > 0) {
-    const fresco = await readPushDoc();
-    await writePushDoc({ ...fresco, lastPillNudge: date });
+    const fresco = await readPushDoc(owner);
+    await writePushDoc({ ...fresco, lastPillNudge: date }, owner);
   }
 
   return Response.json({ sent, gone, date, hour });

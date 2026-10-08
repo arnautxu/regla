@@ -1,3 +1,5 @@
+import { accountMode } from "@/lib/account-mode";
+import { runAccountsCron } from "@/lib/server/account-push";
 import { readPushDoc, sendToAudience, writePushDoc } from "@/lib/server/push";
 import { localNow } from "@/lib/server/local-time";
 import { readForecast } from "@/lib/forecast";
@@ -59,8 +61,12 @@ export async function GET(request: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
 
+  return accountMode() ? runAccountsCron(runForAccount) : runForAccount();
+}
+
+async function runForAccount(owner?: string) {
   const { date } = localNow(new Date());
-  const push = await readPushDoc();
+  const push = await readPushDoc(owner);
   const f = push.forecast;
   if (!f) return Response.json({ skipped: "sin ficha", date });
 
@@ -75,7 +81,7 @@ export async function GET(request: Request) {
       body: pick(A_ELLA, date),
       tag: `regla-${f.cycleStart}`,
       url: "/",
-    });
+    }, owner);
     if (res.sent > 0) {
       done.period = f.cycleStart;
       sent.push("regla");
@@ -95,7 +101,7 @@ export async function GET(request: Request) {
       body: pick(SENSIBLE, date),
       tag: `sensible-${f.cycleStart}`,
       url: "/",
-    });
+    }, owner);
     if (res.sent > 0) {
       done.sensitive = f.cycleStart;
       sent.push("sensible");
@@ -121,7 +127,7 @@ export async function GET(request: Request) {
         body,
         tag: `aviso-arnau-${f.cycleStart}`,
         url: "/cookie-monster",
-      });
+      }, owner);
       if (res.sent > 0) {
         done.arnau = f.cycleStart;
         sent.push("arnau");
@@ -132,8 +138,8 @@ export async function GET(request: Request) {
   if (sent.length) {
     // Se relee: sendToAudience puede haber limpiado suscripciones
     // muertas por el camino y no hay que resucitarlas.
-    const fresco = await readPushDoc();
-    await writePushDoc({ ...fresco, cycleNudges: done });
+    const fresco = await readPushDoc(owner);
+    await writePushDoc({ ...fresco, cycleNudges: done }, owner);
   }
 
   return Response.json({ date, dayOfCycle: r.dayOfCycle, daysUntil: r.daysUntil, sent });

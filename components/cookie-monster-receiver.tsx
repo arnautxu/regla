@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { enable, installed, status, type PushStatus } from "@/lib/push";
+import { accountMode } from "@/lib/account-mode";
 import { PHASE_LABEL, type Phase } from "@/lib/cycle";
+
+const partnerName = accountMode() ? "tu pareja" : "Lidia";
 
 interface Estado {
   shared: boolean;
@@ -51,7 +54,7 @@ export function CookieMonsterReceiver() {
     setMessage(null);
     try {
       const result = await enable(22, "cookie-monster");
-      setMessage(result.ok ? "Listo. Te avisaré cuando Lidia lo active." : result.message);
+      setMessage(result.ok ? `Listo. Te avisaré cuando ${partnerName} lo active.` : result.message);
       setPush(await status());
     } finally {
       setBusy(false);
@@ -67,7 +70,7 @@ export function CookieMonsterReceiver() {
     try {
       const res = await fetch("/api/cookie-monster/insult", { method: "POST" });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setInsultMessage(res.ok ? "Pulla enviada a Lidia." : (data.error ?? "No he podido enviarla."));
+      setInsultMessage(res.ok ? `Pulla enviada a ${partnerName}.` : (data.error ?? "No he podido enviarla."));
     } finally {
       setInsulting(false);
     }
@@ -80,7 +83,7 @@ export function CookieMonsterReceiver() {
     try {
       const res = await fetch("/api/cookie-monster/encourage", { method: "POST" });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setEncourageMessage(res.ok ? "Ánimos enviados a Lidia." : (data.error ?? "No he podido enviarlos."));
+      setEncourageMessage(res.ok ? `Ánimos enviados a ${partnerName}.` : (data.error ?? "No he podido enviarlos."));
     } finally {
       setEncouraging(false);
     }
@@ -98,7 +101,7 @@ export function CookieMonsterReceiver() {
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (res.ok) setPersonalText("");
-      setPersonalMessage(res.ok ? "Mensaje enviado a Lidia." : (data.error ?? "No he podido enviarlo."));
+      setPersonalMessage(res.ok ? `Mensaje enviado a ${partnerName}.` : (data.error ?? "No he podido enviarlo."));
     } finally {
       setSendingPersonal(false);
     }
@@ -111,8 +114,8 @@ export function CookieMonsterReceiver() {
         <h1 className="mt-2 font-display text-2xl font-bold tracking-[-0.04em]">🍪 Cookie Monster</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">
           {estado?.shared
-            ? "Activa este móvil como receptor. De Lidia solo ves lo de aquí abajo, porque ella lo ha querido."
-            : "Activa este móvil como receptor. No descarga ni ve los datos de Lidia."}
+            ? `Activa este móvil como receptor. De ${partnerName} solo ves lo de aquí abajo, porque ella lo ha querido.`
+            : `Activa este móvil como receptor. No descarga ni ve los datos de ${partnerName}.`}
         </p>
       </div>
 
@@ -149,7 +152,7 @@ export function CookieMonsterReceiver() {
           className="mt-3 w-full rounded-full px-lg py-3.5 font-display text-base font-bold transition-[transform,opacity] duration-150 active:scale-[0.975] disabled:opacity-45"
           style={{ background: "#2f7eae", color: "#fffdf8", boxShadow: "3px 3px 0 0 #16496a" }}
         >
-          {encouraging ? "Mandando ánimos…" : "Mandarle ánimos a Lidia"}
+          {encouraging ? "Mandando ánimos…" : `Mandarle ánimos a ${partnerName}`}
         </button>
         {encourageMessage && (
           <p className="mt-2 text-xs leading-relaxed text-faint" role="status" aria-live="polite">
@@ -158,7 +161,7 @@ export function CookieMonsterReceiver() {
         )}
         <div className="mt-lg border-t border-[var(--border)] pt-lg">
           <label htmlFor="mensaje-para-lidia" className="text-sm text-muted">
-            Mensaje personal para Lidia
+            Mensaje personal para {partnerName}
           </label>
           <textarea
             id="mensaje-para-lidia"
@@ -198,7 +201,7 @@ export function CookieMonsterReceiver() {
           className="mt-3 w-full rounded-full px-lg py-3.5 font-display text-base font-bold transition-[transform,opacity] duration-150 active:scale-[0.975] disabled:opacity-45"
           style={{ background: "var(--accent)", color: "var(--on-accent)" }}
         >
-          {insulting ? "Mandando pulla…" : "🍪 Mandarle una pulla a Lidia"}
+          {insulting ? "Mandando pulla…" : `🍪 Mandarle una pulla a ${partnerName}`}
         </button>
         {insultMessage && (
           <p className="mt-2 text-xs leading-relaxed text-faint" role="status" aria-live="polite">
@@ -232,10 +235,10 @@ function EstadoLidia({ estado }: { estado: Estado }) {
     <section
       className="rounded-2xl px-md py-md"
       style={{ background: "var(--surface)", boxShadow: "inset 0 0 0 1.5px var(--border-strong)" }}
-      aria-label="Cómo va Lidia"
+      aria-label={`Cómo va ${partnerName}`}
     >
       <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
-        Lidia hoy · día {estado.dayOfCycle}
+        {accountMode() ? "Tu pareja" : "Lidia"} hoy · día {estado.dayOfCycle}
       </p>
       <p className="mt-1 font-display text-xl font-bold tracking-[-0.02em]">
         {PHASE_LABEL[estado.phase!]}

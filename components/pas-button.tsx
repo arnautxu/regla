@@ -33,7 +33,7 @@ import { EpisodioSheet, NotaLibre, UnaOpcion } from "./episodio-sheet";
    ni en la llamada.
    ═══════════════════════════════════════════════════════════════ */
 
-export function PasButton() {
+export function PasButton({ pareja }: { pareja: string | null }) {
   const [event, setEvent] = useState<CryEvent | null>(null);
   const [abierta, setAbierta] = useState(false);
   const [flash, setFlash] = useState(false);
@@ -147,7 +147,7 @@ export function PasButton() {
             id: "nota",
             nombre: "Nota",
             titulo: "¿Quieres contar algo más?",
-            ayuda: "Esto no se lo cuento a nadie, ni a Arnau.",
+            ayuda: pareja ? `Esto no se lo cuento a nadie, ni a ${pareja}.` : "Esto no se lo cuento a nadie.",
             hecho: !!nota.trim(),
             valor: nota.trim() || undefined,
             libre: true,

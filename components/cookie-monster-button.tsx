@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useEffect, useState } from "react";
 import {
   addAngerEvent,
@@ -18,6 +19,8 @@ import {
   REACCION_ENFADO_NECESITA,
   REACCION_ENFADO_NIVEL,
 } from "@/lib/lilita/reacciones";
+import type { Reaccion } from "@/lib/lilita/reacciones";
+import { conPareja } from "@/lib/pareja";
 import { EpisodioSheet, UnaOpcion } from "./episodio-sheet";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -40,7 +43,8 @@ import { EpisodioSheet, UnaOpcion } from "./episodio-sheet";
    solo le llega el aviso, como siempre.
    ═══════════════════════════════════════════════════════════════ */
 
-export function CookieMonsterButton({ days }: { days: DayLog[] }) {
+export function CookieMonsterButton({ days, pareja }: { days: DayLog[]; pareja: string }) {
+  const con = (r: Reaccion | null) => (r ? { ...r, texto: conPareja(r.texto, pareja) } : null);
   const [abierta, setAbierta] = useState(false);
   const [event, setEvent] = useState<AngerEvent | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -138,17 +142,17 @@ export function CookieMonsterButton({ days }: { days: DayLog[] }) {
         abierta={abierta && !!event}
         label="Cookie Monster"
         cara="enfadada"
-        titulo={busy ? "Avisando a Arnau…" : sendError ? "Apuntado, pero sin aviso" : "🍪 Arnau ya lo sabe"}
+        titulo={busy ? `Avisando a ${pareja}…` : sendError ? "Apuntado, pero sin aviso" : `🍪 ${pareja} ya lo sabe`}
         subtitulo={
           sendError
             ? `${sendError} El enfado queda guardado igual.`
             : "Ahora cuéntame a mí. Solo si quieres."
         }
-        celebra="Expediente completo. Arnau, tiembla."
+        celebra={`Expediente completo. ${pareja}, tiembla.`}
         aviso={
           sendError
             ? undefined
-            : "Cuando se te pase, toca «Se me ha pasado» en Hoy. «Deshacer» lo borra de aquí; el aviso a Arnau ya ha salido."
+            : `Cuando se te pase, toca «Se me ha pasado» en Hoy. «Deshacer» lo borra de aquí; el aviso a ${pareja} ya ha salido.`
         }
         onDeshacer={() => void undo()}
         onCerrar={() => setAbierta(false)}
@@ -166,7 +170,7 @@ export function CookieMonsterButton({ days }: { days: DayLog[] }) {
                 value={event?.level}
                 onChange={(v) => {
                   patch({ level: v });
-                  contestada(v === undefined ? null : REACCION_ENFADO_NIVEL[v]);
+                  contestada(v === undefined ? null : con(REACCION_ENFADO_NIVEL[v]));
                 }}
               />
             ),
@@ -185,7 +189,7 @@ export function CookieMonsterButton({ days }: { days: DayLog[] }) {
                 value={event?.reason}
                 onChange={(v) => {
                   patch({ reason: v });
-                  contestada(v === undefined ? null : REACCION_ENFADO_MOTIVO[v]);
+                  contestada(v === undefined ? null : con(REACCION_ENFADO_MOTIVO[v]));
                 }}
               />
             ),
@@ -204,7 +208,7 @@ export function CookieMonsterButton({ days }: { days: DayLog[] }) {
                 value={event?.need}
                 onChange={(v) => {
                   patch({ need: v });
-                  contestada(v === undefined ? null : REACCION_ENFADO_NECESITA[v]);
+                  contestada(v === undefined ? null : con(REACCION_ENFADO_NECESITA[v]));
                 }}
               />
             ),

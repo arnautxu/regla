@@ -1,5 +1,9 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Versió multiusuari
+
+La configuració de Supabase, els plans de subscripció, els límits d'IA, les proves i el procés d'activació són a [docs/market-launch.md](docs/market-launch.md). Per defecte es conserva el mode personal; la versió de comptes requereix `NEXT_PUBLIC_ACCOUNT_MODE=true` i una compilació nova. No activis cobraments ni IA fins a completar les comprovacions del document.
+
 ## Getting Started
 
 First, run the development server:

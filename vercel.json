@@ -3,6 +3,7 @@
   "crons": [
     { "path": "/api/cron/pastilla", "schedule": "0 20 * * *" },
     { "path": "/api/cron/pastilla", "schedule": "0 21 * * *" },
-    { "path": "/api/cron/ciclo", "schedule": "0 8 * * *" }
+    { "path": "/api/cron/ciclo", "schedule": "0 8 * * *" },
+    { "path": "/api/cron/ia", "schedule": "0 3 * * *" }
   ]
 }

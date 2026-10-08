@@ -15,7 +15,7 @@ import {
    recordatorios de salud. */
 async function lidiaGuard(): Promise<boolean> {
   const jar = await cookies();
-  return verifySession(jar.get(SESSION_COOKIE)?.value);
+  return await verifySession(jar.get(SESSION_COOKIE)?.value);
 }
 
 export async function POST() {

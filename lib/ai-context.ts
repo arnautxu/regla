@@ -2,6 +2,7 @@ import type { CycleState } from "./cycle";
 import { PHASE_LABEL } from "./cycle";
 import { fromKey, type ChatSettings, type DayLog, type HumorLevel, type Memory } from "./db";
 import type { Insight } from "./insights";
+import { accountMode } from "./account-mode";
 
 /* ═══════════════════════════════════════════════════════════════
    LO QUE SALE DEL MÓVIL
@@ -28,6 +29,8 @@ import type { Insight } from "./insights";
    ═══════════════════════════════════════════════════════════════ */
 
 export interface LilitaContext {
+  /** Nombre de su pareja; null si no tiene, no lo dice o es menor. */
+  pareja?: string | null;
   fase?: string;
   diaDelCiclo?: number;
   diaDeRegla?: number;
@@ -87,6 +90,7 @@ export function buildContext(
     days?: DayLog[];
     memories?: Memory[];
     chat?: ChatSettings;
+    pareja?: string | null;
   },
 ): LilitaContext {
   const dolorHoy = today?.painLevel;
@@ -97,7 +101,7 @@ export function buildContext(
       ? extra.days
           .filter((d) => d.note?.trim())
           .sort((a, b) => b.date.localeCompare(a.date))
-          .slice(0, MAX_NOTAS)
+          .slice(0, accountMode() ? 3 : MAX_NOTAS)
           .map((d) => ({
             cuando: cuando(d.date, state.todayKey),
             texto: d.note!.trim().slice(0, LARGO_NOTA),
@@ -106,10 +110,11 @@ export function buildContext(
 
   const memorias =
     extra?.chat?.remembers && extra.memories
-      ? extra.memories.map((m) => ({ id: m.id, texto: m.text }))
+      ? (accountMode() ? extra.memories.slice(-8) : extra.memories).map((m) => ({ id: m.id, texto: m.text }))
       : [];
 
   return {
+    pareja: extra?.pareja ?? null,
     notas,
     memorias,
     puedeRecordar: extra?.chat?.remembers === true,

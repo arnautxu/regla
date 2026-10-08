@@ -1,3 +1,4 @@
+import { conPareja, TOKEN_PAREJA } from "../pareja";
 import type { HumorLevel } from "../db";
 import type { Phase } from "../cycle";
 
@@ -14,6 +15,8 @@ export type Mood =
   | "volando";
 
 export interface LineContext {
+  /** Nombre de su pareja; null si no tiene o es menor */
+  pareja?: string | null;
   phase?: Phase;
   /** La regla sigue abierta pero hoy no se ha registrado nada */
   pendienteDeHoy?: boolean;
@@ -28,7 +31,7 @@ export interface LineContext {
   humorLevel: HumorLevel;
   /** Hoy ha apuntado un PAS */
   cryToday?: boolean;
-  /** Hay un enfado con Arnau abierto (Cookie Monster) */
+  /** Hay un enfado con su pareja abierto (Cookie Monster) */
   angryNow?: boolean;
   /** Hoy cae dentro de su semana sensible (patrón de PAS) */
   sensitiveNow?: boolean;
@@ -401,7 +404,7 @@ const LUTEA: Line[] = [
     mood: "gremlin",
   },
   {
-    text: "Si hoy le gritas a Arnau, que sepas que yo lo he visto y estaba justificado.",
+    text: "Si hoy le gritas a {pareja}, que sepas que yo lo he visto y estaba justificado.",
     mood: "gremlin",
   },
   {
@@ -595,7 +598,7 @@ const ENFADADA: Line[] = [
   { text: "Cookie Monster avisado. Que se lo curre.", mood: "gremlin" },
   { text: "Estoy de tu lado. Siempre. Aunque no sepa qué ha hecho, seguro que algo ha hecho.", mood: "gremlin" },
   { text: "Modo monstruo activado. Cuando se te pase, dale a «se me ha pasado» y que respire.", mood: "gremlin" },
-  { text: "Arnau ya lo sabe. Si te manda una pulla ahora, es valiente o tonto.", mood: "gremlin" },
+  { text: "{pareja} ya lo sabe. Si te manda una pulla ahora, le sobra valor o le falta cabeza.", mood: "gremlin" },
 ];
 
 const SEMANA_SENSIBLE: Line[] = [
@@ -605,13 +608,13 @@ const SEMANA_SENSIBLE: Line[] = [
 ];
 
 const ZONA_MONSTRUO_PRONTO: Line[] = [
-  { text: "Zona monstruo a la vista. Arnau, ve comprando galletas de verdad.", mood: "gremlin" },
-  { text: "En nada empieza tu zona monstruo. Avisada quedas. Y Arnau, si lee esto, también.", mood: "gremlin" },
+  { text: "Zona monstruo a la vista. {pareja}, ve comprando galletas de verdad.", mood: "gremlin" },
+  { text: "En nada empieza tu zona monstruo. Avisada quedas. Y {pareja}, si lee esto, también.", mood: "gremlin" },
 ];
 
 const ZONA_MONSTRUO: Line[] = [
   { text: "Zona monstruo. Si alguien mastica fuerte cerca de ti, no respondo de tus actos.", mood: "gremlin" },
-  { text: "Estás en la zona donde más saltas con Arnau. No es que él sea peor estos días. Bueno, igual sí.", mood: "gremlin" },
+  { text: "Estás en la zona donde más saltas con {pareja}. No es que sea peor estos días. Bueno, igual sí.", mood: "gremlin" },
   { text: "Zona monstruo. Galletas a mano y paciencia ajena bajo mínimos. Normal.", mood: "gremlin" },
 ];
 
@@ -632,11 +635,23 @@ function seedFrom(str: string): number {
   return Math.abs(h);
 }
 
+/** Con quién se mete Lilita hoy. Lo fija lilitaSays antes de elegir:
+    sin pareja, las frases que la nombran no entran en el sorteo. */
+let pareja: string | null = null;
+
 function pick<T>(pool: T[], seed: string): T {
-  return pool[seedFrom(seed) % pool.length];
+  const sinNombrar = pareja ? pool : pool.filter((l) => !JSON.stringify(l).includes(TOKEN_PAREJA));
+  const opciones = sinNombrar.length ? sinNombrar : pool;
+  return opciones[seedFrom(seed) % opciones.length];
 }
 
 export function lilitaSays(ctx: LineContext, dateKey: string): Line {
+  pareja = ctx.pareja ?? null;
+  const l = elegir(ctx, dateKey);
+  return { ...l, text: conPareja(l.text, pareja) };
+}
+
+function elegir(ctx: LineContext, dateKey: string): Line {
   // --- Freno de mano. Primero, antes que nada.
   if (ctx.badDay || (ctx.painLevel ?? 0) >= 8) {
     return { text: pick(CUIDADOS, dateKey + "cuidados"), mood: "cuidando" };

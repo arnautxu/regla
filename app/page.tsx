@@ -10,6 +10,7 @@ import { DaySheet, type Paso } from "@/components/day-sheet";
 import { CycleRing } from "@/components/cycle-ring";
 import { CookieMonsterButton } from "@/components/cookie-monster-button";
 import { PasButton } from "@/components/pas-button";
+import { nombrePareja } from "@/lib/pareja";
 import { PHASE_LABEL, type CycleState } from "@/lib/cycle";
 import { fromKey, setPill, type DayLog } from "@/lib/db";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
@@ -24,6 +25,7 @@ export default function Hoy() {
   // chat, que sí es una conversación abierta y no tiene banco posible.
   const { ready, state, today, line, dateKey, cycles, settings, pillStreak, days, windows } =
     useLilaila();
+  const pareja = nombrePareja(settings);
 
   // Solo cuando EMPIEZA una regla, no cada día que sigue sangrando:
   // gastar la fanfarria a diario la convierte en ruido.
@@ -183,8 +185,8 @@ export default function Hoy() {
             }}
           />
         )}
-        <PasButton />
-        <CookieMonsterButton days={days} />
+        <PasButton pareja={pareja} />
+        {pareja && <CookieMonsterButton days={days} pareja={pareja} />}
       </div>
 
       {/* ── Acción principal ──────────────────────────────────────

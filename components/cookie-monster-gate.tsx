@@ -1,5 +1,6 @@
 "use client";
 
+import { accountMode } from "@/lib/account-mode";
 import { useEffect, useRef, useState } from "react";
 
 type Gate = "checking" | "setup" | "locked" | "open";
@@ -55,7 +56,7 @@ export function CookieMonsterGate({ children }: { children: React.ReactNode }) {
         <p className="mt-2 text-center text-sm text-muted">
           {gate === "setup"
             ? "Falta configurar tu código privado en el servidor."
-            : "Entra con tu código privado. No es el de Lidia."}
+            : accountMode() ? "Introduce la invitación que te ha dado tu pareja." : "Entra con tu código privado. No es el de Lidia."}
         </p>
       </div>
       {gate !== "setup" && gate !== "checking" && (
@@ -64,7 +65,7 @@ export function CookieMonsterGate({ children }: { children: React.ReactNode }) {
             ref={input}
             autoFocus
             type="password"
-            inputMode="numeric"
+            inputMode={accountMode() ? "text" : "numeric"}
             autoComplete="current-password"
             value={pin}
             onChange={(event) => {
@@ -72,7 +73,7 @@ export function CookieMonsterGate({ children }: { children: React.ReactNode }) {
               setError(null);
             }}
             aria-label="Tu código privado"
-            className="w-full rounded-2xl bg-transparent py-4 text-center font-display text-2xl tracking-[0.3em] outline-none"
+            className="w-full rounded-2xl bg-transparent py-4 text-center font-display text-base tracking-normal outline-none"
             style={{ boxShadow: "inset 0 0 0 1.5px var(--border-strong)" }}
           />
           {error && <p role="alert" className="text-center text-sm" style={{ color: "var(--accent)" }}>{error}</p>}

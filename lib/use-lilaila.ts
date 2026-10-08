@@ -1,5 +1,6 @@
 "use client";
 
+import { nombrePareja } from "./pareja";
 import { useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
@@ -131,6 +132,7 @@ export function useLilaila(): Lilaila {
       painLevel: today?.painLevel,
       badDay: today?.badDay,
       humorLevel: resolvedSettings.humorLevel,
+      pareja: nombrePareja(resolvedSettings),
       cryToday: !!today?.cryEvents?.length,
       angryNow,
       sensitiveNow: inWindow(windows.sensitive, dayOfCycle),

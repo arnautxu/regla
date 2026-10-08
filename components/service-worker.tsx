@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { setPill } from "@/lib/db";
+import { setPill, localOwner } from "@/lib/db";
 
 /** Registra el service worker. Sin él, iOS no da push ni offline. */
 export function ServiceWorker() {
@@ -32,8 +32,9 @@ export function ServiceWorker() {
     if (!("serviceWorker" in navigator)) return;
 
     const onMessage = (e: MessageEvent) => {
-      const msg = e.data as { type?: string; date?: string; at?: string };
+      const msg = e.data as { type?: string; date?: string; at?: string; ownerId?: string };
       if (msg?.type !== "pastilla-tomada" || !msg.date) return;
+      if (process.env.NEXT_PUBLIC_ACCOUNT_MODE === "true" && msg.ownerId !== localOwner) return;
       void setPill(msg.date, true, msg.at ? new Date(msg.at) : new Date());
     };
 

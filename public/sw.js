@@ -20,7 +20,7 @@
    abrirla, el aviso serviría para acordarse pero no para registrar.
    ═══════════════════════════════════════════════════════════════ */
 
-const VERSION = "v3";
+const VERSION = "v4";
 const PAGES = `lilaila-pages-${VERSION}`;
 const ASSETS = `lilaila-assets-${VERSION}`;
 const KEEP = [PAGES, ASSETS];
@@ -121,26 +121,20 @@ self.addEventListener("push", (event) => {
     // sistema termina revocando el permiso. Mejor un aviso genérico.
   }
 
-  const title = aviso.title || "Lilaila";
-  // Lo que Cookie Monster contesta se apunta en el día (solo el tipo
-  // y la hora) para ver luego qué respuesta arregla antes un enfado.
-  // Si falla, el aviso sale igual: apuntar nunca puede tapar el aviso.
-  if (aviso.registro && aviso.registro.tipo === "respuesta-monstruo") {
-    event.waitUntil(apuntarRespuesta(aviso.registro.kind).catch(() => {}));
-  }
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body: aviso.body || "Tienes algo que apuntar.",
-      tag: aviso.tag || "lilaila",
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
-      data: { url: aviso.url || "/" },
-      // iOS todavía ignora los botones de acción; ahí el aviso entero
-      // es el botón y lleva a Hoy, donde la pastilla es lo primero que
-      // se ve. En Android y escritorio sí salen y se marca sin abrir.
-      actions: aviso.actions || [],
-    }),
-  );
+  event.waitUntil((async () => {
+    // Account-bound pushes never reveal another account's content after logout.
+    const allowed = !aviso.recipientId || await isCurrentAccount(aviso.recipientId);
+    if (allowed && aviso.registro?.tipo === "respuesta-monstruo") {
+      await apuntarRespuesta(aviso.registro.kind, aviso.ownerId).catch(() => {});
+    }
+    await self.registration.showNotification(allowed ? (aviso.title || "Lilaila") : "Lilaila", {
+      body: allowed ? (aviso.body || "Tienes algo que apuntar.") : "Tienes un aviso. Entra en tu cuenta para verlo.",
+      tag: `${aviso.ownerId || "legacy"}:${aviso.tag || "lilaila"}`,
+      icon: "/icon-192.png", badge: "/icon-192.png",
+      data: { url: aviso.url || "/", ownerId: aviso.ownerId, recipientId: aviso.recipientId },
+      actions: allowed ? (aviso.actions || []) : [],
+    });
+  })());
 });
 
 /* --- La base de datos, desde aquí -------------------------------
@@ -156,9 +150,16 @@ self.addEventListener("push", (event) => {
 const DB_NAME = "lilaila";
 const STORE = "days";
 
-function abrirDb() {
+async function isCurrentAccount(id) {
+  try {
+    const r = await fetch("/api/auth", { credentials: "include", cache: "no-store" });
+    return r.ok && (await r.json()).user?.id === id;
+  } catch { return false; }
+}
+
+function abrirDb(ownerId) {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME);
+    const req = indexedDB.open(ownerId ? `lilaila-account-${ownerId}` : DB_NAME);
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
     req.onblocked = () => reject(new Error("base bloqueada"));
@@ -173,8 +174,9 @@ function claveDeHoy(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
-async function marcarPastilla() {
-  const db = await abrirDb();
+async function marcarPastilla(ownerId) {
+  if (ownerId && !await isCurrentAccount(ownerId)) throw new Error("Cuenta distinta");
+  const db = await abrirDb(ownerId);
   if (!db.objectStoreNames.contains(STORE)) {
     db.close();
     return null;
@@ -211,9 +213,9 @@ async function marcarPastilla() {
 
 const RESPUESTAS = ["animos", "pulla", "mensaje"];
 
-async function apuntarRespuesta(kind) {
+async function apuntarRespuesta(kind, ownerId) {
   if (!RESPUESTAS.includes(kind)) return null;
-  const db = await abrirDb();
+  const db = await abrirDb(ownerId);
   if (!db.objectStoreNames.contains(STORE)) {
     db.close();
     return null;
@@ -279,9 +281,9 @@ self.addEventListener("notificationclick", (event) => {
 
   if (event.action === "pastilla-tomada") {
     event.waitUntil(
-      marcarPastilla()
+      marcarPastilla(event.notification.data?.ownerId)
         .then((res) =>
-          res ? avisarAClientes({ type: "pastilla-tomada", ...res }) : null,
+          res ? avisarAClientes({ type: "pastilla-tomada", ownerId: event.notification.data?.ownerId, ...res }) : null,
         )
         // Si escribir falla, no se traga el toque en silencio: se abre
         // la app para que pueda marcarla a mano.

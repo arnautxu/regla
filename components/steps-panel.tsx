@@ -1,5 +1,6 @@
 "use client";
 
+import { esMenor } from "@/lib/pareja";
 import { useState } from "react";
 import {
   DEFAULT_STEP_ORDER,
@@ -68,6 +69,7 @@ export function StepsPanel({ settings }: { settings: Settings }) {
           <span className="text-xs text-faint">Primero con la regla</span>
         </li>
         {lista.map((p, i) => {
+          if (p === "sexo" && esMenor(settings)) return null;
           const visible = !hidden.includes(p);
           const nota =
             p === "pastilla" && !settings.pill.enabled

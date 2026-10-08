@@ -1,3 +1,5 @@
+import { accountMode } from "@/lib/account-mode";
+import { partnerOwner } from "@/lib/server/supabase";
 import { cookies } from "next/headers";
 import {
   COOKIE_MONSTER_SESSION_COOKIE,
@@ -21,12 +23,12 @@ import {
 
 async function guard(): Promise<boolean> {
   const jar = await cookies();
-  return verifySession(jar.get(SESSION_COOKIE)?.value);
+  return await verifySession(jar.get(SESSION_COOKIE)?.value);
 }
 
 async function cookieMonsterGuard(): Promise<boolean> {
   const jar = await cookies();
-  return verifyCookieMonsterSession(jar.get(COOKIE_MONSTER_SESSION_COOKIE)?.value);
+  return await verifyCookieMonsterSession(jar.get(COOKIE_MONSTER_SESSION_COOKIE)?.value);
 }
 
 const DENIED = Response.json({ error: "No autorizado." }, { status: 401 });
@@ -90,6 +92,7 @@ export async function POST(req: Request) {
     { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth }, audience },
     hour,
     audience,
+    accountMode() && isCookieMonster ? (await partnerOwner())! : undefined,
   );
   return Response.json({ ok: true });
 }

@@ -1,3 +1,5 @@
+import { accountMode } from "@/lib/account-mode";
+import { accountStatus, accountLogin, accountLogout } from "@/lib/server/account-auth";
 import { cookies, headers } from "next/headers";
 import {
   SESSION_COOKIE,
@@ -22,6 +24,7 @@ import {
  * sin copia. No queremos dejarla tras una puerta que nadie abre.
  */
 export async function GET() {
+  if (accountMode()) return accountStatus();
   const problem = configProblem();
   const configured = !problem && Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 
@@ -33,11 +36,12 @@ export async function GET() {
   const jar = await cookies();
   return Response.json({
     configured: true,
-    authenticated: verifySession(jar.get(SESSION_COOKIE)?.value),
+    authenticated: await verifySession(jar.get(SESSION_COOKIE)?.value),
   });
 }
 
 export async function POST(req: Request) {
+  if (accountMode()) return accountLogin(req);
   // Un problema de configuración no es culpa de quien intenta entrar,
   // y merece un mensaje que diga qué arreglar.
   const problem = configProblem();
@@ -93,7 +97,8 @@ export async function POST(req: Request) {
 }
 
 /** Cerrar sesión. */
-export async function DELETE() {
+export async function DELETE(req: Request) {
+  if (accountMode()) return accountLogout(req);
   const jar = await cookies();
   jar.set(SESSION_COOKIE, "", cookieOptions(0));
   return Response.json({ authenticated: false });

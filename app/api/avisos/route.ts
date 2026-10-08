@@ -27,7 +27,7 @@ import { isForecast } from "@/lib/forecast";
 
 async function guard(): Promise<boolean> {
   const jar = await cookies();
-  return verifySession(jar.get(SESSION_COOKIE)?.value);
+  return await verifySession(jar.get(SESSION_COOKIE)?.value);
 }
 
 const DENIED = Response.json({ error: "No autorizado." }, { status: 401 });

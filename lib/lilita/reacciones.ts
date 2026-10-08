@@ -96,20 +96,20 @@ export const REACCION_PAS_MOTIVO: Record<CryReason, Reaccion> = {
 };
 
 /* ── Cookie Monster ───────────────────────────────────────────────
-   Aquí sí puede ser gamberra: el enfado es con Arnau, no con ella. */
+   Aquí sí puede ser gamberra: el enfado es con su pareja ({pareja} en los textos), no con ella. */
 
 export const REACCION_ENFADO_NIVEL: Record<AngerLevel, Reaccion> = {
-  1: { texto: "Un mordisquito. Arnau sobrevivirá.", cara: "gremlin" },
+  1: { texto: "Un mordisquito. {pareja} sobrevivirá.", cara: "gremlin" },
   2: { texto: "Bastante. Que se vaya preparando.", cara: "enfadada" },
-  3: { texto: "MONSTRUO TOTAL. Arnau, corre.", cara: "enfadada" },
+  3: { texto: "MONSTRUO TOTAL. {pareja}, corre.", cara: "enfadada" },
 };
 
 export const REACCION_ENFADO_MOTIVO: Record<AngerReason, Reaccion> = {
-  "algo-dicho": { texto: "Esa boquita, Arnau…", cara: "enfadada" },
+  "algo-dicho": { texto: "Esa boquita, {pareja}…", cara: "enfadada" },
   "algo-hecho": { texto: "Apuntado. Lo va a pagar.", cara: "enfadada" },
-  "no-has-hecho": { texto: "Clásico. Muy de Arnau.", cara: "gremlin" },
-  "no-me-escuchas": { texto: "¿Hola? ¿Arnau? ¿Hay alguien?", cara: "enfadada" },
-  cansada: { texto: "Cansada y con Arnau cerca. Mala mezcla.", cara: "exhausta" },
+  "no-has-hecho": { texto: "Clásico. Muy de {pareja}.", cara: "gremlin" },
+  "no-me-escuchas": { texto: "¿Hola? ¿{pareja}? ¿Hay alguien?", cara: "enfadada" },
+  cansada: { texto: "Cansada y con {pareja} cerca. Mala mezcla.", cara: "exhausta" },
   hambre: { texto: "Enfadambre. Lo más peligroso.", cara: "gremlin" },
   "no-se": { texto: "No hace falta motivo. Estás en tu derecho.", cara: "gremlin" },
 };
@@ -119,6 +119,6 @@ export const REACCION_ENFADO_NECESITA: Record<AngerNeed, Reaccion> = {
   espacio: { texto: "Distancia de seguridad activada.", cara: "neutral" },
   perdon: { texto: "Y un perdón de los buenos.", cara: "enfadada" },
   hablar: { texto: "Con calma. Bueno, intentadlo.", cara: "neutral" },
-  comida: { texto: "Arnau: comida. YA.", cara: "gremlin" },
+  comida: { texto: "{pareja}: comida. YA.", cara: "gremlin" },
   nada: { texto: "Se pasará. Tú mandas.", cara: "neutral" },
 };

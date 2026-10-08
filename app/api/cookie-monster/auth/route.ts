@@ -1,3 +1,5 @@
+import { accountMode } from "@/lib/account-mode";
+import { partnerStatus, partnerLogin } from "../account";
 import { cookies, headers } from "next/headers";
 import {
   COOKIE_MONSTER_SESSION_COOKIE,
@@ -12,19 +14,21 @@ import {
 
 /** Puerta exclusiva del receptor: su PIN no da acceso a Lilaila. */
 export async function GET() {
+  if (accountMode()) return partnerStatus();
   const problem = cookieMonsterConfigProblem();
   if (problem) return Response.json({ configured: false, authenticated: false });
 
   const jar = await cookies();
   return Response.json({
     configured: true,
-    authenticated: verifyCookieMonsterSession(
+    authenticated: await verifyCookieMonsterSession(
       jar.get(COOKIE_MONSTER_SESSION_COOKIE)?.value,
     ),
   });
 }
 
 export async function POST(req: Request) {
+  if (accountMode()) return partnerLogin(req);
   const problem = cookieMonsterConfigProblem();
   if (problem) {
     return Response.json({ error: "El acceso de Cookie Monster no está configurado." }, { status: 500 });
