@@ -466,7 +466,7 @@ function Codigo({
 
 export function Planes({ onCerrar, inicial = "anual" }: { onCerrar: () => void; inicial?: OpcionId }) {
   const cuenta = useCuenta();
-  const conVoz = !!cuenta?.venta?.voz;
+  const conVoz = !PAGA_CON_APPLE && !!cuenta?.venta?.voz;
   const ids: OpcionId[] = conVoz ? ["anual", "mensual", "voz"] : ["anual", "mensual"];
   const [opcion, setOpcion] = useState<OpcionId>(inicial === "voz" && !conVoz ? "anual" : inicial);
   const [precios, setPrecios] = useState<Partial<Record<OpcionId, string>>>({});

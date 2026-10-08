@@ -167,7 +167,7 @@ export async function comprobarSesion(): Promise<Estado> {
       email: d.user.email ?? "",
       metodo: d.user.method ?? "email",
     });
-    if (NATIVA) iniciarCompras(d.user.id);
+    if (NATIVA) void iniciarCompras(d.user.id)?.catch(() => {});
     void refrescarPlan();
   } else fijar(null);
   return d;
@@ -263,12 +263,12 @@ export const PAGA_CON_APPLE = NATIVA;
 
 /** Precios de Apple en la moneda de cada país, si los hay. */
 export async function preciosDeApple(): Promise<Partial<Record<OpcionId, string>>> {
-  if (!comprasDisponibles()) return {};
+  if (!comprasDisponibles() || !actual) return {};
+  await iniciarCompras(actual.id);
   const p = await paquetes();
   return {
     anual: p.anual?.product.priceString,
     mensual: p.mensual?.product.priceString,
-    voz: p.voz?.product.priceString,
   };
 }
 
@@ -286,7 +286,9 @@ export async function contratar(id: OpcionId) {
     return fijar({ ...c, plan: o.plan, tienda: "apple", hasta: hasta.toISOString() });
   }
   if (PAGA_CON_APPLE) {
+    if (id === "voz") throw new SinCompras("Este plan no está a la venta ahora mismo.");
     if (!comprasDisponibles() || !c.venta?.apple) throw new SinCompras("Las compras del iPhone abren muy pronto.");
+    await iniciarCompras(c.id);
     const paquete = (await paquetes())[id];
     if (!paquete) throw new SinCompras("Este plan no está a la venta ahora mismo.");
     await comprar(paquete);
@@ -302,6 +304,7 @@ export async function contratar(id: OpcionId) {
 export async function restaurarCompras() {
   if (DEMO || !actual) return;
   if (!comprasDisponibles()) throw new SinCompras("Restaurar es cosa de la app del iPhone.");
+  await iniciarCompras(actual.id);
   await restaurar();
   await enviar("/api/billing/apple", undefined, "PUT");
   await refrescarPlan();

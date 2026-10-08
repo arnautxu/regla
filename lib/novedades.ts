@@ -20,6 +20,14 @@ export type Novedad = {
 
 export const NOVEDADES: Novedad[] = [
   {
+    id: "2026-10-08-c",
+    titulo: "Plus se viene al iPhone, guapa",
+    cambios: [
+      "En la app del iPhone, Plus cuesta 6,99 € al mes o 49,99 € al año; los cobros los lleva Apple.",
+      "Si ya lo habías comprado, toca «Restaurar compras» y recuperamos lo tuyo, que aquí no se paga dos veces por gusto.",
+    ],
+  },
+  {
     id: "2026-10-08-b",
     titulo: "Tu pareja ahora se configura, como un mueble de IKEA",
     cambios: [
