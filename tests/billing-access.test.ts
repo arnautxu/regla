@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { z } from "zod";
 import { PLANS, PLUS_ANUAL_EUROS } from "../lib/plans";
+import { NextRequest, NextResponse } from "next/server";
 
 /** Ejecuta los módulos reales con servicios dobles: ninguna petición sale
  * hacia Supabase, Stripe o RevenueCat. Cada carga tiene estado aislado. */
@@ -26,6 +27,22 @@ const http = {
   sameOrigin: () => true,
   limitedJson: (req: Request) => req.json(),
 };
+
+test("Apple webhook reaches its authentication without Origin while account writes remain protected", () => {
+  const { proxy } = isolatedModule<typeof import("../proxy")>("../proxy.ts", {
+    "next/server": { NextResponse }, "@/lib/account-mode": { accountMode: () => true },
+  });
+  const request = (path: string, method: string, origin?: string) => new NextRequest(`https://lilaila.vercel.app${path}`, {
+    method, headers: origin ? { origin } : {},
+  });
+  const webhook = proxy(request("/api/billing/apple", "POST"));
+  assert.equal(webhook.headers.get("x-middleware-next"), "1");
+  assert.equal(proxy(request("/api/billing/apple", "PUT")).status, 403);
+  assert.equal(proxy(request("/api/billing/apple", "PUT", "https://untrusted.invalid")).status, 403);
+  assert.equal(proxy(request("/api/billing/apple", "PUT", "https://lilaila.vercel.app")).headers.get("x-middleware-next"), "1");
+  assert.equal(proxy(request("/api/account", "DELETE")).status, 403);
+  assert.equal(proxy(request("/api/billing/apple/extra", "POST")).status, 403);
+});
 
 function budget(plan: "free" | "plus", failedLookup = false, rpcError?: string) {
   let reservations = 0;

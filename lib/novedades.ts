@@ -20,6 +20,14 @@ export type Novedad = {
 
 export const NOVEDADES: Novedad[] = [
   {
+    id: "2026-10-08-f",
+    titulo: "Tu cuenta, tu diario y yo al otro lado",
+    cambios: [
+      "Ahora entras con tu cuenta: tu diario antiguo sigue guardado, pero hay que pasarlo a la cuenta que te toca, que no voy a adivinar de quién es.",
+      "Con Plus ya puedo contestarte; el diario sigue siendo gratis, faltaría más.",
+    ],
+  },
+  {
     id: "2026-10-08-e",
     titulo: "Ya me sé el nombre de tu pareja, prometido",
     cambios: [

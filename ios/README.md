@@ -31,10 +31,10 @@ Time Sensitive Notifications solo habilita la capacidad: no registra el disposit
 
 El plan gratuito conserva el diario, con **0 respuestas de Lilita**. El cliente muestra Plus desde el primer intento y `reserve` lo rechaza antes de reservar consumo. La migración `20261008113950_free_diary_without_chat.sql` está aplicada en Supabase (proyecto «Lilaila») y deja también el límite de `reserve_ai` a cero. El 2026-10-08 se comprobó que devuelve `plus_required` sin crear reservas, mediante una prueba transaccional revertida, y que solo `service_role` conserva permiso para ejecutarla.
 
-El interruptor general `ai_policy.enabled` permanece en `false`, como estaba antes del despliegue: las respuestas de Lilita siguen desactivadas también para cuentas de pago.
+El interruptor general `ai_policy.enabled` se activó el 2026-10-08 por indicación de Arnau, manteniendo el presupuesto de 100 USD/mes. Las credenciales de Supabase, `LILAILA_APP_URL` y `NEXT_PUBLIC_ACCOUNT_MODE=true` están configuradas en Vercel Production. Arnau aprobó el PNG y la sustitución del acceso con PIN por cuentas; el diario antiguo se conserva y requiere una importación explícita al propietario correcto.
 
 **Plus con voz** permanece en los datos del plan, pero se muestra como «Próximamente», sin precio ni selección de compra, en iPhone y web. Tanto el cliente como el checkout web rechazan comprarlo; su disponibilidad no depende de activar las llamadas. Las suscripciones Plus y los derechos ya existentes conservan su gestión.
 
 `npm test`, `npm run lint` y `npm run build` comprueban la lógica y la web. `npx cap sync ios` sincroniza los dos complementos nativos sin subir una build. La revisión del código de acceso confirma `clientId: "app.lilaila"`, nonce y `signInWithIdToken({ provider: "apple" })`. El panel de Supabase confirma el proveedor Apple activado con ese identificador; queda pendiente probar el inicio de sesión en un iPhone.
 
-Antes de aceptar la integración en dispositivo quedan las pruebas de compra/restauración con Sandbox y la recepción del webhook, sin compras reales ni envío a revisión. APNs y los secretos del servidor no se han configurado en esta tarea.
+Antes de aceptar la integración en dispositivo quedan las pruebas de compra/restauración con Sandbox y la recepción del webhook, sin compras reales ni envío a revisión. Las claves de RevenueCat están configuradas en Vercel Production. APNs sigue pendiente.
