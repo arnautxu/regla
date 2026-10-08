@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { startBackup, stopBackup } from "@/lib/backup";
+import { pushNow, startBackup, stopBackup } from "@/lib/backup";
+import { traerDiarioAnterior } from "@/lib/diario-anterior";
 import { CUENTAS_ACTIVAS, DEMO, comprobarSesion } from "@/lib/cuenta";
 import { Acceso } from "./cuenta";
 import { Lilita } from "./lilita";
@@ -32,7 +33,12 @@ function Gate({ children }: { children: React.ReactNode }) {
       if ((localStorage.getItem(OWNER_KEY) ?? "guest") !== owner) {
         stopBackup(); localStorage.setItem(OWNER_KEY, owner); location.reload(); return;
       }
-      if (d.authenticated) { await startBackup(); if (alive) setStatus("ready"); }
+      if (d.authenticated) {
+        await startBackup();
+        // Después de mirar la copia: si allí había diario, ya está aquí y no se toca.
+        if (await traerDiarioAnterior().catch(() => false)) await pushNow().catch(() => {});
+        if (alive) setStatus("ready");
+      }
       else setStatus("login");
     }).catch(() => {
       // Sin red: quien ya entró en este móvil sigue con su diario local.
