@@ -1,5 +1,7 @@
 "use client";
 
+import { accountMode } from "@/lib/account-mode";
+
 import { useEffect, useState } from "react";
 import {
   addAngerEvent,
@@ -138,17 +140,17 @@ export function CookieMonsterButton({ days }: { days: DayLog[] }) {
         abierta={abierta && !!event}
         label="Cookie Monster"
         cara="enfadada"
-        titulo={busy ? "Avisando a Arnau…" : sendError ? "Apuntado, pero sin aviso" : "🍪 Arnau ya lo sabe"}
+        titulo={busy ? (accountMode() ? "Avisando a tu pareja…" : "Avisando a Arnau…") : sendError ? "Apuntado, pero sin aviso" : (accountMode() ? "🍪 Tu pareja ya lo sabe" : "🍪 Arnau ya lo sabe")}
         subtitulo={
           sendError
             ? `${sendError} El enfado queda guardado igual.`
             : "Ahora cuéntame a mí. Solo si quieres."
         }
-        celebra="Expediente completo. Arnau, tiembla."
+        celebra={accountMode() ? "Expediente completo. Que se prepare tu pareja." : "Expediente completo. Arnau, tiembla."}
         aviso={
           sendError
             ? undefined
-            : "Cuando se te pase, toca «Se me ha pasado» en Hoy. «Deshacer» lo borra de aquí; el aviso a Arnau ya ha salido."
+            : `Cuando se te pase, toca «Se me ha pasado» en Hoy. «Deshacer» lo borra de aquí; el aviso a ${accountMode() ? "tu pareja" : "Arnau"} ya ha salido.`
         }
         onDeshacer={() => void undo()}
         onCerrar={() => setAbierta(false)}

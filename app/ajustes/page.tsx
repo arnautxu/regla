@@ -1,5 +1,6 @@
 "use client";
 
+import { AccountPanel } from "@/components/account-panel";
 import { Lilita } from "@/components/lilita";
 import { BackupPanel } from "@/components/backup-panel";
 import { MemoryPanel } from "@/components/memory-panel";
@@ -60,6 +61,8 @@ export default function Ajustes() {
         ))}
       </Group>
 
+      <AccountPanel />
+
       <StepsPanel settings={settings} />
 
       <MemoryPanel chat={settings.chat} />
@@ -89,7 +92,7 @@ export default function Ajustes() {
       <BackupPanel />
 
       <p className="text-xs leading-relaxed text-faint">
-        Lo que registras vive en este móvil. Si has puesto código, además se
+        Lo que registras vive en este móvil. Si has conectado tu cuenta, además se
         guarda una copia privada. Lilaila no es un dispositivo médico ni un
         método anticonceptivo.
       </p>

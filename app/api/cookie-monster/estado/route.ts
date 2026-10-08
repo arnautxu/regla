@@ -1,3 +1,5 @@
+import { accountMode } from "@/lib/account-mode";
+import { partnerOwner } from "@/lib/server/supabase";
 import { cookies } from "next/headers";
 import {
   COOKIE_MONSTER_SESSION_COOKIE,
@@ -19,12 +21,13 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const jar = await cookies();
-  if (!verifyCookieMonsterSession(jar.get(COOKIE_MONSTER_SESSION_COOKIE)?.value)) {
+  if (!await verifyCookieMonsterSession(jar.get(COOKIE_MONSTER_SESSION_COOKIE)?.value)) {
     return Response.json({ error: "No autorizado." }, { status: 401 });
   }
   if (!pushConfigured()) return Response.json({ shared: false });
 
-  const push = await readPushDoc();
+  const owner = accountMode() ? (await partnerOwner())! : undefined;
+  const push = await readPushDoc(owner);
   if (!push.prefs?.arnauView || !push.forecast) return Response.json({ shared: false });
 
   const { date } = localNow(new Date());

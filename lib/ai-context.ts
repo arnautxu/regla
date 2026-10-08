@@ -2,6 +2,7 @@ import type { CycleState } from "./cycle";
 import { PHASE_LABEL } from "./cycle";
 import { fromKey, type ChatSettings, type DayLog, type HumorLevel, type Memory } from "./db";
 import type { Insight } from "./insights";
+import { accountMode } from "./account-mode";
 
 /* ═══════════════════════════════════════════════════════════════
    LO QUE SALE DEL MÓVIL
@@ -97,7 +98,7 @@ export function buildContext(
       ? extra.days
           .filter((d) => d.note?.trim())
           .sort((a, b) => b.date.localeCompare(a.date))
-          .slice(0, MAX_NOTAS)
+          .slice(0, accountMode() ? 3 : MAX_NOTAS)
           .map((d) => ({
             cuando: cuando(d.date, state.todayKey),
             texto: d.note!.trim().slice(0, LARGO_NOTA),
@@ -106,7 +107,7 @@ export function buildContext(
 
   const memorias =
     extra?.chat?.remembers && extra.memories
-      ? extra.memories.map((m) => ({ id: m.id, texto: m.text }))
+      ? (accountMode() ? extra.memories.slice(-8) : extra.memories).map((m) => ({ id: m.id, texto: m.text }))
       : [];
 
   return {

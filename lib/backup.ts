@@ -2,6 +2,7 @@
 
 import {
   db,
+  localOwner,
   onLocalChange,
   type Cycle,
   type DayLog,
@@ -38,6 +39,13 @@ export type BackupState =
   | { status: "saved"; savedAt: string }
   | { status: "offline"; savedAt?: string }
   | { status: "error"; message: string; savedAt?: string };
+
+let revision = 0;
+let conflicted = false;
+let pushing = false;
+let pending = false;
+const accountMode = () => process.env.NEXT_PUBLIC_ACCOUNT_MODE === "true";
+const revisionKey = () => `lilaila-revision-${localOwner}`;
 
 let timer: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Set<(s: BackupState) => void>();
@@ -84,20 +92,25 @@ function scheduleRetry() {
 }
 
 async function push() {
+  if (!started || conflicted) return;
+  if (pushing) { pending = true; return; }
+  if (accountMode() && localStorage.getItem("lilaila-account-owner") !== localOwner) return;
+  pushing = true;
   emit({ status: "saving" });
   try {
     const body = await collect();
     const res = await fetch("/api/data", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ version: 1, ...body }),
+      headers: { "Content-Type": "application/json", "x-lilaila-owner": localOwner },
+      body: JSON.stringify({ version: 1, revision, ...body }),
     });
 
     if (res.status === 401) return emit({ status: "off" });
 
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      scheduleRetry();
+      if (res.status === 409) conflicted = true;
+      else scheduleRetry();
       return emit({
         status: "error",
         message: data.error ?? "El servidor no aceptó la copia.",
@@ -105,7 +118,9 @@ async function push() {
       });
     }
 
-    const { savedAt } = (await res.json()) as { savedAt: string };
+    const { savedAt, revision: nextRevision } = (await res.json()) as { savedAt: string; revision?: number };
+    if (!started) return;
+    if (nextRevision !== undefined) { revision = nextRevision; localStorage.setItem(revisionKey(), String(revision)); }
     lastSavedAt = savedAt;
     if (retry) { clearTimeout(retry); retry = null; }
     emit({ status: "saved", savedAt });
@@ -113,6 +128,9 @@ async function push() {
     // Sin red: no es culpa de nadie y se reintenta sola.
     scheduleRetry();
     emit({ status: "offline", savedAt: lastSavedAt });
+  } finally {
+    pushing = false;
+    if (pending) { pending = false; schedulePush(); }
   }
 }
 
@@ -128,18 +146,31 @@ function schedulePush() {
 async function restoreIfEmpty(): Promise<boolean> {
   // Vacio = sin dias registrados. La tabla de ciclos es legado.
   const localCount = await db.days.count();
-  if (localCount > 0) return false;
+  if (localCount > 0 && !accountMode()) return false;
 
   const res = await fetch("/api/data");
-  if (!res.ok) return false;
+  if (!res.ok) throw new Error("No se ha podido comprobar la copia.");
 
   const doc = (await res.json()) as {
+    revision?: number;
     cycles: Cycle[];
     days: DayLog[];
     settings: Settings | null;
     memories?: Memory[];
   };
-  if (!doc.cycles?.length && !doc.days?.length) return false;
+  if (accountMode()) {
+    const known = localStorage.getItem(revisionKey());
+    revision = Number(known ?? 0);
+    if (localCount > 0 && (doc.revision ?? 0) !== revision) {
+      conflicted = true;
+      emit({ status: "error", message: "Hay una copia más reciente en otro dispositivo. Exporta tus datos antes de restaurar.", savedAt: lastSavedAt });
+      return true;
+    }
+    revision = doc.revision ?? 0;
+    localStorage.setItem(revisionKey(), String(revision));
+  }
+  if (localCount > 0) return false;
+  if (!doc.cycles?.length && !doc.days?.length && !doc.settings && !doc.memories?.length) return false;
 
   await db.transaction(
     "rw",
@@ -164,7 +195,15 @@ export async function startBackup() {
   if (started) return;
   started = true;
 
-  const restored = await restoreIfEmpty().catch(() => false);
+  let restored: boolean;
+  try { restored = await restoreIfEmpty(); }
+  catch {
+    emit({ status: "error", message: "No se ha podido comprobar la copia. No se sobrescribirá hasta reconectar." });
+    // Retry the read before allowing ANY upload after an offline start.
+    started = false;
+    retry = setTimeout(() => { retry = null; void startBackup(); }, 60_000);
+    return;
+  }
 
   onLocalChange(schedulePush);
 
@@ -174,8 +213,11 @@ export async function startBackup() {
 
 export function stopBackup() {
   started = false;
+  pending = false;
   onLocalChange(null);
   if (timer) clearTimeout(timer);
+  if (retry) clearTimeout(retry);
+  timer = null; retry = null;
   emit({ status: "off" });
 }
 
@@ -184,4 +226,29 @@ export function pushNow() {
   if (timer) clearTimeout(timer);
   timer = null;
   return push();
+}
+
+/** Called only after the explicit diary deletion confirmation in Settings. */
+export async function eraseCloudDiary() {
+  if (!accountMode() || localOwner === "guest") return;
+  stopBackup();
+  const response = await fetch("/api/data", { method: "DELETE", headers: { "x-lilaila-owner": localOwner } });
+  if (!response.ok) throw new Error("No se ha podido borrar la copia privada. No se ha borrado el diario del móvil.");
+  const data = await response.json();
+  localStorage.setItem(revisionKey(), String(data.revision));
+}
+
+export async function restoreCloudDiary() {
+  if (!accountMode() || localOwner === "guest") throw new Error("Entra en tu cuenta primero.");
+  const res = await fetch("/api/data", { cache: "no-store" });
+  if (!res.ok) throw new Error("No se ha podido descargar tu copia.");
+  const doc = await res.json();
+  stopBackup();
+  await db.transaction("rw", db.days, db.cycles, db.memories, db.settings, async () => {
+    await Promise.all([db.days.clear(), db.cycles.clear(), db.memories.clear(), db.settings.clear()]);
+    await db.days.bulkPut(doc.days); await db.cycles.bulkPut(doc.cycles); await db.memories.bulkPut(doc.memories ?? []);
+    if (doc.settings) await db.settings.put({ ...doc.settings, id: "singleton" });
+  });
+  localStorage.setItem(revisionKey(), String(doc.revision));
+  location.reload();
 }

@@ -19,6 +19,17 @@ export type Novedad = {
 };
 
 export const NOVEDADES: Novedad[] = [
+  ...(process.env.NEXT_PUBLIC_ACCOUNT_MODE === "true" ? [{
+    id: "2026-10-08",
+    titulo: "Tu diario ya tiene su propio sitio",
+    cambios: [
+      "Entra con tu correo y guardo una copia privada de tu diario, sin mezclarlo con el de nadie.",
+      "En Ajustes te cuento cuánto nos queda por hablar, sin cobrarte sorpresas.",
+      "Las llamadas duran hasta dos minutos: te enseño el reloj para que no nos pille a medias.",
+      "A tu pareja la invitas tú, y le cierras la puerta cuando quieras.",
+      "Mis recuerdos los escribes tú en Ajustes: eliges qué quieres que tenga presente cuando charlamos.",
+    ],
+  }] : []),
   {
     id: "2026-10-07-d",
     titulo: "Llorar y enfadarte ahora va paso a paso",

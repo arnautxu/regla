@@ -1,3 +1,5 @@
+import { accountMode } from "@/lib/account-mode";
+import { accountVoice, voiceReady } from "@/lib/server/account-voice";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, requireSession } from "@/lib/server/auth";
 import { explain, voiceId } from "@/lib/server/elevenlabs";
@@ -36,10 +38,12 @@ const MODELS = ["eleven_v3_conversational", "eleven_flash_v2_5"];
 let cachedAgent: string | null = null;
 
 export async function GET() {
+  if (accountMode()) return Response.json({ enabled: voiceReady() });
   return Response.json({ enabled: Boolean(process.env.ELEVENLABS_API_KEY) });
 }
 
 export async function POST(req: Request) {
+  if (accountMode()) return accountVoice(req);
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) {
     return Response.json({ error: "Voz no configurada." }, { status: 503 });

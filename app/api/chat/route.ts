@@ -1,3 +1,5 @@
+import { accountMode } from "@/lib/account-mode";
+import { accountChat } from "@/lib/server/account-chat";
 import {
   convertToModelMessages,
   createUIMessageStreamResponse,
@@ -34,6 +36,7 @@ const BUDGET_MS = 52_000;
 const FIRST_WORD_MS = 12_000;
 
 export async function POST(req: Request) {
+  if (accountMode()) return accountChat(req);
   const deadline = Date.now() + BUDGET_MS;
   if (!aiConfigured()) {
     return Response.json({ error: "IA no configurada." }, { status: 503 });

@@ -1,15 +1,22 @@
+import { accountMode } from "@/lib/account-mode";
+import { accountDataGet, accountDataPut, accountDataDelete } from "@/lib/server/account-diary";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, verifySession } from "@/lib/server/auth";
 import { readDoc, writeDoc, type StoredDoc } from "@/lib/server/store";
 
 async function guard(): Promise<boolean> {
   const jar = await cookies();
-  return verifySession(jar.get(SESSION_COOKIE)?.value);
+  return await verifySession(jar.get(SESSION_COOKIE)?.value);
 }
 
 const DENIED = Response.json({ error: "No autorizado." }, { status: 401 });
 
+export async function DELETE(req: Request) {
+  return accountMode() ? accountDataDelete(req) : new Response(null, { status: 405 });
+}
+
 export async function GET() {
+  if (accountMode()) return accountDataGet();
   if (!(await guard())) return DENIED;
   return Response.json(await readDoc());
 }
@@ -26,6 +33,7 @@ export async function GET() {
  * existe para evitar.
  */
 export async function PUT(req: Request) {
+  if (accountMode()) return accountDataPut(req);
   if (!(await guard())) return DENIED;
 
   let incoming: StoredDoc;

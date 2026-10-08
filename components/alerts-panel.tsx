@@ -6,6 +6,7 @@ import { status, type PushStatus } from "@/lib/push";
 import { toggleAlert } from "@/lib/alerts";
 import { haptic } from "@/lib/use-lilaila";
 import { SwitchRow } from "./switch-row";
+import { accountMode } from "@/lib/account-mode";
 
 /* ═══════════════════════════════════════════════════════════════
    AVISOS DEL CICLO Y LO QUE VE ARNAU
@@ -95,7 +96,7 @@ export function AlertsPanel({
 
       <section>
         <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-faint">
-          Arnau
+          {accountMode() ? "Tu pareja" : "Arnau"}
         </h2>
         <div
           className="sticker mt-sm divide-y divide-[var(--border)] rounded-2xl px-lg"

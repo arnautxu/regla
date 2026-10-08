@@ -1,3 +1,4 @@
+import { accountMode } from "../account-mode";
 import type { HumorLevel } from "../db";
 import type { Phase } from "../cycle";
 
@@ -637,6 +638,11 @@ function pick<T>(pool: T[], seed: string): T {
 }
 
 export function lilitaSays(ctx: LineContext, dateKey: string): Line {
+  const line = chooseLine(ctx, dateKey);
+  return accountMode() ? { ...line, text: line.text.replaceAll("Arnau", "tu pareja") } : line;
+}
+
+function chooseLine(ctx: LineContext, dateKey: string): Line {
   // --- Freno de mano. Primero, antes que nada.
   if (ctx.badDay || (ctx.painLevel ?? 0) >= 8) {
     return { text: pick(CUIDADOS, dateKey + "cuidados"), mood: "cuidando" };

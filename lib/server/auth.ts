@@ -1,3 +1,5 @@
+import { accountMode } from "@/lib/account-mode";
+import { currentUser, partnerOwner } from "./supabase";
 import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -149,7 +151,8 @@ export function createSession(): { token: string; maxAge: number } {
   };
 }
 
-export function verifySession(token: string | undefined): boolean {
+export async function verifySession(token: string | undefined): Promise<boolean> {
+  if (accountMode()) return Boolean(await currentUser());
   if (!token) return false;
   const parts = token.split(".");
   if (parts.length !== 3) return false;
@@ -172,7 +175,8 @@ export function createCookieMonsterSession(): { token: string; maxAge: number } 
 }
 
 /** Esta firma distinta impide usar esta cookie contra /api/data o el chat. */
-export function verifyCookieMonsterSession(token: string | undefined): boolean {
+export async function verifyCookieMonsterSession(token: string | undefined): Promise<boolean> {
+  if (accountMode()) return Boolean(await partnerOwner());
   if (!token) return false;
   const parts = token.split(".");
   if (parts.length !== 3) return false;
@@ -199,7 +203,7 @@ export async function requireSession(
   if (process.env.NODE_ENV !== "production" && !process.env.LILAILA_PIN) {
     return null;
   }
-  if (verifySession(token)) return null;
+  if (await verifySession(token)) return null;
 
   return Response.json(
     { error: "No autorizado. Configura LILAILA_PIN y entra con tu código." },

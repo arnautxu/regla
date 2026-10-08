@@ -19,6 +19,7 @@ import { phaseByDay } from "@/lib/cycle";
 import { addMemory, db, removeMemory } from "@/lib/db";
 import { DURATION, EASE_OUT_QUART } from "@/lib/motion";
 import { haptic, useLilaila } from "@/lib/use-lilaila";
+import { accountMode } from "@/lib/account-mode";
 
 // La librería de llamadas solo se descarga cuando Lídia llama.
 const LiveCall = dynamic(
@@ -296,6 +297,7 @@ export default function Chat() {
         className="flex items-end gap-2 border-t border-line py-md pb-safe"
       >
         <input
+          maxLength={accountMode() ? 2000 : undefined}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Escribe aquí…"

@@ -282,7 +282,7 @@ export interface Memory {
 
 export const DEFAULT_SETTINGS: Settings = {
   id: "singleton",
-  name: "Lidia",
+  name: process.env.NEXT_PUBLIC_ACCOUNT_MODE === "true" ? "" : "Lidia",
   avgCycleLength: 28,
   avgPeriodLength: 5,
   humorLevel: "gamberro",
@@ -325,7 +325,9 @@ export function withDefaults(stored: Partial<Settings> | null | undefined): Sett
   };
 }
 
-const db = new Dexie("lilaila") as Dexie & {
+export const localOwner = typeof window === "undefined" ? "guest" : (window.localStorage.getItem("lilaila-account-owner") ?? "guest");
+export const localDatabaseName = process.env.NEXT_PUBLIC_ACCOUNT_MODE === "true" ? `lilaila-account-${localOwner}` : "lilaila";
+const db = new Dexie(localDatabaseName) as Dexie & {
   cycles: EntityTable<Cycle, "id">;
   days: EntityTable<DayLog, "date">;
   settings: EntityTable<Settings, "id">;

@@ -1,3 +1,6 @@
+import { accountMode } from "@/lib/account-mode";
+import { readAccountPush, writeAccountPush } from "./account-push";
+import { adminDb, userId } from "./supabase";
 import { get, put } from "@vercel/blob";
 import webpush from "web-push";
 import type { Forecast } from "@/lib/forecast";
@@ -35,6 +38,7 @@ export interface StoredSub {
 export type PushAudience = "lidia" | "cookie-monster";
 
 export interface PushDoc {
+  revision?: number;
   version: 1;
   subs: StoredSub[];
   /**
@@ -97,7 +101,8 @@ function applyVapid(): void {
   );
 }
 
-export async function readPushDoc(): Promise<PushDoc> {
+export async function readPushDoc(owner?: string): Promise<PushDoc> {
+  if (accountMode()) return readAccountPush(owner);
   try {
     const result = await get(PATH, { access: "private" });
     if (!result || result.statusCode !== 200) return EMPTY;
@@ -118,7 +123,8 @@ export async function readPushDoc(): Promise<PushDoc> {
   }
 }
 
-export async function writePushDoc(doc: PushDoc): Promise<void> {
+export async function writePushDoc(doc: PushDoc, owner?: string): Promise<void> {
+  if (accountMode()) return writeAccountPush(doc, owner);
   await put(PATH, JSON.stringify(doc), {
     access: "private",
     contentType: "application/json",
@@ -133,8 +139,9 @@ export async function addSub(
   sub: Omit<StoredSub, "createdAt">,
   hour?: number,
   audience: PushAudience = "lidia",
+  owner?: string,
 ): Promise<void> {
-  const doc = await readPushDoc();
+  const doc = await readPushDoc(owner);
   const otros = doc.subs.filter((s) => s.endpoint !== sub.endpoint);
   await writePushDoc({
     ...doc,
@@ -143,15 +150,15 @@ export async function addSub(
       { ...sub, audience, createdAt: new Date().toISOString() },
     ],
     reminderHour: hour ?? doc.reminderHour,
-  });
+  }, owner);
 }
 
-export async function removeSub(endpoint: string): Promise<void> {
-  const doc = await readPushDoc();
+export async function removeSub(endpoint: string, owner?: string): Promise<void> {
+  const doc = await readPushDoc(owner);
   await writePushDoc({
     ...doc,
     subs: doc.subs.filter((s) => s.endpoint !== endpoint),
-  });
+  }, owner);
 }
 
 export interface Notice {
@@ -181,23 +188,40 @@ export interface Notice {
  */
 export async function sendToAll(
   notice: Notice,
+  owner?: string,
 ): Promise<{ sent: number; gone: number }> {
-  return sendToAudience("lidia", notice);
+  return sendToAudience("lidia", notice, owner);
 }
 
 /** Manda un aviso solo a un grupo de dispositivos registrado. */
 export async function sendToAudience(
   audience: PushAudience,
   notice: Notice,
+  owner?: string,
 ): Promise<{ sent: number; gone: number }> {
   if (!pushConfigured()) return { sent: 0, gone: 0 };
   applyVapid();
 
-  const doc = await readPushDoc();
+  const doc = await readPushDoc(owner);
   const recipients = doc.subs.filter((sub) => sub.audience === audience);
   if (recipients.length === 0) return { sent: 0, gone: 0 };
 
-  const payload = JSON.stringify(notice);
+  const uid = accountMode() ? (owner ?? await userId()) : undefined;
+  const scheduled = uid && /^(pastilla|regla|sensible|aviso-arnau)-/.test(notice.tag);
+  if (scheduled) {
+    const { error } = await adminDb().from("notification_claims").insert({ user_id: uid, tag: notice.tag });
+    if (error?.code === "23505") return { sent: 0, gone: 0 };
+    if (error) throw error;
+  }
+  let recipientId = uid;
+  if (uid && audience === "cookie-monster") {
+    const { data, error } = await adminDb().from("partner_links").select("partner_id").eq("owner_id", uid).maybeSingle();
+    if (error) throw error;
+    if (!data) return { sent: 0, gone: 0 };
+    recipientId = data.partner_id;
+  }
+  const generic = (s: string) => s.replaceAll("Arnau", "tu pareja").replaceAll("Lidia", "tu pareja").replaceAll("Lídia", "tu pareja");
+  const payload = JSON.stringify({ ...notice, ...(uid ? { title: generic(notice.title), body: generic(notice.body), ownerId: uid, recipientId } : {}) });
   const muertas: string[] = [];
   let sent = 0;
 
@@ -219,12 +243,13 @@ export async function sendToAudience(
   );
 
   if (muertas.length) {
-    const fresco = await readPushDoc();
+    const fresco = await readPushDoc(owner);
     await writePushDoc({
       ...fresco,
       subs: fresco.subs.filter((s) => !muertas.includes(s.endpoint)),
-    });
+    }, owner);
   }
 
+  if (scheduled && sent === 0) await adminDb().from("notification_claims").delete().eq("user_id", uid!).eq("tag", notice.tag);
   return { sent, gone: muertas.length };
 }

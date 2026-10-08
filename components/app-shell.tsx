@@ -10,6 +10,9 @@ import { useForecastSync } from "@/lib/alerts";
 import { Onboarding } from "./onboarding";
 import { Novedades } from "./novedades";
 import { marcarNovedadesVistas } from "@/lib/novedades";
+import { AccountGate } from "./account-gate";
+import { accountMode } from "@/lib/account-mode";
+import { Fragment } from "react";
 import { PinGate } from "./pin-gate";
 import { CookieMonsterGate } from "./cookie-monster-gate";
 import { ServiceWorker } from "./service-worker";
@@ -22,6 +25,11 @@ import { TabBar } from "./tab-bar";
  * la barra de estado de iOS.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
+  return <AccountGate><DiaryShell>{children}</DiaryShell></AccountGate>;
+}
+
+function DiaryShell({ children }: { children: React.ReactNode }) {
+  const Gate = accountMode() ? Fragment : PinGate;
   const lilaila = useLilaila();
   const { ready, state, settings, cycles } = lilaila;
   const pathname = usePathname();
@@ -103,7 +111,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </CookieMonsterGate>
       ) : (
-      <PinGate startBackup={!cookieMonsterReceiver}>
+      <Gate>
         <div className="mx-auto flex min-h-dvh w-full max-w-[440px] flex-col">
           {cookieMonsterReceiver ? (
             children
@@ -132,7 +140,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
           <ServiceWorker />
         </div>
-      </PinGate>
+      </Gate>
       )}
     </MotionConfig>
   );
