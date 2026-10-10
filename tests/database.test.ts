@@ -143,6 +143,10 @@ test("a gifted plan never expires, survives billing events and needs a confirmed
   // Una baja o un reembolso de lo pagado no le quitan el regalo.
   await rpc("apply_billing('evt_gift',500,'cus_gift','sub_gift','free','revoked',null)");
   assert.equal(await rpc("granted_plan($1)", [gift]), "voice");
+  // El servidor llama como service_role, que no puede leer auth.users.
+  await db.exec("set role service_role");
+  assert.equal(await rpc("granted_plan($1)", [gift]), "voice");
+  await db.exec("reset role");
   const r = await reserve(gift, "voice"); assert.equal((r as { plan?: string }).plan, "voice");
   await rpc("settle_ai($1,1000,60)", [r.id]);
   // Sin correo confirmado no hay regalo.
