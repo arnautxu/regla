@@ -9,7 +9,7 @@ async function rpc<T>(sql: string, args: unknown[] = []) { return (await db.quer
 async function reserve(user = a, kind = "chat") { return rpc<{ id?: string; error?: string; reserved?: number }>("reserve_ai($1,$2,$3)", [user, crypto.randomUUID(), kind]); }
 before(async () => {
   await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
-    create schema auth; create table auth.users(id uuid primary key);
+    create schema auth; create table auth.users(id uuid primary key, email text, email_confirmed_at timestamptz);
     create function auth.uid() returns uuid language sql as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     grant usage on schema auth,public to anon,authenticated,service_role;
     insert into auth.users values('${a}'),('${b}');`);
@@ -131,4 +131,25 @@ test("checkout admission is atomic and concurrent attempts cannot both claim", a
   await db.exec(`update billing_accounts set status='inactive',plan='free',paid_until=null where user_id='${a}'`);
   const results = await Promise.all([rpc<boolean>("claim_checkout($1)", [a]), rpc<boolean>("claim_checkout($1)", [a])]);
   assert.equal(results.filter(Boolean).length, 1);
+});
+
+test("a gifted plan never expires, survives billing events and needs a confirmed email", async () => {
+  const gift = "00000000-0000-0000-0000-000000000004";
+  const fake = "00000000-0000-0000-0000-000000000005";
+  await db.exec(`delete from ai_reservations; update ai_policy set enabled=true,monthly_micro_usd=100000000;
+    insert into auth.users values('${gift}','Regalo@Example.com',now()),('${fake}','otra@example.com',null);
+    insert into plan_grants(email,plan) values('regalo@example.com','voice'),('otra@example.com','voice');
+    insert into billing_accounts(user_id,customer_id,plan,status,paid_until) values('${gift}','cus_gift','plus','active',now()+interval '1 month')`);
+  // Una baja o un reembolso de lo pagado no le quitan el regalo.
+  await rpc("apply_billing('evt_gift',500,'cus_gift','sub_gift','free','revoked',null)");
+  assert.equal(await rpc("granted_plan($1)", [gift]), "voice");
+  const r = await reserve(gift, "voice"); assert.equal((r as { plan?: string }).plan, "voice");
+  await rpc("settle_ai($1,1000,60)", [r.id]);
+  // Sin correo confirmado no hay regalo.
+  assert.equal(await rpc("granted_plan($1)", [fake]), null);
+  assert.equal((await reserve(fake)).error, "plus_required");
+  await db.exec("set role authenticated");
+  await assert.rejects(db.query("select * from plan_grants"), /permission denied/);
+  await assert.rejects(rpc("granted_plan($1)", [gift]), /permission denied/);
+  await db.exec("reset role");
 });

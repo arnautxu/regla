@@ -84,6 +84,8 @@ export interface Cuenta {
   /** Dónde se paga lo que tiene: cambia cómo se gestiona. */
   tienda: "apple" | "stripe" | null;
   hasta: string | null;
+  /** Plan regalado para siempre: no caduca ni se gestiona en ninguna tienda. */
+  regalo?: boolean;
   uso?: { mensajes: number; segundos: number; renueva: string | null };
   /** Qué se puede contratar ahora mismo desde aquí. */
   venta?: { web: boolean; anual: boolean; voz: boolean; apple: boolean };
@@ -182,6 +184,7 @@ export async function refrescarPlan() {
         plan: Plan;
         store: Cuenta["tienda"];
         paidUntil: string | null;
+        gift?: boolean;
         usedMessages: number;
         usedSeconds: number;
         resetsAt: string | null;
@@ -197,6 +200,7 @@ export async function refrescarPlan() {
       plan: d.plan,
       tienda: d.store,
       hasta: d.paidUntil,
+      regalo: !!d.gift,
       uso: { mensajes: d.usedMessages, segundos: d.usedSeconds, renueva: d.resetsAt },
       venta: { web: d.billingReady, anual: d.annualReady, voz: d.voiceReady, apple: d.appleReady },
     });
