@@ -22,6 +22,7 @@ export async function GET() {
     hasCustomer: billingStore(account) === "stripe",
     store: plan === "free" ? null : billingStore(account),
     paidUntil: plan === "free" ? null : account?.paid_until ?? null,
+    gift: plan !== "free" && account?.granted_plan === plan,
     annualReady: !!priceId("plus", "anual"),
     appleReady: appleReady(),
     voiceReady: false,

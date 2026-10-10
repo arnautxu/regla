@@ -78,7 +78,11 @@ export default function TuCuenta() {
           <div>
             <p className="font-display text-base font-bold text-accent">{plan.name}</p>
             <p className="text-xs text-muted">
-              {cuenta.hasta ? `Pagado hasta el ${fecha(cuenta.hasta)}.` : "Activo."}
+              {cuenta.regalo
+                ? "Para siempre. Invita la casa."
+                : cuenta.hasta
+                  ? `Pagado hasta el ${fecha(cuenta.hasta)}.`
+                  : "Activo."}
             </p>
           </div>
         </div>
@@ -109,7 +113,8 @@ export default function TuCuenta() {
         {plan.voiceSeconds > 0 && <Row label="Llamadas" value={`${llamadas} de 10`} />}
       </Group>
 
-      {conPlus && (
+      {/* Un regalo sin compra detrás no tiene nada que gestionar ni cancelar. */}
+      {conPlus && cuenta.tienda && (
         <Group
           title="Suscripción"
           note={

@@ -20,6 +20,14 @@ export type Novedad = {
 
 export const NOVEDADES: Novedad[] = [
   {
+    id: "2026-10-10",
+    titulo: "Te ha tocado el gordo: Plus con voz para siempre",
+    cambios: [
+      "Charlas y llamadas conmigo sin pagar nada, ni este mes ni nunca: invita la casa.",
+      "En Tu cuenta ya no hay nada que gestionar ni cancelar, porque esto no caduca.",
+    ],
+  },
+  {
     id: "2026-10-08-j",
     titulo: "Ya te puedes ir cuando quieras",
     cambios: ["Cerrar sesión está abajo del todo en Ajustes, sin tener que buscarlo dentro de tu cuenta."],
