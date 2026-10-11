@@ -164,9 +164,12 @@ test("gifted voice calls last 20 minutes, skip personal quotas and free Lilita o
   for (let i = 0; i < 3; i++) {
     const r = await reserve(gift, "voice") as { id?: string; seconds?: number };
     assert.equal(r.seconds, 1200);
+    // Colgar otra llamada (una petición tardía de la anterior) no libera esta.
+    await rpc("release_voice($1,$2)", [gift, crypto.randomUUID()]);
+    assert.equal((await reserve(gift)).error, "busy");
     // Mientras dura la llamada, Lilita está ocupada; al colgar, libre al momento.
     assert.equal((await reserve(gift)).error, "busy");
-    await rpc("release_voice($1)", [gift]);
+    await rpc("release_voice($1,$2)", [gift, r.id]);
     await db.exec("update ai_reservations set created_at=now()-interval '2 minutes'");
   }
   assert.ok((await reserve(gift)).id);
@@ -177,6 +180,6 @@ test("gifted voice calls last 20 minutes, skip personal quotas and free Lilita o
   assert.equal(paid.seconds, 120);
   assert.ok((await db.query<{ ok: boolean }>("select expires_at <= now()+interval '4 minutes' ok from ai_reservations where id=$1", [paid.id])).rows[0].ok);
   await db.exec("set role authenticated");
-  await assert.rejects(rpc("release_voice($1)", [gift]), /permission denied/);
+  await assert.rejects(rpc("release_voice($1,$2)", [gift, paid.id]), /permission denied/);
   await db.exec("reset role");
 });

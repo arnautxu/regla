@@ -2,7 +2,7 @@
 -- * Con Plus con voz regalado, cada llamada dura hasta 20 minutos y no cuenta para los minutos
 --   ni el uso del mes de esa persona; el tope global de ai_policy sigue mandando.
 -- * La reserva de una llamada caduca 2 minutos después de su duración máxima (antes, 18 minutos fijos).
--- * release_voice: al colgar, Lilita queda libre al momento.
+-- * release_voice: al colgar esa llamada, Lilita queda libre al momento.
 create or replace function public.reserve_ai(p_user uuid,p_id uuid,p_kind text)
 returns jsonb language plpgsql set search_path = '' as $$
 declare pol public.ai_policy; b public.billing_accounts; pl text := 'free'; g text;
@@ -46,10 +46,10 @@ begin
  return jsonb_build_object('id',p_id,'reserved',amount,'seconds',seconds,'plan',pl);
 end $$;
 
-create function public.release_voice(p_user uuid)
+create function public.release_voice(p_user uuid,p_id uuid)
 returns void language sql set search_path = '' as $$
  update public.ai_reservations set expires_at=now()
- where user_id=p_user and kind='voice' and status='reserved' and expires_at>now();
+ where id=p_id and user_id=p_user and kind='voice' and status='reserved' and expires_at>now();
 $$;
-revoke all on function public.release_voice(uuid) from public, anon, authenticated;
-grant execute on function public.release_voice(uuid) to service_role;
+revoke all on function public.release_voice(uuid,uuid) from public, anon, authenticated;
+grant execute on function public.release_voice(uuid,uuid) to service_role;

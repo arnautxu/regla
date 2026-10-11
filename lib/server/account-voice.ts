@@ -101,7 +101,7 @@ export async function accountVoice(req: Request) {
     const token = await client.conversationalAi.conversations.getWebrtcToken({ agentId: created.agentId }, { maxRetries: 0 });
     const { error } = await adminDb().from("ai_reservations").update({ provider_id: token.conversationId }).eq("id", reservation.id!);
     if (error || !token.conversationId) throw new Error("Conversation not bound to reservation");
-    return privateJson({ token: token.token, limited: true, maxSeconds });
+    return privateJson({ token: token.token, limited: true, maxSeconds, id: reservation.id });
   } catch {
     // Ambiguous provider failures retain the reservation. Reconciliation/cleanup
     // does not refund money unless provider usage is known.
@@ -120,18 +120,22 @@ export async function releaseVoice(req: Request) {
   if (!sameOrigin(req)) return privateJson({ error: "Origen no permitido." }, 403);
   const user = await currentUser();
   if (!user) return privateJson({ error: "Entra en tu cuenta." }, 401);
-  // Antes de liberar, se corta la llamada borrando su agente: liberar sin colgar
-  // permitiría abrir otra llamada en paralelo.
+  const parsed = z.object({ id: z.uuid() }).safeParse(await limitedJson(req, 1_000).catch(() => null));
+  if (!parsed.success) return privateJson({ error: "No se ha podido colgar." }, 400);
+  const { id } = parsed.data;
+  // Solo esa llamada, y antes de liberarla se corta borrando su agente: liberar sin
+  // colgar permitiría abrir otra llamada en paralelo.
   const db = adminDb();
-  const { data: open, error: readError } = await db.from("ai_reservations").select("id,agent_id")
-    .eq("user_id", user.id).eq("kind", "voice").eq("status", "reserved").eq("agent_deleted", false).gt("expires_at", new Date().toISOString());
+  const { data: row, error: readError } = await db.from("ai_reservations").select("agent_id,agent_deleted")
+    .eq("id", id).eq("user_id", user.id).eq("kind", "voice").eq("status", "reserved").maybeSingle();
   if (readError) return privateJson({ error: "No se ha podido colgar." }, 503);
-  for (const row of open ?? []) {
-    if (!row.agent_id) return privateJson({ error: "No se ha podido colgar." }, 409);
+  if (!row) return privateJson({ ok: true });
+  if (!row.agent_id) return privateJson({ error: "No se ha podido colgar." }, 409);
+  if (!row.agent_deleted) {
     try { await voiceClient().conversationalAi.agents.delete(row.agent_id); }
     catch (e) { if ((e as { statusCode?: number }).statusCode !== 404) return privateJson({ error: "No se ha podido colgar." }, 503); }
-    await db.from("ai_reservations").update({ agent_deleted: true }).eq("id", row.id);
+    await db.from("ai_reservations").update({ agent_deleted: true }).eq("id", id);
   }
-  const { error } = await db.rpc("release_voice", { p_user: user.id });
+  const { error } = await db.rpc("release_voice", { p_user: user.id, p_id: id });
   return error ? privateJson({ error: "No se ha podido colgar." }, 503) : privateJson({ ok: true });
 }
