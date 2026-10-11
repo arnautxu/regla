@@ -13,8 +13,10 @@ import { VOICE_SECONDS_PER_CALL } from "@/lib/ai-limits";
 export function voiceClient() {
   return new ElevenLabsClient({ apiKey: process.env.ELEVENLABS_API_KEY });
 }
+/** El webhook (ELEVENLABS_WEBHOOK_SECRET) es opcional: sin él la reserva se queda
+ * cobrada entera y el agente temporal no se borra al colgar, pero la llamada va. */
 export function voiceReady() {
-  return !!(process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_WEBHOOK_SECRET && process.env.LILAILA_VOICE_ENABLED === "true");
+  return !!(process.env.ELEVENLABS_API_KEY && process.env.LILAILA_VOICE_ENABLED === "true");
 }
 /** El teléfono solo aparece a quien tiene Plus con voz (hoy, solo el regalo de Lídia). */
 export async function canCall() {
