@@ -1,7 +1,8 @@
 -- reserve_ai igual que en 20261010135403, salvo:
 -- * Con Plus con voz regalado, cada llamada dura hasta 20 minutos y no cuenta para los minutos
 --   ni el uso del mes de esa persona; el tope global de ai_policy sigue mandando.
--- * La reserva de una llamada caduca 2 minutos después de su duración máxima (antes, 18 minutos fijos).
+-- * La reserva de una llamada dura los 15 minutos en que vale el pase de ElevenLabs más la llamada
+--   y un minuto de margen (18 para 2 minutos, como antes; 36 para 20). Colgar la libera antes.
 -- * release_voice: al colgar esa llamada, Lilita queda libre al momento.
 create or replace function public.reserve_ai(p_user uuid,p_id uuid,p_kind text)
 returns jsonb language plpgsql set search_path = '' as $$
@@ -42,7 +43,7 @@ begin
  select coalesce(sum(coalesce(charged_micro_usd,reserved_micro_usd)),0) into total from public.ai_reservations where period=period_start;
  if total+amount > pol.monthly_micro_usd then return jsonb_build_object('error','global_budget'); end if;
  insert into public.ai_reservations(id,user_id,kind,plan,period,reserved_micro_usd,voice_seconds,expires_at)
- values(p_id,p_user,p_kind,pl,period_start,amount,seconds,now()+case p_kind when 'voice' then make_interval(secs => seconds+120) else interval '2 minutes' end);
+ values(p_id,p_user,p_kind,pl,period_start,amount,seconds,now()+case p_kind when 'voice' then make_interval(secs => 900+seconds+60) else interval '2 minutes' end);
  return jsonb_build_object('id',p_id,'reserved',amount,'seconds',seconds,'plan',pl);
 end $$;
 
