@@ -7,6 +7,7 @@ import { limitedJson, privateJson, sameOrigin } from "./http";
 import { liveInstructions } from "./lilita-prompt";
 import { voiceId } from "./elevenlabs";
 import { reserve } from "./ai-budget";
+import { activePlan, billingAccount } from "./billing";
 import { VOICE_SECONDS_PER_CALL } from "@/lib/ai-limits";
 
 export function voiceClient() {
@@ -14,6 +15,13 @@ export function voiceClient() {
 }
 export function voiceReady() {
   return !!(process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_WEBHOOK_SECRET && process.env.LILAILA_VOICE_ENABLED === "true");
+}
+/** El teléfono solo aparece a quien tiene Plus con voz (hoy, solo el regalo de Lídia). */
+export async function canCall() {
+  if (!voiceReady()) return false;
+  const user = await currentUser();
+  if (!user) return false;
+  try { return activePlan(await billingAccount(user.id)) === "voice"; } catch { return false; }
 }
 export async function accountVoice(req: Request) {
   if (!sameOrigin(req)) return privateJson({ error: "Origen no permitido." }, 403);
