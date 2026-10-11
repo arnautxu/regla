@@ -117,6 +117,8 @@ test("short calls consume one included call; pending expired usage stays charged
     update billing_accounts set billing_hold=false,status='active',paid_until=now()+interval '1 month' where user_id='${b}'`);
   for (let i=0; i<10; i++) {
     const r = await reserve(b, "voice"); assert.ok(r.id);
+    // A 2-minute call keeps Lilita busy for 3 minutes at most, not 18.
+    if (i === 0) assert.ok((await db.query<{ ok: boolean }>("select expires_at <= now()+interval '3 minutes' ok from ai_reservations where id=$1", [r.id])).rows[0].ok);
     await rpc("settle_ai($1,300000,5)", [r.id]);
   }
   await db.exec("update ai_reservations set created_at=now()-interval '2 minutes'");
