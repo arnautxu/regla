@@ -20,6 +20,20 @@ export function voiceClient() {
 export function voiceReady() {
   return !!process.env.ELEVENLABS_API_KEY && process.env.LILAILA_VOICE_ENABLED !== "false";
 }
+// La voz de antes de las cuentas: la del agente "Lilaila · Lilita" (v3 conversacional,
+// que entiende [laughs] y compañía). Con Flash la misma voz suena a otra persona.
+const BASE_AGENT = "Lilaila · Lilita";
+const MODELS = ["eleven_v3_conversational", "eleven_flash_v2_5"] as const;
+type Model = (typeof MODELS)[number];
+async function baseModel(client: ElevenLabsClient): Promise<Model | undefined> {
+  try {
+    const id = process.env.ELEVENLABS_AGENT_ID
+      || (await client.conversationalAi.agents.list({ search: BASE_AGENT })).agents.find(a => a.name === BASE_AGENT)?.agentId;
+    if (!id) return;
+    const model = (await client.conversationalAi.agents.get(id)).conversationConfig.tts?.modelId;
+    return MODELS.find(m => m === model);
+  } catch { return; }
+}
 export async function canCall() {
   if (!voiceReady()) return false;
   const user = await currentUser();
@@ -42,13 +56,15 @@ export async function accountVoice(req: Request) {
   try {
     // A private agent per reservation: the browser cannot override the prompt,
     // model, token cap or duration, or start unlimited calls on a shared agent.
-    const created = await client.conversationalAi.agents.create({
+    const base = await baseModel(client);
+    const models = base ? [base, ...MODELS.filter(m => m !== base)] : [...MODELS];
+    const create = (modelId: Model) => client.conversationalAi.agents.create({
       name: `Lilaila session ${reservation.id}`,
       conversationConfig: {
         agent: { language: "es", firstMessage: "Aquí estoy. Cuéntame.",
           maxConversationDurationMessage: "Cerramos esta llamada. Puedes seguir por escrito o volver a llamar si te quedan minutos.",
           prompt: { prompt, llm: "gemini-2.5-flash-lite", maxTokens: 160, thinkingBudget: 0, backupLlmConfig: { preference: "disabled" }, toolIds: [], tools: [] } },
-        tts: { modelId: "eleven_flash_v2_5", voiceId: voiceId() },
+        tts: { modelId, voiceId: voiceId() },
         conversation: { maxDurationSeconds: VOICE_SECONDS_PER_CALL, clientEvents: ["audio", "agent_response", "user_transcript", "interruption"] },
       },
       platformSettings: {
@@ -58,6 +74,16 @@ export async function accountVoice(req: Request) {
         overrides: { conversationConfigOverride: { conversation: { maxDurationSeconds: false }, agent: { prompt: { prompt: false, llm: false }, firstMessage: false, language: false } }, customLlmExtraBody: false },
       },
     }, { maxRetries: 0 });
+    let created;
+    for (const [i, model] of models.entries()) {
+      try { created = await create(model); break; }
+      catch (e) {
+        // Una cuenta sin v3 conversacional rechaza el modelo: se prueba con Flash.
+        const status = (e as { statusCode?: number }).statusCode;
+        if (i === models.length - 1 || ![400, 404, 422].includes(status ?? 0)) throw e;
+      }
+    }
+    if (!created) throw new Error("No agent");
     createdAgentId = created.agentId;
     const { error: saved } = await adminDb().from("ai_reservations").update({ agent_id: created.agentId }).eq("id", reservation.id!);
     if (saved) throw saved;
