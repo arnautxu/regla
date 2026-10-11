@@ -25,6 +25,11 @@ export function LiveCall(props: { context: LilitaContext; mood: Mood; onClose: (
   );
 }
 
+// Colgada la llamada, Lilita queda libre para el chat o para otra llamada.
+function release() {
+  void fetch("/api/voz/directo", { method: "DELETE", keepalive: true }).catch(() => {});
+}
+
 function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; onClose: () => void }) {
   const [error, setError] = useState("");
   const [said, setSaid] = useState("");
@@ -38,6 +43,7 @@ function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; 
     },
     onError: (message) => setError(friendly(message)),
     onDisconnect: (d) => {
+      release();
       if (d.reason === "error") setError(friendly(d.message));
     },
   });
@@ -106,7 +112,7 @@ function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; 
 
   // Al salir de la pantalla, se cuelga sí o sí: un micro abierto que
   // nadie ve sería lo peor que podría hacer esta app.
-  useEffect(() => () => endSession(), [endSession]);
+  useEffect(() => () => { endSession(); release(); }, [endSession]);
 
   useEffect(() => {
     if (call.status !== "connected" || remaining === null) return;
@@ -143,7 +149,7 @@ function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; 
     >
       <p className="mt-xl text-2xs font-semibold uppercase tracking-[0.14em] text-faint" aria-live="polite">
         {estado}
-        {remaining !== null && <span className="mt-2 block normal-case tracking-normal">{Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")} · tiempo máximo de esta llamada</span>}
+        {remaining !== null && remaining <= 60 && <span className="mt-2 block normal-case tracking-normal">{Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")} · tiempo máximo de esta llamada</span>}
       </p>
 
       <div className="flex flex-col items-center gap-lg">

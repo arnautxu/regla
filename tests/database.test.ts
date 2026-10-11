@@ -117,8 +117,6 @@ test("short calls consume one included call; pending expired usage stays charged
     update billing_accounts set billing_hold=false,status='active',paid_until=now()+interval '1 month' where user_id='${b}'`);
   for (let i=0; i<10; i++) {
     const r = await reserve(b, "voice"); assert.ok(r.id);
-    // A 2-minute call keeps Lilita busy for 3 minutes at most, not 18.
-    if (i === 0) assert.ok((await db.query<{ ok: boolean }>("select expires_at <= now()+interval '3 minutes' ok from ai_reservations where id=$1", [r.id])).rows[0].ok);
     await rpc("settle_ai($1,300000,5)", [r.id]);
   }
   await db.exec("update ai_reservations set created_at=now()-interval '2 minutes'");
@@ -157,5 +155,28 @@ test("a gifted plan never expires, survives billing events and needs a confirmed
   await db.exec("set role authenticated");
   await assert.rejects(db.query("select * from plan_grants"), /permission denied/);
   await assert.rejects(rpc("granted_plan($1)", [gift]), /permission denied/);
+  await db.exec("reset role");
+});
+
+test("gifted voice calls last 20 minutes, skip personal quotas and free Lilita on hang-up", async () => {
+  const gift = "00000000-0000-0000-0000-000000000004";
+  await db.exec("delete from ai_reservations; update ai_policy set enabled=true,monthly_micro_usd=100000000");
+  for (let i = 0; i < 3; i++) {
+    const r = await reserve(gift, "voice") as { id?: string; seconds?: number };
+    assert.equal(r.seconds, 1200);
+    // Mientras dura la llamada, Lilita está ocupada; al colgar, libre al momento.
+    assert.equal((await reserve(gift)).error, "busy");
+    await rpc("release_voice($1)", [gift]);
+    await db.exec("update ai_reservations set created_at=now()-interval '2 minutes'");
+  }
+  assert.ok((await reserve(gift)).id);
+  // Sin regalo, la llamada sigue siendo de 2 minutos y la reserva caduca a los 4, no a los 18.
+  await db.exec(`delete from ai_reservations;
+    update billing_accounts set billing_hold=false,status='active',plan='voice',paid_until=now()+interval '1 month' where user_id='${b}'`);
+  const paid = await reserve(b, "voice") as { id?: string; seconds?: number };
+  assert.equal(paid.seconds, 120);
+  assert.ok((await db.query<{ ok: boolean }>("select expires_at <= now()+interval '4 minutes' ok from ai_reservations where id=$1", [paid.id])).rows[0].ok);
+  await db.exec("set role authenticated");
+  await assert.rejects(rpc("release_voice($1)", [gift]), /permission denied/);
   await db.exec("reset role");
 });

@@ -1,5 +1,8 @@
--- reserve_ai igual que en 20261010135403, pero la llamada (2 minutos) deja de
--- ocupar a Lilita a los 3 minutos en lugar de 18: sin webhook nadie la cierra antes.
+-- reserve_ai igual que en 20261010135403, salvo:
+-- * Con Plus con voz regalado, cada llamada dura hasta 20 minutos y no cuenta para los minutos
+--   ni el uso del mes de esa persona; el tope global de ai_policy sigue mandando.
+-- * La reserva de una llamada caduca 2 minutos después de su duración máxima (antes, 18 minutos fijos).
+-- * release_voice: al colgar, Lilita queda libre al momento.
 create or replace function public.reserve_ai(p_user uuid,p_id uuid,p_kind text)
 returns jsonb language plpgsql set search_path = '' as $$
 declare pol public.ai_policy; b public.billing_accounts; pl text := 'free'; g text;
@@ -19,8 +22,9 @@ begin
  if p_kind='chat' and pl='free' then return jsonb_build_object('error','plus_required'); end if;
  if p_kind='voice' and pl <> 'voice' then return jsonb_build_object('error','voice_plan'); end if;
  if p_kind='voice' and (select count(*) from public.ai_reservations where kind='voice' and status='reserved' and expires_at>now()) >= pol.max_voice_concurrent then return jsonb_build_object('error','busy'); end if;
- amount:=case when p_kind='chat' then 6000 else 300000 end;
- seconds:=case when p_kind='voice' then 120 else 0 end;
+ -- Una llamada regalada puede durar 20 minutos y no gasta cupo propio: solo la frena el tope global.
+ amount:=case when p_kind='chat' then 6000 when g='voice' then 3000000 else 300000 end;
+ seconds:=case when p_kind<>'voice' then 0 when g='voice' then 1200 else 120 end;
  personal_cap:=case pl when 'free' then 0 when 'plus' then 2000000 else 6000000 end;
  if (select count(*) from public.ai_reservations where user_id=p_user and created_at > now()-interval '1 minute') >= 10 then
   return jsonb_build_object('error','rate');
@@ -33,11 +37,19 @@ begin
  into messages,used_seconds,total from public.ai_reservations
  where user_id=p_user and (case when pl='free' then true else period=period_start end);
  if p_kind='chat' and messages >= (case pl when 'free' then 0 else 300 end) then return jsonb_build_object('error','messages'); end if;
- if p_kind='voice' and used_seconds+seconds > 1200 then return jsonb_build_object('error','minutes'); end if;
- if total+amount > personal_cap then return jsonb_build_object('error','budget'); end if;
+ if p_kind='voice' and g is distinct from 'voice' and used_seconds+seconds > 1200 then return jsonb_build_object('error','minutes'); end if;
+ if g is distinct from 'voice' and total+amount > personal_cap then return jsonb_build_object('error','budget'); end if;
  select coalesce(sum(coalesce(charged_micro_usd,reserved_micro_usd)),0) into total from public.ai_reservations where period=period_start;
  if total+amount > pol.monthly_micro_usd then return jsonb_build_object('error','global_budget'); end if;
  insert into public.ai_reservations(id,user_id,kind,plan,period,reserved_micro_usd,voice_seconds,expires_at)
- values(p_id,p_user,p_kind,pl,period_start,amount,seconds,now()+case p_kind when 'voice' then interval '3 minutes' else interval '2 minutes' end);
+ values(p_id,p_user,p_kind,pl,period_start,amount,seconds,now()+case p_kind when 'voice' then make_interval(secs => seconds+120) else interval '2 minutes' end);
  return jsonb_build_object('id',p_id,'reserved',amount,'seconds',seconds,'plan',pl);
 end $$;
+
+create function public.release_voice(p_user uuid)
+returns void language sql set search_path = '' as $$
+ update public.ai_reservations set expires_at=now()
+ where user_id=p_user and kind='voice' and status='reserved' and expires_at>now();
+$$;
+revoke all on function public.release_voice(uuid) from public, anon, authenticated;
+grant execute on function public.release_voice(uuid) to service_role;
