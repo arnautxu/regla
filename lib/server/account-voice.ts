@@ -7,13 +7,24 @@ import { limitedJson, privateJson, sameOrigin } from "./http";
 import { liveInstructions } from "./lilita-prompt";
 import { voiceId } from "./elevenlabs";
 import { reserve } from "./ai-budget";
+import { activePlan, billingAccount } from "./billing";
 import { VOICE_SECONDS_PER_CALL } from "@/lib/ai-limits";
 
 export function voiceClient() {
   return new ElevenLabsClient({ apiKey: process.env.ELEVENLABS_API_KEY });
 }
+/** Con cuentas, la voz va si hay clave de ElevenLabs, como antes de las cuentas.
+ * LILAILA_VOICE_ENABLED=false la apaga. Solo llama quien tiene Plus con voz
+ * (canCall y reserve_ai). El webhook (ELEVENLABS_WEBHOOK_SECRET) es opcional:
+ * sin él la reserva se queda cobrada entera y el agente temporal no se borra. */
 export function voiceReady() {
-  return !!(process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_WEBHOOK_SECRET && process.env.LILAILA_VOICE_ENABLED === "true");
+  return !!process.env.ELEVENLABS_API_KEY && process.env.LILAILA_VOICE_ENABLED !== "false";
+}
+export async function canCall() {
+  if (!voiceReady()) return false;
+  const user = await currentUser();
+  if (!user) return false;
+  try { return activePlan(await billingAccount(user.id)) === "voice"; } catch { return false; }
 }
 export async function accountVoice(req: Request) {
   if (!sameOrigin(req)) return privateJson({ error: "Origen no permitido." }, 403);

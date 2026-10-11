@@ -1,5 +1,5 @@
 import { accountMode } from "@/lib/account-mode";
-import { accountVoice, voiceReady } from "@/lib/server/account-voice";
+import { accountVoice, canCall } from "@/lib/server/account-voice";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, requireSession } from "@/lib/server/auth";
 import { explain, voiceId } from "@/lib/server/elevenlabs";
@@ -38,7 +38,7 @@ const MODELS = ["eleven_v3_conversational", "eleven_flash_v2_5"];
 let cachedAgent: string | null = null;
 
 export async function GET() {
-  if (accountMode()) return Response.json({ enabled: voiceReady() });
+  if (accountMode()) return Response.json({ enabled: await canCall() }, { headers: { "Cache-Control": "private, no-store" } });
   return Response.json({ enabled: Boolean(process.env.ELEVENLABS_API_KEY) });
 }
 
