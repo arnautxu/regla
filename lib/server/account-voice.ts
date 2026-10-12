@@ -8,7 +8,6 @@ import { liveInstructions } from "./lilita-prompt";
 import { voiceId } from "./elevenlabs";
 import { reserve } from "./ai-budget";
 import { activePlan, billingAccount } from "./billing";
-import { VOICE_SECONDS_PER_CALL } from "@/lib/ai-limits";
 
 export function voiceClient() {
   return new ElevenLabsClient({ apiKey: process.env.ELEVENLABS_API_KEY });
@@ -51,6 +50,8 @@ export async function accountVoice(req: Request) {
   if (Buffer.byteLength(prompt) > 12_000) return privateJson({ error: "Hay demasiados datos para esta llamada." }, 400);
   const reservation = await reserve(user.id, "voice");
   if (reservation.response) return reservation.response;
+  // reserve_ai decide cuánto dura: 2 minutos, o 20 con Plus con voz regalado.
+  const maxSeconds = reservation.seconds!;
   const client = voiceClient();
   let createdAgentId: string | undefined;
   try {
@@ -65,7 +66,7 @@ export async function accountVoice(req: Request) {
           maxConversationDurationMessage: "Cerramos esta llamada. Puedes seguir por escrito o volver a llamar si te quedan minutos.",
           prompt: { prompt, llm: "gemini-2.5-flash-lite", maxTokens: 160, thinkingBudget: 0, backupLlmConfig: { preference: "disabled" }, toolIds: [], tools: [] } },
         tts: { modelId, voiceId: voiceId() },
-        conversation: { maxDurationSeconds: VOICE_SECONDS_PER_CALL, clientEvents: ["audio", "agent_response", "user_transcript", "interruption"] },
+        conversation: { maxDurationSeconds: maxSeconds, clientEvents: ["audio", "agent_response", "user_transcript", "interruption"] },
       },
       platformSettings: {
         auth: { enableAuth: true },
@@ -88,7 +89,7 @@ export async function accountVoice(req: Request) {
     const { error: saved } = await adminDb().from("ai_reservations").update({ agent_id: created.agentId }).eq("id", reservation.id!);
     if (saved) throw saved;
     const configured = await client.conversationalAi.agents.get(created.agentId);
-    if (configured.conversationConfig.conversation?.maxDurationSeconds !== VOICE_SECONDS_PER_CALL
+    if (configured.conversationConfig.conversation?.maxDurationSeconds !== maxSeconds
       || configured.conversationConfig.agent?.prompt?.maxTokens !== 160
       || configured.conversationConfig.agent?.prompt?.llm !== "gemini-2.5-flash-lite"
       || !configured.platformSettings?.auth?.enableAuth
@@ -100,7 +101,7 @@ export async function accountVoice(req: Request) {
     const token = await client.conversationalAi.conversations.getWebrtcToken({ agentId: created.agentId }, { maxRetries: 0 });
     const { error } = await adminDb().from("ai_reservations").update({ provider_id: token.conversationId }).eq("id", reservation.id!);
     if (error || !token.conversationId) throw new Error("Conversation not bound to reservation");
-    return privateJson({ token: token.token, limited: true, maxSeconds: VOICE_SECONDS_PER_CALL });
+    return privateJson({ token: token.token, limited: true, maxSeconds, id: reservation.id });
   } catch {
     // Ambiguous provider failures retain the reservation. Reconciliation/cleanup
     // does not refund money unless provider usage is known.
@@ -112,4 +113,29 @@ export async function accountVoice(req: Request) {
     }
     return privateJson({ error: "No se ha podido iniciar la llamada. La llamada reservada queda pendiente de revisión." }, 503);
   }
+}
+
+/** Al colgar, Lilita queda libre al momento en lugar de esperar a que caduque la reserva. */
+export async function releaseVoice(req: Request) {
+  if (!sameOrigin(req)) return privateJson({ error: "Origen no permitido." }, 403);
+  const user = await currentUser();
+  if (!user) return privateJson({ error: "Entra en tu cuenta." }, 401);
+  const parsed = z.object({ id: z.uuid() }).safeParse(await limitedJson(req, 1_000).catch(() => null));
+  if (!parsed.success) return privateJson({ error: "No se ha podido colgar." }, 400);
+  const { id } = parsed.data;
+  // Solo esa llamada, y antes de liberarla se corta borrando su agente: liberar sin
+  // colgar permitiría abrir otra llamada en paralelo.
+  const db = adminDb();
+  const { data: row, error: readError } = await db.from("ai_reservations").select("agent_id,agent_deleted")
+    .eq("id", id).eq("user_id", user.id).eq("kind", "voice").eq("status", "reserved").maybeSingle();
+  if (readError) return privateJson({ error: "No se ha podido colgar." }, 503);
+  if (!row) return privateJson({ ok: true });
+  if (!row.agent_id) return privateJson({ error: "No se ha podido colgar." }, 409);
+  if (!row.agent_deleted) {
+    try { await voiceClient().conversationalAi.agents.delete(row.agent_id); }
+    catch (e) { if ((e as { statusCode?: number }).statusCode !== 404) return privateJson({ error: "No se ha podido colgar." }, 503); }
+    await db.from("ai_reservations").update({ agent_deleted: true }).eq("id", id);
+  }
+  const { error } = await db.rpc("release_voice", { p_user: user.id, p_id: id });
+  return error ? privateJson({ error: "No se ha podido colgar." }, 503) : privateJson({ ok: true });
 }

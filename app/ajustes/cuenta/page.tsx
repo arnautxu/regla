@@ -110,7 +110,7 @@ export default function TuCuenta() {
         }
       >
         <Row label="Respuestas de Lilita" value={`${restantes} de ${plan.messages}`} />
-        {plan.voiceSeconds > 0 && <Row label="Llamadas" value={`${llamadas} de 10`} />}
+        {plan.voiceSeconds > 0 && <Row label="Llamadas" value={cuenta.regalo ? "Sin límite" : `${llamadas} de 10`} />}
       </Group>
 
       {/* Un regalo sin compra detrás no tiene nada que gestionar ni cancelar. */}

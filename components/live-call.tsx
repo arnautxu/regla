@@ -25,11 +25,21 @@ export function LiveCall(props: { context: LilitaContext; mood: Mood; onClose: (
   );
 }
 
+// Colgada la llamada, Lilita queda libre para el chat o para otra llamada.
+function release(id: string | null | undefined) {
+  if (!id) return;
+  void fetch("/api/voz/directo", {
+    method: "DELETE", keepalive: true,
+    headers: { "content-type": "application/json" }, body: JSON.stringify({ id }),
+  }).catch(() => {});
+}
+
 function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; onClose: () => void }) {
   const [error, setError] = useState("");
   const [said, setSaid] = useState("");
   const [muted, setMuted] = useState(false);
   const [remaining, setRemaining] = useState<number | null>(null);
+  const callId = useRef<string | null>(null);
 
   const call = useConversation({
     micMuted: muted,
@@ -38,6 +48,7 @@ function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; 
     },
     onError: (message) => setError(friendly(message)),
     onDisconnect: (d) => {
+      release(callId.current);
       if (d.reason === "error") setError(friendly(d.message));
     },
   });
@@ -73,7 +84,7 @@ function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; 
         return;
       }
       const data = (await res.json().catch(() => null)) as
-        | { token?: string; prompt?: string; voiceId?: string; limited?: boolean; maxSeconds?: number; error?: string }
+        | { token?: string; prompt?: string; voiceId?: string; limited?: boolean; maxSeconds?: number; id?: string; error?: string }
         | null;
       if (!res.ok || !data?.token) {
         setError(
@@ -84,7 +95,9 @@ function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; 
         );
         return;
       }
-      if (cancelled) return;
+      // Cerrada la pantalla mientras se preparaba: esa llamada no llega a empezar.
+      if (cancelled) { release(data.id); return; }
+      callId.current = data.id ?? null;
       setRemaining(data.maxSeconds ?? null);
       try { startSession({
         conversationToken: data.token,
@@ -106,7 +119,7 @@ function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; 
 
   // Al salir de la pantalla, se cuelga sí o sí: un micro abierto que
   // nadie ve sería lo peor que podría hacer esta app.
-  useEffect(() => () => endSession(), [endSession]);
+  useEffect(() => () => { endSession(); release(callId.current); }, [endSession]);
 
   useEffect(() => {
     if (call.status !== "connected" || remaining === null) return;
@@ -143,7 +156,7 @@ function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; 
     >
       <p className="mt-xl text-2xs font-semibold uppercase tracking-[0.14em] text-faint" aria-live="polite">
         {estado}
-        {remaining !== null && <span className="mt-2 block normal-case tracking-normal">{Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")} · tiempo máximo de esta llamada</span>}
+        {remaining !== null && remaining <= 60 && <span className="mt-2 block normal-case tracking-normal">{Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")} · tiempo máximo de esta llamada</span>}
       </p>
 
       <div className="flex flex-col items-center gap-lg">

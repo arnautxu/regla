@@ -13,16 +13,18 @@ export async function GET() {
   if (plan !== "free") query = query.gte("period", period.toISOString().slice(0, 10));
   const { data, error } = await query;
   if (error) return privateJson({ error: "No se ha podido leer el uso." }, 503);
+  // Con Plus con voz regalado las llamadas no gastan cupo (reserve_ai), así que no cuentan.
+  const gift = plan !== "free" && account?.granted_plan === plan;
   const next = new Date(period); next.setUTCMonth(next.getUTCMonth() + 1);
   return privateJson({ authenticated: true, email: user.email, plan, limits: PLANS[plan],
     usedMessages: data.filter(r => r.kind === "chat").length,
-    usedSeconds: data.reduce((n, r) => n + r.voice_seconds, 0),
+    usedSeconds: gift && plan === "voice" ? 0 : data.reduce((n, r) => n + r.voice_seconds, 0),
     resetsAt: plan === "free" ? null : next.toISOString(),
     billingReady: !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET && priceId("plus") && process.env.LILAILA_APP_URL),
     hasCustomer: billingStore(account) === "stripe",
     store: plan === "free" ? null : billingStore(account),
     paidUntil: plan === "free" ? null : account?.paid_until ?? null,
-    gift: plan !== "free" && account?.granted_plan === plan,
+    gift,
     annualReady: !!priceId("plus", "anual"),
     appleReady: appleReady(),
     voiceReady: false,

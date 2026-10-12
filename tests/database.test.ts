@@ -157,3 +157,29 @@ test("a gifted plan never expires, survives billing events and needs a confirmed
   await assert.rejects(rpc("granted_plan($1)", [gift]), /permission denied/);
   await db.exec("reset role");
 });
+
+test("gifted voice calls last 20 minutes, skip personal quotas and free Lilita on hang-up", async () => {
+  const gift = "00000000-0000-0000-0000-000000000004";
+  await db.exec("delete from ai_reservations; update ai_policy set enabled=true,monthly_micro_usd=100000000");
+  for (let i = 0; i < 3; i++) {
+    const r = await reserve(gift, "voice") as { id?: string; seconds?: number };
+    assert.equal(r.seconds, 1200);
+    // Colgar otra llamada (una petición tardía de la anterior) no libera esta.
+    await rpc("release_voice($1,$2)", [gift, crypto.randomUUID()]);
+    assert.equal((await reserve(gift)).error, "busy");
+    // Mientras dura la llamada, Lilita está ocupada; al colgar, libre al momento.
+    assert.equal((await reserve(gift)).error, "busy");
+    await rpc("release_voice($1,$2)", [gift, r.id]);
+    await db.exec("update ai_reservations set created_at=now()-interval '2 minutes'");
+  }
+  assert.ok((await reserve(gift)).id);
+  // Sin regalo, la llamada sigue siendo de 2 minutos; la reserva cubre el pase de 15 minutos más la llamada.
+  await db.exec(`delete from ai_reservations;
+    update billing_accounts set billing_hold=false,status='active',plan='voice',paid_until=now()+interval '1 month' where user_id='${b}'`);
+  const paid = await reserve(b, "voice") as { id?: string; seconds?: number };
+  assert.equal(paid.seconds, 120);
+  assert.ok((await db.query<{ ok: boolean }>("select expires_at between now()+interval '17 minutes' and now()+interval '18 minutes' ok from ai_reservations where id=$1", [paid.id])).rows[0].ok);
+  await db.exec("set role authenticated");
+  await assert.rejects(rpc("release_voice($1,$2)", [gift, paid.id]), /permission denied/);
+  await db.exec("reset role");
+});
