@@ -166,7 +166,7 @@ export default function Chat() {
   }, [messages, status]);
 
   function send(text: string) {
-    if (!text.trim() || status !== "ready") return;
+    if (!text.trim() || (status !== "ready" && status !== "error")) return;
     if (CUENTAS_ACTIVAS && cuenta?.plan === "free") {
       haptic(8);
       setLimite(true);
@@ -343,7 +343,7 @@ export default function Chat() {
         />
         <button
           type="submit"
-          disabled={!input.trim() || status !== "ready"}
+          disabled={!input.trim() || (status !== "ready" && status !== "error")}
           aria-label="Enviar"
           className="flex size-[46px] shrink-0 items-center justify-center rounded-full transition-[transform,opacity,box-shadow] duration-150 active:scale-90 disabled:opacity-35"
           style={{

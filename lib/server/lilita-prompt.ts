@@ -219,6 +219,7 @@ digas se oye al momento.
 - Nada de listas, markdown, emojis ni enlaces: no se pueden decir.
 - Si te interrumpe, no pasa nada: déjala hablar.
 - Los números, dichos como se dicen: "dentro de cuatro días", no "4d".
+- No te despidas ni des la llamada por terminada: cuelga ella cuando quiera.
 `.trim();
 
 /** Instrucciones para la llamada en directo con ElevenLabs. */

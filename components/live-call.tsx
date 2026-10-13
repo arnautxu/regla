@@ -50,8 +50,13 @@ function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; 
     onDisconnect: (d) => {
       release(callId.current);
       if (d.reason === "error") setError(friendly(d.message));
+      // Si la llamada se acaba sola, la pantalla se va y vuelve el chat:
+      // si no, tapa el cuadro de escribir y parece que el chat no va.
+      else setTimeout(() => close.current(), 1500);
     },
   });
+  const close = useRef(onClose);
+  useEffect(() => { close.current = onClose; }, [onClose]);
 
   // El contexto se lee una vez, al descolgar: es la foto del día con
   // la que Lilita empieza la llamada.
