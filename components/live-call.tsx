@@ -49,9 +49,17 @@ function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; 
     onError: (message) => setError(friendly(message)),
     onDisconnect: (d) => {
       release(callId.current);
-      if (d.reason === "error") setError(friendly(d.message));
+      // Si la llamada se acaba sola (o se agota el tiempo), la pantalla se va y
+      // vuelve el chat: si no, tapa el cuadro de escribir y parece que no va.
+      const ended = d.reason === "agent" || (d.reason === "error" && d.context.type === "max_duration_exceeded");
+      if (ended) closing.current = setTimeout(() => close.current(), 1500);
+      else if (d.reason === "error") setError(friendly(d.message));
     },
   });
+  const close = useRef(onClose);
+  const closing = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => { close.current = onClose; }, [onClose]);
+  useEffect(() => () => clearTimeout(closing.current), []);
 
   // El contexto se lee una vez, al descolgar: es la foto del día con
   // la que Lilita empieza la llamada.
@@ -123,7 +131,7 @@ function Call({ context, mood, onClose }: { context: LilitaContext; mood: Mood; 
 
   useEffect(() => {
     if (call.status !== "connected" || remaining === null) return;
-    if (remaining === 0) { void endSession(); return; }
+    if (remaining === 0) { void endSession(); close.current(); return; }
     const timer = setTimeout(() => setRemaining(n => n === null ? null : Math.max(0, n - 1)), 1000);
     return () => clearTimeout(timer);
   }, [call.status, remaining, endSession]);

@@ -64,7 +64,10 @@ export async function accountVoice(req: Request) {
       conversationConfig: {
         agent: { language: "es", firstMessage: "Aquí estoy. Cuéntame.",
           maxConversationDurationMessage: "Cerramos esta llamada. Puedes seguir por escrito o volver a llamar si te quedan minutos.",
-          prompt: { prompt, llm: "gemini-2.5-flash-lite", maxTokens: 160, thinkingBudget: 0, backupLlmConfig: { preference: "disabled" }, toolIds: [], tools: [] } },
+          prompt: { prompt, llm: "gemini-2.5-flash-lite", maxTokens: 160, thinkingBudget: 0, backupLlmConfig: { preference: "disabled" }, toolIds: [], tools: [],
+            // Solo cuelga ella o el tiempo máximo: Lilita no puede cortar la llamada por su cuenta.
+            builtInTools: { endCall: null as unknown as undefined } } },
+        turn: { silenceEndCallTimeout: -1 },
         tts: { modelId, voiceId: voiceId() },
         conversation: { maxDurationSeconds: maxSeconds, clientEvents: ["audio", "agent_response", "user_transcript", "interruption"] },
       },
